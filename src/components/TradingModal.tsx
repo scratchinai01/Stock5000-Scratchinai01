@@ -983,6 +983,10 @@ export const TradingModal: React.FC<TradingModalProps> = ({
   const handleExecuteWithAction = (action: OrderAction) => {
     setOrderAction(action);
     if (!hasEnoughCash || quantity <= 0) return;
+    if (selectedInstrument.isMock) {
+      setFairTradeWarning(`🚫 ${selectedInstrument.name}（${selectedInstrument.symbol}）目前查無 FinMind 真實報價，無法下單。`);
+      return;
+    }
 
     // 💡 設計方案 B：若現貨股票觸及漲停鎖死，市價買單無法成交，彈出【智慧金融教育引導：轉向衍生性商品】
     if ((action === 'BUY_STOCK' || action === 'BUY_MARGIN_STOCK') && isCurrentlyLimitUp) {
@@ -1481,6 +1485,12 @@ export const TradingModal: React.FC<TradingModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasEnoughCash || quantity <= 0) return;
+
+    // 沒有 FinMind 真實報價的商品不允許下單，避免用示範價格成交
+    if (selectedInstrument.isMock) {
+      setFairTradeWarning(`🚫 ${selectedInstrument.name}（${selectedInstrument.symbol}）目前查無 FinMind 真實報價，無法下單。`);
+      return;
+    }
 
     // 💡 設計方案 B：若現貨股票觸及漲停鎖死，市價買單無法成交，彈出【智慧金融教育引導：轉向衍生性商品】
     if ((orderAction === 'BUY_STOCK' || orderAction === 'BUY_MARGIN_STOCK') && isCurrentlyLimitUp) {

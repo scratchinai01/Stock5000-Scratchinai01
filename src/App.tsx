@@ -818,6 +818,9 @@ export default function App() {
           });
         }
         const liveMap = json.data;
+        const unavailableSymbols = new Set<string>(
+          (Array.isArray(json.unavailable) ? json.unavailable : []).map((u: any) => String(u.symbol))
+        );
         const timeStr = json.serverTime || new Date().toTimeString().split(' ')[0];
         setLastFinmindUpdateTime(timeStr);
         setUpdateCount(c => c + 1);
@@ -865,8 +868,11 @@ export default function App() {
                 sessionName: live.sessionName,
                 nextSessionTime: live.nextSessionTime,
                 dataSource: live.dataSource || 'FinMind',
-                isMock: false,
+                isMock: Boolean(live.isStale), // 舊快取（非 FinMind 最新資料）不可交易
               };
+            }
+            if (unavailableSymbols.has(inst.symbol)) {
+              return { ...inst, isMock: true, dataSource: 'FinMind 無此商品資料（顯示的是內建示範價，不可交易）' };
             }
             return inst;
           })
@@ -901,8 +907,11 @@ export default function App() {
               sessionName: live.sessionName,
               nextSessionTime: live.nextSessionTime,
               dataSource: live.dataSource || 'FinMind',
-              isMock: false,
+              isMock: Boolean(live.isStale), // 舊快取（非 FinMind 最新資料）不可交易
             };
+          }
+          if (unavailableSymbols.has(prev.symbol)) {
+            return { ...prev, isMock: true, dataSource: 'FinMind 無此商品資料（顯示的是內建示範價，不可交易）' };
           }
           return prev;
         });
@@ -933,32 +942,13 @@ export default function App() {
             const dedupedPositions = Array.from(dedupedMap.values());
 
             const updatedPositions = dedupedPositions.map(pos => {
-              // Auto-heal corrupted futures entry prices caused by previous margin-division bug
-              if (
-                pos.category === 'futures' &&
-                (pos.symbol === 'TX' || pos.symbol === 'MTX' || pos.symbol === 'TMF') &&
-                pos.entryPrice < 5000
-              ) {
-                pos.entryPrice = 22850;
-              }
+              // 只用同一商品（或期交所正式別名）的報價計算損益。
+              // 原本會拿現股價冒充股票期貨、拿標的股價冒充權證、拿 TX 冒充選擇權，
+              // 還會把 TX 的進場價改寫成寫死的 22850，這些都會產生虛假的損益。
               let live = liveMap[pos.symbol];
-              if (!live && (pos.symbol === '6285F' || pos.symbol === 'IJF')) live = liveMap['6285F'] || liveMap['6285'];
-              if (!live && (pos.symbol === '5483F' || pos.symbol === 'OQF')) live = liveMap['5483F'] || liveMap['5483'];
-              if (!live && pos.symbol.endsWith('F')) {
-                const under = pos.symbol.replace(/F$/, '');
-                live = liveMap[under];
-              }
-              if (!live && pos.symbol === 'CDF') live = liveMap['2330'] || liveMap['CDF'];
-              if (!live && pos.symbol === 'DHF') live = liveMap['2317'] || liveMap['DHF'];
-              if (!live && pos.symbol === 'CCF') live = liveMap['2303'] || liveMap['CCF'];
-              if (!live && pos.symbol === 'CZF') live = liveMap['2603'] || liveMap['CZF'];
-              if (!live && pos.symbol === 'QDF') live = liveMap['2382'] || liveMap['QDF'];
-              if (!live && pos.symbol === 'DVF') live = liveMap['2454'] || liveMap['DVF'];
-              if (!live && pos.symbol.startsWith('TXO')) live = liveMap[pos.symbol] || liveMap['TXO-49000-C'];
-              if (!live && (pos.symbol.startsWith('08303') || pos.symbol.startsWith('08304'))) live = liveMap['2303'];
-              if (!live && pos.symbol.startsWith('08643')) live = liveMap['2330'];
-              if (!live && pos.symbol.startsWith('08644')) live = liveMap['2317'];
-              if (!live && pos.symbol.startsWith('08645')) live = liveMap['TX'];
+              if (!live && (pos.symbol === '6285F' || pos.symbol === 'IJF')) live = liveMap['6285F'] || liveMap['IJF'];
+              if (!live && (pos.symbol === '5483F' || pos.symbol === 'OQF')) live = liveMap['5483F'] || liveMap['OQF'];
+              if (!live && pos.symbol === 'QDF') live = liveMap['DKF'];
 
               if (!live) return pos;
               const currentPrice = live.currentPrice;

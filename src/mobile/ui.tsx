@@ -124,3 +124,23 @@ export const Segmented: React.FC<{
     })}
   </div>
 );
+
+export function TopBar({ title, sub, left, right }: { title: React.ReactNode; sub?: React.ReactNode; left?: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <div className="sticky top-0 z-30 flex items-center gap-1 px-2 pt-2 pb-1.5" style={{ background: C.bar }}>
+      <div className="w-11 flex justify-center">{left}</div>
+      <div className="flex-1 min-w-0 flex flex-col items-center text-center">
+        <div className="text-[17px] font-black truncate max-w-full">{title}</div>
+        {sub && <div className="text-[11px] truncate max-w-full" style={{ color: C.muted }}>{sub}</div>}
+      </div>
+      <div className="w-11 flex justify-center">{right}</div>
+    </div>
+  );
+}
+
+export const IconButton: React.FC<{ label: string; onClick: () => void; children: React.ReactNode; color?: string }> = ({ label, onClick, children, color }) => (
+  <button type="button" aria-label={label} onClick={onClick} className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ color: color || C.text }}>
+    {children}
+  </button>
+);
+

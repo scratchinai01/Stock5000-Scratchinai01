@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { InstrumentSpec, StudentProfile, OrderAction, AssetCategory, Position } from '../types/market';
-import { C, mono, fmtPrice, fmtMoney, fmtSigned, dirColor, arrow, instrumentChange, Icon, Chip, Segmented } from './ui';
+import { C, mono, fmtPrice, fmtMoney, fmtSigned, dirColor, arrow, instrumentChange, Icon, Chip, Segmented, TopBar, IconButton } from './ui';
 import { getInstrumentTradingClock } from '../utils/tradingClock';
 import { getTwHolidayName, nextTwTradingDay, formatTradingDay } from '../utils/twHolidays';
 import { computeOrderCost, simpleActions, ACTION_LABEL, isLongPosition, contractMultiplier } from '../utils/orderMath';
 import { KLineChart } from '../components/KLineChart';
 import { useGlossary } from '../context/GlossaryContext';
 import { FINANCIAL_TERMS } from '../data/financialTerms';
+import { OrderScreen, type OrderPreset } from './OrderScreen';
+import type { ClientOrder, OrderRequest } from '../hooks/useOrderBook';
+import { usesOrderBook, closeSide, isActiveStatus } from '../utils/orderRules';
 
 export interface TradeRequest {
   symbol: string;
@@ -38,6 +41,11 @@ interface Props {
   onOpenProAnalysis: () => void;
   onSwitchToDesktop: () => void;
   lastUpdateTime?: string;
+  orders: ClientOrder[];
+  reservedCash: number;
+  onPlaceOrder: (req: OrderRequest) => Promise<{ order?: ClientOrder; error?: string }>;
+  onCancelOrder: (id: string) => Promise<{ order?: ClientOrder; error?: string }>;
+  onModifyOrder: (id: string, patch: { limitPrice?: number; quantity?: number }) => Promise<{ order?: ClientOrder; error?: string }>;
 }
 
 type Tab = 'watch' | 'quote' | 'order' | 'portfolio' | 'rank';
@@ -80,6 +88,15 @@ export const MobileShell: React.FC<Props> = props => {
 
   const inst = props.instruments.find(i => i.symbol === props.selectedInstrument.symbol) || props.selectedInstrument;
   const open = (i: InstrumentSpec, to: Tab = 'quote') => { props.onSelectInstrument(i); setTab(to); };
+  const [preset, setPreset] = useState<OrderPreset | null>(null);
+  const openSymbol = (sym: string, to: Tab = 'quote') => { const i = props.instruments.find(x => x.symbol === sym); if (i) open(i, to); };
+  const startClose = (pos: Position) => {
+    const i = props.instruments.find(x => x.symbol === pos.symbol);
+    if (!i) return;
+    setPreset({ symbol: pos.symbol, side: closeSide(pos.orderType), intent: 'CLOSE', positionId: pos.id });
+    open(i, 'order');
+  };
+  const activeOrders = props.orders.filter(o => isActiveStatus(o.status)).length;
   const toggleWatch = (sym: string) => setWatch(w => (w.includes(sym) ? w.filter(s => s !== sym) : [...w, sym]));
   const needLogin = !props.isAuthenticated && (tab === 'order' || tab === 'portfolio' || tab === 'rank');
 
@@ -91,11 +108,23 @@ export const MobileShell: React.FC<Props> = props => {
         ) : tab === 'watch' ? (
           <Watchlist {...props} watch={watch} onOpen={open} />
         ) : tab === 'quote' ? (
-          <Quote {...props} inst={inst} watched={watch.includes(inst.symbol)} onToggleWatch={() => toggleWatch(inst.symbol)} onBack={() => setTab('watch')} onTrade={() => setTab('order')} />
+          <Quote {...props} inst={inst} watched={watch.includes(inst.symbol)} onToggleWatch={() => toggleWatch(inst.symbol)} onBack={() => setTab('watch')} onTrade={() => { setPreset(null); setTab('order'); }} />
         ) : tab === 'order' ? (
-          <Order {...props} inst={inst} onBack={() => setTab('quote')} />
+          <OrderScreen
+            inst={inst}
+            profile={props.currentProfile}
+            orders={props.orders}
+            reservedCash={props.reservedCash}
+            preset={preset}
+            onPlaceOrder={props.onPlaceOrder}
+            onCancelOrder={props.onCancelOrder}
+            onModifyOrder={props.onModifyOrder}
+            onOpenAdvancedTrade={props.onOpenAdvancedTrade}
+            onBack={() => setTab('quote')}
+            onOpenSymbol={sym => openSymbol(sym)}
+          />
         ) : tab === 'portfolio' ? (
-          <Portfolio {...props} onOpen={open} />
+          <Portfolio {...props} onOpen={open} onStartClose={startClose} />
         ) : (
           <Rank {...props} />
         )}
@@ -112,7 +141,13 @@ export const MobileShell: React.FC<Props> = props => {
           <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}
             className="flex flex-col items-center justify-center gap-0.5 min-h-[50px] text-[11px] font-bold"
             style={{ color: tab === id ? C.accent : C.muted }}>
-            {icon}{label}
+            <span className="relative">
+              {icon}
+              {id === 'order' && activeOrders > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center" style={{ background: C.accent, color: C.bg }}>{activeOrders}</span>
+              )}
+            </span>
+            {label}
           </button>
         ))}
       </nav>
@@ -130,25 +165,6 @@ function MarketChip({ inst }: { inst?: InstrumentSpec }) {
   }
   return <Chip tone={clock.isTradingNow ? 'accent' : 'muted'}>{clock.isTradingNow ? '交易中' : '非交易時段'} · {clock.sessionName}</Chip>;
 }
-
-function TopBar({ title, sub, left, right }: { title: React.ReactNode; sub?: React.ReactNode; left?: React.ReactNode; right?: React.ReactNode }) {
-  return (
-    <div className="sticky top-0 z-30 flex items-center gap-1 px-2 pt-2 pb-1.5" style={{ background: C.bar }}>
-      <div className="w-11 flex justify-center">{left}</div>
-      <div className="flex-1 min-w-0 flex flex-col items-center text-center">
-        <div className="text-[17px] font-black truncate max-w-full">{title}</div>
-        {sub && <div className="text-[11px] truncate max-w-full" style={{ color: C.muted }}>{sub}</div>}
-      </div>
-      <div className="w-11 flex justify-center">{right}</div>
-    </div>
-  );
-}
-
-const IconButton: React.FC<{ label: string; onClick: () => void; children: React.ReactNode; color?: string }> = ({ label, onClick, children, color }) => (
-  <button type="button" aria-label={label} onClick={onClick} className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ color: color || C.text }}>
-    {children}
-  </button>
-);
 
 function LoginGate({ onLogin }: { onLogin: () => void }) {
   return (
@@ -383,147 +399,6 @@ function TermCard({ inst }: { inst: InstrumentSpec }) {
 }
 
 // ───────────────────────── 3. 下單 ─────────────────────────
-function Order(p: Props & { inst: InstrumentSpec; onBack: () => void }) {
-  const { inst } = p;
-  const acts = simpleActions(inst);
-  const [side, setSide] = useState<'buy' | 'sell'>('buy');
-  const [qty, setQty] = useState(1);
-  const [rationale, setRationale] = useState('');
-  const [confirming, setConfirming] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
-  useEffect(() => { setQty(1); setDone(null); }, [inst.symbol]);
-
-  const holding = (p.currentProfile?.positions || []).filter(x => x.symbol === inst.symbol);
-  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Taipei' }).format(new Date());
-  const clock = getInstrumentTradingClock(inst.symbol, inst.category);
-  const holiday = getTwHolidayName(today);
-
-  if (!acts) {
-    return (
-      <>
-        <TopBar left={<IconButton label="返回報價" onClick={p.onBack}>{Icon.back}</IconButton>} title="下單" sub={`${inst.name} ${inst.symbol}`} />
-        <div className="px-6 py-10 flex flex-col gap-4 text-center">
-          <div className="text-[15px] leading-relaxed" style={{ color: C.sub }}>選擇權、權證、美股、原物料與加密貨幣有多種委託類別（買權／賣權、買方／賣方等），請用完整下單畫面。</div>
-          <button type="button" onClick={() => p.onOpenAdvancedTrade(inst)} className="min-h-[48px] rounded-xl font-black" style={{ background: C.accent, color: C.bg }}>開啟完整下單</button>
-        </div>
-      </>
-    );
-  }
-
-  const action = side === 'buy' ? acts.buy : acts.sell;
-  const price = inst.price;
-  const { totalCostOrMargin, notionalValue, multiplier } = computeOrderCost(inst, action, price, qty);
-  const cash = p.currentProfile?.availableCash ?? 0;
-  const enough = cash >= totalCostOrMargin;
-  const isFut = inst.category === 'futures';
-  const perPoint = multiplier * qty;
-  const onePct = price * 0.01 * multiplier * qty;
-  const longHolding = holding.find(h => isLongPosition(h.orderType));
-  const blocked = inst.isMock || !(price > 0);
-
-  const submit = async () => {
-    await p.onExecuteTrade({
-      symbol: inst.symbol, name: inst.name, category: inst.category, action, price, quantity: qty,
-      unitMultiplier: multiplier, totalAmountOrMargin: totalCostOrMargin, notionalValue,
-      rationale: rationale.trim() || `手機下單：${ACTION_LABEL[action] ?? action} ${qty} ${acts.unit} @ ${price}`,
-    });
-    setConfirming(false);
-    setRationale('');
-    setDone(`已成交：${ACTION_LABEL[action]} ${inst.name} ${qty} ${acts.unit} @ ${fmtPrice(price)}`);
-  };
-
-  return (
-    <>
-      <TopBar left={<IconButton label="返回報價" onClick={p.onBack}>{Icon.back}</IconButton>} title="下單" sub={`${inst.name} ${inst.symbol} · ${isFut ? `每點 ${multiplier.toLocaleString()} 元` : inst.unitLabel || ''}`} />
-      <div className="px-4 pb-4 flex flex-col gap-3">
-        {(holiday && !['US_EQUITY', 'COMMODITY_FUTURES', 'CRYPTO_24_7'].includes(clock.instrumentClass)) || !clock.isTradingNow ? (
-          <div className="text-[12px] font-bold px-3 py-2 rounded-lg leading-relaxed" style={{ background: C.accentBg, color: C.accent }}>
-            {holiday ? `${holiday}休市` : '非交易時段'}：模擬交易會以最後收盤價 {fmtPrice(price)} 成交
-          </div>
-        ) : null}
-
-        <div className="flex items-baseline justify-between">
-          <span className="text-[13px]" style={{ color: C.muted }}>成交價（現價）</span>
-          <span className="text-[30px] font-bold" style={{ ...mono, color: dirColor(instrumentChange(inst).chg) }}>{fmtPrice(price)}</span>
-        </div>
-
-        <div role="tablist" aria-label="買賣方向" className="grid grid-cols-2 gap-2">
-          <button type="button" role="tab" aria-selected={side === 'buy'} onClick={() => setSide('buy')} className="min-h-[48px] rounded-xl font-black text-[16px]"
-            style={{ background: side === 'buy' ? C.upFill : C.card, color: side === 'buy' ? '#fff' : C.sub, border: `1px solid ${side === 'buy' ? C.upFill : C.line}` }}>
-            {ACTION_LABEL[acts.buy]}
-          </button>
-          <button type="button" role="tab" aria-selected={side === 'sell'} onClick={() => setSide('sell')} className="min-h-[48px] rounded-xl font-black text-[16px]"
-            style={{ background: side === 'sell' ? C.downFill : C.card, color: side === 'sell' ? '#fff' : C.sub, border: `1px solid ${side === 'sell' ? C.downFill : C.line}` }}>
-            {ACTION_LABEL[acts.sell]}
-          </button>
-        </div>
-
-        {side === 'sell' && longHolding && (
-          <div className="rounded-xl p-3 flex items-center justify-between gap-3" style={{ background: C.card, border: `1px solid ${C.line2}` }}>
-            <span className="text-[13px] leading-relaxed" style={{ color: C.sub }}>你持有 {longHolding.quantity} {acts.unit}，要賣掉庫存請用「平倉」，上面的賣出是新開一筆空單。</span>
-            <button type="button" onClick={() => p.onClosePosition(longHolding.id)} className="flex-none min-h-[40px] px-3 rounded-lg font-black text-[14px] text-white" style={{ background: C.downFill }}>平倉</button>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2.5">
-          <span className="text-[13px] w-10" style={{ color: C.muted }}>數量</span>
-          <button type="button" aria-label="減少數量" onClick={() => setQty(q => Math.max(1, q - 1))} className="w-12 h-12 rounded-xl text-[22px]" style={{ background: C.card, border: `1px solid ${C.line2}` }}>−</button>
-          <input aria-label="數量" inputMode="numeric" value={qty} onChange={e => { const v = parseInt(e.target.value, 10); setQty(isFinite(v) && v > 0 ? Math.min(v, 9999) : 1); }}
-            className="flex-1 min-w-0 h-12 rounded-xl text-center text-[22px] font-bold bg-transparent" style={{ ...mono, border: `1px solid ${C.line2}`, color: C.text }} />
-          <button type="button" aria-label="增加數量" onClick={() => setQty(q => Math.min(9999, q + 1))} className="w-12 h-12 rounded-xl text-[22px]" style={{ background: C.card, border: `1px solid ${C.line2}` }}>+</button>
-          <span className="text-[15px] font-bold w-6">{acts.unit}</span>
-        </div>
-        <div className="flex gap-1.5">
-          {[1, 2, 5, 10].map(n => (
-            <button key={n} type="button" onClick={() => setQty(n)} className="flex-1 min-h-[36px] rounded-lg text-[13px] font-bold"
-              style={{ background: qty === n ? C.accent : C.card, color: qty === n ? C.bg : C.sub }}>{n}</button>
-          ))}
-        </div>
-
-        <div className="rounded-xl p-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[13px]" style={{ background: C.card2, border: `1px solid ${C.line2}` }}>
-          <span style={{ color: C.muted }}>{isFut ? '合約價值' : '交易金額'}</span><span className="text-right font-semibold" style={mono}>{fmtMoney(notionalValue)}</span>
-          <span style={{ color: C.muted }}>{isFut || action.startsWith('SHORT') ? '需要保證金' : '需要現金'}</span><span className="text-right font-semibold" style={mono}>{fmtMoney(totalCostOrMargin)}</span>
-          {isFut && (<><span style={{ color: C.muted }}>指數每動 1 點</span><span className="text-right font-semibold" style={mono}>{fmtMoney(perPoint)}</span></>)}
-          <span style={{ color: C.muted }}>{side === 'buy' ? '價格跌 1% 時' : '價格漲 1% 時'}</span><span className="text-right font-semibold" style={{ ...mono, color: C.down }}>−{fmtMoney(onePct).replace('NT$ ', 'NT$ ')}</span>
-          <span style={{ color: C.muted }}>可用現金</span><span className="text-right font-semibold" style={{ ...mono, color: enough ? C.text : C.up }}>{fmtMoney(cash)}</span>
-        </div>
-        {!enough && <div className="text-[13px] font-bold" style={{ color: C.up }}>可用現金不足，請減少數量。</div>}
-        {done && <div className="text-[13px] font-bold px-3 py-2 rounded-lg" style={{ background: '#0d2a18', color: C.down }}>{done}</div>}
-      </div>
-
-      <div className="fixed inset-x-0 z-30 px-4 py-2.5" style={{ bottom: 'calc(60px + max(10px, env(safe-area-inset-bottom)))', background: C.bar, borderTop: `1px solid ${C.line}` }}>
-        <button type="button" disabled={blocked || !enough} onClick={() => setConfirming(true)}
-          className="w-full min-h-[52px] rounded-2xl text-white text-[18px] font-black disabled:opacity-40"
-          style={{ background: side === 'buy' ? C.upFill : C.downFill }}>
-          {blocked ? '無真實報價，不可下單' : `${side === 'buy' ? '買進' : '賣出'} ${qty} ${acts.unit}`}
-        </button>
-      </div>
-      <div className="h-[80px]" />
-
-      {confirming && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setConfirming(false)}>
-          <div role="dialog" aria-modal="true" aria-label="確認委託" className="w-full rounded-t-3xl p-5 flex flex-col gap-3" style={{ background: C.card, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
-            <div className="text-[18px] font-black">確認委託</div>
-            <div className="text-[15px] leading-relaxed" style={{ color: C.sub }}>
-              {ACTION_LABEL[action]} <b style={{ color: C.text }}>{inst.name}</b> {qty} {acts.unit}，成交價 <b style={mono}>{fmtPrice(price)}</b>，
-              {isFut || action.startsWith('SHORT') ? '保證金' : '金額'} <b style={mono}>{fmtMoney(totalCostOrMargin)}</b>
-            </div>
-            <label className="flex flex-col gap-1 text-[13px]" style={{ color: C.muted }}>
-              下單理由（會整理進期末報告）
-              <textarea value={rationale} onChange={e => setRationale(e.target.value)} rows={3} placeholder="例如：看好 AI 伺服器需求，分批布局"
-                className="rounded-xl p-3 text-[15px] bg-transparent outline-none" style={{ border: `1px solid ${C.line2}`, color: C.text }} />
-            </label>
-            <div className="grid grid-cols-2 gap-2.5">
-              <button type="button" onClick={() => setConfirming(false)} className="min-h-[50px] rounded-2xl font-black" style={{ background: C.bar, color: C.sub }}>取消</button>
-              <button type="button" onClick={submit} className="min-h-[50px] rounded-2xl font-black text-white" style={{ background: side === 'buy' ? C.upFill : C.downFill }}>確認送出</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
 // ───────────────────────── 4. 庫存 ─────────────────────────
 const CAT_GROUP: { key: string; label: string; color: string; match: (c: AssetCategory) => boolean }[] = [
   { key: 'stocks', label: '股票', color: '#f5b301', match: c => c === 'stocks' },
@@ -538,7 +413,7 @@ function positionValue(pos: Position) {
   return marginBased ? pos.totalCostOrMargin + (pos.unrealizedPnL || 0) : pos.notionalValue;
 }
 
-function Portfolio(p: Props & { onOpen: (i: InstrumentSpec, to?: Tab) => void }) {
+function Portfolio(p: Props & { onOpen: (i: InstrumentSpec, to?: Tab) => void; onStartClose: (pos: Position) => void }) {
   const prof = p.currentProfile;
   const [shock, setShock] = useState(-3);
   const [closing, setClosing] = useState<Position | null>(null);
@@ -633,7 +508,7 @@ function Portfolio(p: Props & { onOpen: (i: InstrumentSpec, to?: Tab) => void })
                   </span>
                   <span className="flex flex-col items-end gap-1">
                     <span className="text-[15px] font-bold" style={{ ...mono, color: dirColor(x.unrealizedPnL) }}>{Math.round(x.unrealizedPnL).toLocaleString()}</span>
-                    <button type="button" onClick={() => setClosing(x)} className="min-h-[32px] px-2.5 rounded-lg text-[12px] font-bold" style={{ border: `1px solid ${C.line2}`, color: C.sub }}>平倉</button>
+                    <button type="button" onClick={() => (usesOrderBook(x.category) ? p.onStartClose(x) : setClosing(x))} className="min-h-[32px] px-2.5 rounded-lg text-[12px] font-bold" style={{ border: `1px solid ${C.line2}`, color: C.sub }}>平倉</button>
                   </span>
                 </div>
               );

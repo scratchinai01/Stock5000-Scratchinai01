@@ -17,6 +17,7 @@ import {
   formatTradingDay,
 } from './src/utils/twHolidays';
 import { getHistory } from './server-lib/history';
+import { registerOrderRoutes } from './server-lib/orders';
 
 dotenv.config();
 
@@ -1032,6 +1033,13 @@ app.get('/api/market/calendar', (_req, res) => {
 });
 
 // 專業分析：長期歷史日K（原始＋還原），優先讀 Firestore stock-history
+// 委託簿與撮合（限價／市價、ROD／IOC／FOK、刪改單、預約單）
+registerOrderRoutes(app, {
+  getToken: () => currentFinmindToken,
+  getCachedQuote: (symbol: string) => authenticQuotesCache[symbol.toUpperCase()] || authenticQuotesCache[symbol],
+  futuresCode: (symbol: string) => FUTURES_CODE_MAP[symbol.toUpperCase()] || symbol.toUpperCase(),
+});
+
 app.get('/api/history/daily', async (req, res) => {
   const symbol = String(req.query.symbol || '').trim();
   try {

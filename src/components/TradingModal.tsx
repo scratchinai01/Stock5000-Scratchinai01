@@ -7,6 +7,7 @@ import {
 } from '../types/market';
 import { KLineChart } from './KLineChart';
 import { computeOrderCost } from '../utils/orderMath';
+import { usesOrderBook, roundToTick } from '../utils/orderRules';
 import { LimitUpAlternativeModal } from './LimitUpAlternativeModal';
 import { SmartInstrumentSearchBoard } from './SmartInstrumentSearchBoard';
 import { CommoditiesBoard } from './CommoditiesBoard';
@@ -946,12 +947,13 @@ export const TradingModal: React.FC<TradingModalProps> = ({
     }
 
     // 💡 設計方案 B：若現貨股票觸及漲停鎖死，市價買單無法成交，彈出【智慧金融教育引導：轉向衍生性商品】
-    if ((action === 'BUY_STOCK' || action === 'BUY_MARGIN_STOCK') && isCurrentlyLimitUp) {
+    if (!usesOrderBook(selectedInstrument.category) && (action === 'BUY_STOCK' || action === 'BUY_MARGIN_STOCK') && isCurrentlyLimitUp) {
       setShowLimitUpAlternatives(true);
       return;
     }
 
     if (
+      !usesOrderBook(selectedInstrument.category) &&
       (action === 'BUY_STOCK' || action === 'BUY_MARGIN_STOCK' || action === 'BUY_ETF') &&
       useCustomPrice &&
       customPrice < selectedInstrument.price
@@ -982,7 +984,9 @@ export const TradingModal: React.FC<TradingModalProps> = ({
     });
 
     setOrderSuccessMsg(
-      isCurrentlyLimitUp
+      usesOrderBook(selectedInstrument.category)
+        ? `委託已送出：限價 ${roundToTick(selectedInstrument.category, selectedInstrument.symbol, currentPrice)} ROD ${quantity} ${selectedInstrument.unitLabel || ''}。要等市場價格到了才會成交，結果看畫面上方的委託回報。`
+        : isCurrentlyLimitUp
         ? `下單成功！已依漲停價 NT$ ${currentPrice} 委託建立 ${quantity} ${contractSpec.unitName} 之部位。`
         : `下單成功！已成功建立 ${quantity} ${contractSpec.unitName} (${contractSpec.specFormula}) 之部位。`
     );
@@ -1450,7 +1454,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
     }
 
     // 💡 設計方案 B：若現貨股票觸及漲停鎖死，市價買單無法成交，彈出【智慧金融教育引導：轉向衍生性商品】
-    if ((orderAction === 'BUY_STOCK' || orderAction === 'BUY_MARGIN_STOCK') && isCurrentlyLimitUp) {
+    if (!usesOrderBook(selectedInstrument.category) && (orderAction === 'BUY_STOCK' || orderAction === 'BUY_MARGIN_STOCK') && isCurrentlyLimitUp) {
       setShowLimitUpAlternatives(true);
       return;
     }
@@ -1458,6 +1462,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
     // Fair Trading Check:
     // Only block if the stock is actually limit-up (cannot buy below limit-up when limit-up)
     if (
+      !usesOrderBook(selectedInstrument.category) &&
       (orderAction === 'BUY_STOCK' || orderAction === 'BUY_MARGIN_STOCK' || orderAction === 'BUY_ETF') &&
       useCustomPrice &&
       customPrice < selectedInstrument.price &&
@@ -1487,7 +1492,9 @@ export const TradingModal: React.FC<TradingModalProps> = ({
     });
 
     setOrderSuccessMsg(
-      isCurrentlyLimitUp
+      usesOrderBook(selectedInstrument.category)
+        ? `委託已送出：限價 ${roundToTick(selectedInstrument.category, selectedInstrument.symbol, currentPrice)} ROD ${quantity} ${selectedInstrument.unitLabel || ''}。要等市場價格到了才會成交，結果看畫面上方的委託回報。`
+        : isCurrentlyLimitUp
         ? `下單成功！已依漲停價 NT$ ${currentPrice} 委託建立 ${quantity} ${selectedInstrument.unitLabel} 之部位 (遵守公平撮合規則)。`
         : `下單成功！已成功建立 ${quantity} ${selectedInstrument.unitLabel} 之部位。`
     );

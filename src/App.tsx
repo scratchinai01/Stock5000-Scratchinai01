@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StudentProfile,
   InstrumentSpec,
@@ -30,6 +30,12 @@ import { CryptoLiveBoard } from './components/CryptoLiveBoard';
 import { GlobalMarketRadarModal } from './components/GlobalMarketRadarModal';
 import { ProAnalysisModal } from './components/ProAnalysisModal';
 import { MobileShell } from './mobile/MobileShell';
+import { OrdersView } from './mobile/OrderScreen';
+import { applyOpenFill, applyCloseFill } from './utils/ledger';
+import { useOrderBook, type ClaimedFill, type ClientOrder, type OrderRequest } from './hooks/useOrderBook';
+import { usesOrderBook, roundToTick, positionPnL } from './utils/orderRules';
+import { reservedAmount, pendingCloseQty, describeOrder } from './utils/orderClient';
+import { computeOrderCost } from './utils/orderMath';
 import { ResetPortfolioModal } from './components/ResetPortfolioModal';
 import { GeminiAuditSheetsModal } from './components/GeminiAuditSheetsModal';
 import { Term } from './components/Term';
@@ -163,6 +169,9 @@ export default function App() {
     }
     return deduplicateProfiles(INITIAL_STUDENT_PROFILES);
   });
+
+  const profilesRef = useRef(profiles);
+  profilesRef.current = profiles;
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return Boolean(sessionStorage.getItem('finmind_session_player_active'));
@@ -1001,41 +1010,9 @@ export default function App() {
 
               if (!live) return pos;
               const currentPrice = live.currentPrice;
-              let unrealizedPnL = 0;
               const notionalValue = currentPrice * pos.quantity * pos.unitMultiplier;
-
-              if (
-                pos.orderType === 'BUY_STOCK' ||
-                pos.orderType === 'BUY_ETF' ||
-                pos.orderType === 'BUY_BOND' ||
-                pos.orderType === 'BUY_MARGIN_STOCK' ||
-                pos.orderType === 'BUY_US_STOCK'
-              ) {
-                unrealizedPnL = (currentPrice - pos.entryPrice) * pos.quantity * pos.unitMultiplier;
-              } else if (
-                pos.orderType === 'SHORT_SELL_STOCK' ||
-                pos.orderType === 'SHORT_SELL_ETF'
-              ) {
-                unrealizedPnL = (pos.entryPrice - currentPrice) * pos.quantity * pos.unitMultiplier;
-              } else if (pos.orderType === 'BUY_FUTURES_LONG') {
-                unrealizedPnL = (currentPrice - pos.entryPrice) * pos.quantity * pos.unitMultiplier;
-              } else if (pos.orderType === 'SELL_FUTURES_SHORT') {
-                unrealizedPnL = (pos.entryPrice - currentPrice) * pos.quantity * pos.unitMultiplier;
-              } else if (pos.orderType === 'BUY_COMMODITY_LONG') {
-                unrealizedPnL = (currentPrice - pos.entryPrice) * pos.quantity * pos.unitMultiplier * 32.0;
-              } else if (pos.orderType === 'SELL_COMMODITY_SHORT') {
-                unrealizedPnL = (pos.entryPrice - currentPrice) * pos.quantity * pos.unitMultiplier * 32.0;
-              } else if (pos.orderType === 'BUY_CRYPTO') {
-                unrealizedPnL = (currentPrice - pos.entryPrice) * pos.quantity * pos.unitMultiplier * 32.5;
-              } else if (pos.orderType === 'SHORT_SELL_CRYPTO') {
-                unrealizedPnL = (pos.entryPrice - currentPrice) * pos.quantity * pos.unitMultiplier * 32.5;
-              } else if (pos.orderType === 'BUY_STABLECOIN') {
-                unrealizedPnL = (currentPrice - pos.entryPrice) * pos.quantity * 32.5;
-              } else if (pos.orderType === 'BUY_CALL_OPTION' || pos.orderType === 'BUY_CALL_WARRANT') {
-                unrealizedPnL = (currentPrice - pos.entryPrice) * pos.quantity * pos.unitMultiplier;
-              } else if (pos.orderType === 'BUY_PUT_OPTION' || pos.orderType === 'BUY_PUT_WARRANT') {
-                unrealizedPnL = (currentPrice - pos.entryPrice) * pos.quantity * pos.unitMultiplier;
-              }
+              // 統一損益公式（含選擇權賣方，原本漏算為 0）
+              const unrealizedPnL = positionPnL(pos.orderType, pos.entryPrice, currentPrice, pos.quantity, pos.unitMultiplier);
 
               const unrealizedPnLPercent =
                 pos.totalCostOrMargin > 0 ? (unrealizedPnL / pos.totalCostOrMargin) * 100 : 0;
@@ -1140,7 +1117,21 @@ export default function App() {
   const totalReturn = currentProfile ? netAssetValue - currentProfile.initialCapital : 0;
   const totalReturnPct = currentProfile ? ((netAssetValue - currentProfile.initialCapital) / currentProfile.initialCapital) * 100 : 0;
 
-  // Execute Trade Handler
+  // ───────────── 帳務：把成交記入目前學生 ─────────────
+  const commitProfile = (updated: StudentProfile, txs: ImmutableTransaction[]) => {
+    setProfiles(prev =>
+      prev.map(p =>
+        p.id === updated.id || p.studentName.trim().toLowerCase() === updated.studentName.trim().toLowerCase() ? updated : p
+      )
+    );
+    profilesRef.current = profilesRef.current.map(p => (p.id === updated.id ? updated : p));
+    txs.forEach(tx => saveImmutableTransaction(tx).catch(e => console.warn('Immutable ledger sync:', e)));
+    savePlayerProfileToFirebase(updated).catch(e => console.error('Firebase save trade error:', e));
+  };
+  const findMe = () =>
+    profilesRef.current.find(p => p.id === currentProfileId || p.isCurrentPlayer) || currentProfile || profilesRef.current[0];
+
+  // 即時成交（美股、加密貨幣、原物料等不走委託簿的商品）
   const handleExecuteTrade = async (trade: {
     symbol: string;
     name: string;
@@ -1153,225 +1144,126 @@ export default function App() {
     notionalValue: number;
     rationale: string;
   }) => {
-    const isFutures = trade.category === 'futures' || trade.category === 'commodities';
-    const isSeller = trade.action === 'SELL_CALL_OPTION' || trade.action === 'SELL_PUT_OPTION';
-    const usesMargin =
-      isFutures ||
-      isSeller ||
-      trade.action === 'SHORT_SELL_STOCK' ||
-      trade.action === 'SHORT_SELL_ETF' ||
-      trade.action === 'SHORT_SELL_CRYPTO' ||
-      trade.action === 'BUY_COMMODITY_LONG' ||
-      trade.action === 'SELL_COMMODITY_SHORT';
-    const execDateTime = getSystemDateTimeStr();
-
-    const newPosition: Position = {
-      id: `pos-${Date.now()}`,
-      symbol: trade.symbol,
-      name: trade.name,
-      category: trade.category,
-      orderType: trade.action,
-      entryDate: execDateTime,
-      entryPrice: trade.price,
-      quantity: trade.quantity,
-      unitMultiplier: trade.unitMultiplier,
-      currentPrice: trade.price,
-      totalCostOrMargin: trade.totalAmountOrMargin,
-      notionalValue: trade.notionalValue,
-      unrealizedPnL: 0,
-      unrealizedPnLPercent: 0,
-      marginRequirement: usesMargin ? trade.totalAmountOrMargin : 0,
-      notes: trade.rationale,
-    };
-
-    const newTradeRecord: TradeRecord = {
-      id: `trade-${Date.now()}`,
-      timestamp: execDateTime.split(' ')[1] || new Date().toLocaleTimeString('zh-TW', { hour12: false }),
-      dateLabel: `${execDateTime} (即時撮合建倉)`,
+    const me = findMe();
+    if (!me) return;
+    const r = applyOpenFill(me, {
       symbol: trade.symbol,
       name: trade.name,
       category: trade.category,
       action: trade.action,
       price: trade.price,
-      quantity: trade.quantity,
-      amount: trade.totalAmountOrMargin,
-      marginUsed: usesMargin ? trade.totalAmountOrMargin : 0,
-      realizedPnL: 0,
+      qty: trade.quantity,
+      multiplier: trade.unitMultiplier,
+      totalAmountOrMargin: trade.totalAmountOrMargin,
+      notionalValue: trade.notionalValue,
       rationale: trade.rationale,
-    };
-
-    const currentP =
-      profiles.find(p => p.id === currentProfileId || p.isCurrentPlayer) || currentProfile || profiles[0];
-    if (!currentP) return;
-
-    const studentUid = currentP.uid || getOrGeneratePermanentUID(currentP.studentName);
-
-    // 1. Construct and save immutable ledger transaction
-    const txId = `TX_${Date.now()}_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-    const immutableTx: ImmutableTransaction = {
-      transactionId: txId,
-      uid: studentUid,
-      studentName: currentP.studentName,
-      symbol: trade.symbol,
-      name: trade.name,
-      category: trade.category,
-      side: trade.action.includes('BUY') ? 'BUY' : trade.action.includes('SHORT') ? 'SHORT' : 'BUY',
-      orderType: trade.action,
-      price: trade.price,
-      quantity: trade.quantity,
-      amount: trade.totalAmountOrMargin,
-      marginUsed: usesMargin ? trade.totalAmountOrMargin : 0,
-      timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
-      status: 'FILLED',
-      rationale: trade.rationale || '金融博士班模擬策略委託',
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      createdAt: Date.now(),
-    };
-    saveImmutableTransaction(immutableTx).catch(e => console.warn('Immutable ledger sync:', e));
-
-    // Consolidate with existing position if identical symbol and action (no duplicate cards)
-    const existingIndex = (currentP.positions || []).findIndex(
-      pos => pos.symbol === trade.symbol && pos.orderType === trade.action
-    );
-    let updatedPositionsList: Position[] = [];
-    if (existingIndex >= 0) {
-      const existing = currentP.positions[existingIndex];
-      const mergedQty = existing.quantity + trade.quantity;
-      const mergedCost = existing.totalCostOrMargin + trade.totalAmountOrMargin;
-      // Correct weighted average transaction entry price: (P1*Q1 + P2*Q2) / (Q1 + Q2)
-      const totalEntryVal = (existing.entryPrice * existing.quantity) + (trade.price * trade.quantity);
-      const weightedEntryPrice = mergedQty > 0 ? Number((totalEntryVal / mergedQty).toFixed(2)) : trade.price;
-      const mergedPos: Position = {
-        ...existing,
-        quantity: mergedQty,
-        totalCostOrMargin: mergedCost,
-        entryPrice: weightedEntryPrice,
-        notionalValue: existing.currentPrice * mergedQty * trade.unitMultiplier,
-      };
-      updatedPositionsList = currentP.positions.map((p, idx) => (idx === existingIndex ? mergedPos : p));
-    } else {
-      updatedPositionsList = [...(currentP.positions || []), newPosition];
-    }
-
-    const updatedProfile: StudentProfile = {
-      ...currentP,
-      uid: studentUid,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      availableCash: currentP.availableCash - trade.totalAmountOrMargin,
-      marginDeposits: currentP.marginDeposits + (usesMargin ? trade.totalAmountOrMargin : 0),
-      positions: updatedPositionsList,
-      tradeHistory: [newTradeRecord, ...(currentP.tradeHistory || [])],
-      immutableTransactions: [immutableTx, ...(currentP.immutableTransactions || [])],
-      updatedAt: Date.now(),
-    };
-
-    setProfiles(prev =>
-      prev.map(p =>
-        p.id === currentP.id || p.studentName.trim().toLowerCase() === currentP.studentName.trim().toLowerCase()
-          ? updatedProfile
-          : p
-      )
-    );
-
-    // Save to Firebase Firestore immediately for real-time class ranking
-    savePlayerProfileToFirebase(updatedProfile).catch(e =>
-      console.error('Firebase save trade error:', e)
-    );
+      label: '即時成交',
+    });
+    commitProfile(r.profile, [r.tx]);
   };
 
-  // Close Position Handler
+  // 即時平倉（不走委託簿的商品）
   const handleClosePosition = async (positionId: string) => {
-    const currentP =
-      profiles.find(p => p.id === currentProfileId || p.isCurrentPlayer) || currentProfile || profiles[0];
-    if (!currentP) return;
+    const me = findMe();
+    const pos = me?.positions?.find(x => x.id === positionId);
+    if (!me || !pos) return;
+    const r = applyCloseFill(me, { positionId, symbol: pos.symbol, action: pos.orderType, price: pos.currentPrice, qty: pos.quantity, label: '即時平倉' });
+    if (r) commitProfile(r.profile, [r.tx]);
+  };
 
-    const targetPos = currentP.positions?.find(pos => pos.id === positionId);
-    if (!targetPos) return;
+  // ───────────── 委託簿（台股、ETF、債券 ETF、權證、期貨、選擇權） ─────────────
+  const [orderToast, setOrderToast] = useState<{ text: string; tone: 'ok' | 'warn' | 'info' } | null>(null);
+  useEffect(() => {
+    if (!orderToast) return;
+    const t = setTimeout(() => setOrderToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [orderToast]);
 
-    const isFutures = targetPos.category === 'futures' || targetPos.category === 'commodities';
-    const isSeller =
-      targetPos.orderType === 'SELL_CALL_OPTION' || targetPos.orderType === 'SELL_PUT_OPTION';
-    const usesMargin =
-      isFutures ||
-      isSeller ||
-      targetPos.orderType === 'SHORT_SELL_STOCK' ||
-      targetPos.orderType === 'SHORT_SELL_ETF' ||
-      targetPos.orderType === 'SHORT_SELL_CRYPTO' ||
-      targetPos.orderType === 'BUY_COMMODITY_LONG' ||
-      targetPos.orderType === 'SELL_COMMODITY_SHORT';
+  const applyClaimedFills = (fills: ClaimedFill[]) => {
+    let me = findMe();
+    if (!me) return;
+    const txs: ImmutableTransaction[] = [];
+    const msgs: string[] = [];
+    for (const f of fills) {
+      const unit = f.category === 'futures' || f.category === 'options' ? '口' : '張';
+      if (f.intent === 'CLOSE') {
+        const r = applyCloseFill(me, { positionId: f.positionId, symbol: f.symbol, action: f.action, price: f.price, qty: f.qty, label: '平倉成交', ref: f.orderId });
+        if (!r) {
+          msgs.push(`⚠️ ${f.name} 平倉成交 ${f.qty} ${unit}，但庫存已無此部位，未記帳`);
+          continue;
+        }
+        me = r.profile;
+        txs.push(r.tx);
+        msgs.push(`成交回報：${f.side === 'BUY' ? '買進' : '賣出'}平倉 ${f.name} ${r.qty} ${unit} @ ${f.price}，損益 ${Math.round(r.realized).toLocaleString()}`);
+      } else {
+        const r = applyOpenFill(me, {
+          symbol: f.symbol, name: f.name, category: f.category, action: f.action, price: f.price, qty: f.qty,
+          multiplier: f.multiplier, marginRequirement: f.marginRequirement, rationale: f.rationale, label: '委託成交', ref: f.orderId,
+        });
+        me = r.profile;
+        txs.push(r.tx);
+        msgs.push(`成交回報：${f.side === 'BUY' ? '買進' : '賣出'} ${f.name} ${f.qty} ${unit} @ ${f.price}`);
+      }
+    }
+    if (txs.length > 0) commitProfile(me, txs);
+    if (msgs.length > 0) setOrderToast({ text: msgs.slice(-3).join('\n'), tone: 'ok' });
+  };
 
-    const refundCash = targetPos.totalCostOrMargin + targetPos.unrealizedPnL;
-    const refundMargin = usesMargin ? targetPos.totalCostOrMargin : 0;
-    const studentUid = currentP.uid || getOrGeneratePermanentUID(currentP.studentName);
+  const orderBook = useOrderBook(
+    isAuthenticated && currentProfile ? currentProfile.id : null,
+    currentProfile?.studentName || '',
+    applyClaimedFills
+  );
+  const reservedCash = reservedAmount(orderBook.orders, instruments);
+  const [isOrdersPanelOpen, setIsOrdersPanelOpen] = useState(false);
+  const activeOrderCount = orderBook.orders.filter(o => o.status === 'QUEUED' || o.status === 'WORKING' || o.status === 'PARTIAL').length;
 
-    // Write offset close transaction to immutable ledger
-    const closeTxId = `TX_CLOSE_${Date.now()}_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-    const closeImmutableTx: ImmutableTransaction = {
-      transactionId: closeTxId,
-      uid: studentUid,
-      studentName: currentP.studentName,
-      symbol: targetPos.symbol,
-      name: targetPos.name,
-      category: targetPos.category,
-      side: targetPos.orderType.includes('SHORT') ? 'COVER' : 'SELL',
-      orderType: 'CLOSE_POSITION',
-      price: targetPos.currentPrice,
-      quantity: targetPos.quantity,
-      amount: refundCash,
-      marginUsed: 0,
-      timestamp: new Date().toLocaleString('zh-TW', { hour12: false }),
-      status: 'FILLED',
-      rationale: `平倉沖銷 ${targetPos.name} (${targetPos.symbol})，實現損益 NT$ ${Math.round(targetPos.unrealizedPnL).toLocaleString()}`,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      createdAt: Date.now(),
-    };
-    saveImmutableTransaction(closeImmutableTx).catch(e => console.warn('Immutable ledger close sync:', e));
+  /** 送出委託（含額度與庫存檢查） */
+  const placeOrder = async (req: OrderRequest): Promise<{ order?: ClientOrder; error?: string }> => {
+    const me = findMe();
+    if (!isAuthenticated || !me) return { error: '請先登入' };
+    if (req.intent === 'OPEN') {
+      const inst = instruments.find(i => i.symbol === req.symbol);
+      if (inst) {
+        const px = req.priceType === 'LIMIT' && req.limitPrice ? req.limitPrice : inst.price * 1.1;
+        const need = computeOrderCost(inst, req.action, px, req.quantity).totalCostOrMargin;
+        const free = me.availableCash - reservedCash;
+        if (need > free) return { error: `可用額度不足：需要 NT$ ${Math.round(need).toLocaleString()}，可用 NT$ ${Math.round(free).toLocaleString()}（已扣除未成交委託圈存）` };
+      }
+    } else {
+      const pos = me.positions?.find(p => p.id === req.positionId);
+      if (!pos) return { error: '找不到要平倉的持倉' };
+      const free = pos.quantity - pendingCloseQty(orderBook.orders, pos.id);
+      if (req.quantity > free) return { error: `可平倉數量只剩 ${free}（其餘已有平倉委託）` };
+    }
+    const r = await orderBook.submit(req);
+    setOrderToast(r.error ? { text: `委託失敗：${r.error}`, tone: 'warn' } : { text: describeOrder(r.order!), tone: r.order!.status === 'CANCELLED' ? 'warn' : 'info' });
+    return r;
+  };
 
-    const closeTradeRecord: TradeRecord = {
-      id: `close-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString('zh-TW', { hour12: false }),
-      dateLabel: '平倉沖銷結算',
-      symbol: targetPos.symbol,
-      name: targetPos.name,
-      category: targetPos.category,
-      action: targetPos.orderType,
-      price: targetPos.currentPrice,
-      quantity: targetPos.quantity,
-      amount: refundCash,
-      marginUsed: 0,
-      realizedPnL: targetPos.unrealizedPnL,
-      rationale: `平倉沖銷 ${targetPos.symbol} 部位，回收現金 NT$ ${Math.round(refundCash).toLocaleString()}`,
-    };
+  // 電腦版下單視窗：台灣市場商品改送委託（輸入的價格就是限價）
+  const handleModalTrade = async (trade: Parameters<typeof handleExecuteTrade>[0]) => {
+    if (!usesOrderBook(trade.category)) return handleExecuteTrade(trade);
+    const inst = instruments.find(i => i.symbol === trade.symbol);
+    await placeOrder({
+      symbol: trade.symbol, name: trade.name, category: trade.category, action: trade.action, intent: 'OPEN',
+      priceType: 'LIMIT', tif: 'ROD', limitPrice: roundToTick(trade.category, trade.symbol, trade.price),
+      quantity: trade.quantity, rationale: trade.rationale, multiplier: trade.unitMultiplier,
+      marginRequirement: inst?.marginRequirement ?? null,
+    });
+  };
 
-    const priorRealizedPnL = currentP.realizedPnL ?? (currentP.tradeHistory || []).reduce((acc, h) => acc + (h.realizedPnL || 0), 0);
-    const newCumulativeRealizedPnL = priorRealizedPnL + targetPos.unrealizedPnL;
-
-    const updatedProfile: StudentProfile = {
-      ...currentP,
-      uid: studentUid,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      availableCash: currentP.availableCash + refundCash,
-      marginDeposits: Math.max(0, currentP.marginDeposits - refundMargin),
-      positions: (currentP.positions || []).filter(pos => pos.id !== positionId),
-      tradeHistory: [closeTradeRecord, ...(currentP.tradeHistory || [])],
-      immutableTransactions: [closeImmutableTx, ...(currentP.immutableTransactions || [])],
-      realizedPnL: newCumulativeRealizedPnL,
-      cumulativeRealizedPnL: newCumulativeRealizedPnL,
-      updatedAt: Date.now(),
-    };
-
-    setProfiles(prev =>
-      prev.map(p =>
-        p.id === currentP.id || p.studentName.trim().toLowerCase() === currentP.studentName.trim().toLowerCase()
-          ? updatedProfile
-          : p
-      )
-    );
-
-    // Save to Firebase Firestore immediately for real-time class ranking
-    savePlayerProfileToFirebase(updatedProfile).catch(e =>
-      console.error('Firebase close pos error:', e)
-    );
+  // 電腦版平倉按鈕：台灣市場商品改送「現價限價 ROD」平倉委託
+  const handleCloseRequest = async (positionId: string) => {
+    const pos = findMe()?.positions?.find(x => x.id === positionId);
+    if (!pos) return;
+    if (!usesOrderBook(pos.category)) return handleClosePosition(positionId);
+    await placeOrder({
+      symbol: pos.symbol, name: pos.name, category: pos.category, action: pos.orderType, intent: 'CLOSE', positionId,
+      priceType: 'LIMIT', tif: 'ROD', limitPrice: roundToTick(pos.category, pos.symbol, pos.currentPrice),
+      quantity: pos.quantity - pendingCloseQty(orderBook.orders, positionId), rationale: '平倉', multiplier: pos.unitMultiplier,
+      marginRequirement: null,
+    });
   };
 
   // Add New Student Profile Handler
@@ -1445,13 +1337,25 @@ export default function App() {
           totalReturnPct={totalReturnPct}
           totalUnrealizedPnL={totalUnrealizedPnL}
           onLogin={() => setIsPlayerSetupOpen(true)}
-          onExecuteTrade={handleExecuteTrade}
-          onClosePosition={handleClosePosition}
+          onExecuteTrade={handleModalTrade}
+          onClosePosition={handleCloseRequest}
           onOpenAdvancedTrade={inst => handleSelectInstrumentToTrade(inst)}
           onOpenProAnalysis={() => setIsProAnalysisOpen(true)}
           onSwitchToDesktop={() => setUiMode('desktop')}
           lastUpdateTime={lastFinmindUpdateTime}
+          orders={orderBook.orders}
+          reservedCash={reservedCash}
+          onPlaceOrder={placeOrder}
+          onCancelOrder={async id => { const r = await orderBook.cancel(id); setOrderToast(r.error ? { text: `刪單失敗：${r.error}`, tone: 'warn' } : { text: '已刪單', tone: 'info' }); return r; }}
+          onModifyOrder={orderBook.modify}
         />
+      )}
+      {orderToast && (
+        <div role="status" aria-live="polite" className="fixed left-1/2 -translate-x-1/2 top-3 z-[100] max-w-[92vw] w-[420px] px-4 py-3 rounded-2xl shadow-2xl text-[14px] font-bold whitespace-pre-line"
+          style={{ background: orderToast.tone === 'warn' ? '#3a1015' : orderToast.tone === 'ok' ? '#0d2a18' : '#1d2632', color: orderToast.tone === 'warn' ? '#ff8a93' : orderToast.tone === 'ok' ? '#5ef08f' : '#e6edf3', border: '1px solid rgba(255,255,255,0.12)' }}
+          onClick={() => setOrderToast(null)}>
+          {orderToast.text}
+        </div>
       )}
       {!isMobileUI && (<>
       {/* Top Header - Layer 1 (Portfolio Header) & Layer 2 (Core Actions) */}
@@ -2095,7 +1999,7 @@ export default function App() {
               <PortfolioOverview
                 currentProfile={currentProfile}
                 onOpenTrading={handleOpenGeneralTrading}
-                onClosePosition={handleClosePosition}
+                onClosePosition={handleCloseRequest}
                 onViewInstrumentKLine={inst => setViewingKLineInst(inst)}
                 allInstruments={instruments}
                 onEditPlayer={() => setIsPlayerSetupOpen(true)}
@@ -2252,7 +2156,7 @@ export default function App() {
           handleOpenCalculator(selectedInstrument);
         }}
         onOpenGlossary={openDrawer}
-        onExecuteTrade={handleExecuteTrade}
+        onExecuteTrade={handleModalTrade}
       />
 
       {/* Gemini AI Financial Calculator Modal */}
@@ -2418,7 +2322,7 @@ export default function App() {
         onClose={() => setIsTradeStatementOpen(false)}
         profile={currentProfile || profiles[0]}
         allInstruments={instruments}
-        onClosePosition={handleClosePosition}
+        onClosePosition={handleCloseRequest}
         onViewInstrumentKLine={inst => setViewingKLineInst(inst)}
         onOpenTrading={inst => {
           if (inst) setSelectedInstrument(inst);
@@ -2509,6 +2413,30 @@ export default function App() {
       )}
 
       {!isMobileUI && (<>
+      {/* 委託查詢（電腦版） */}
+      {isAuthenticated && (
+        <button type="button" onClick={() => setIsOrdersPanelOpen(true)}
+          className="fixed right-4 bottom-24 sm:bottom-6 z-40 rounded-full px-4 py-3 shadow-xl font-black text-[14px] bg-slate-900 text-amber-300 border border-amber-400/40">
+          📋 委託查詢{activeOrderCount > 0 ? `（${activeOrderCount}）` : ''}
+        </button>
+      )}
+      {isOrdersPanelOpen && (
+        <div className="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center p-4" onClick={() => setIsOrdersPanelOpen(false)}>
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl pt-4" style={{ background: '#0b0f14', color: '#e6edf3' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 pb-3">
+              <span className="text-[18px] font-black">委託查詢</span>
+              <button type="button" aria-label="關閉" onClick={() => setIsOrdersPanelOpen(false)} className="w-9 h-9 rounded-lg text-[18px]">✕</button>
+            </div>
+            <OrdersView
+              orders={orderBook.orders}
+              onCancelOrder={orderBook.cancel}
+              onModifyOrder={orderBook.modify}
+              onOpenSymbol={sym => { const i = instruments.find(x => x.symbol === sym); if (i) { setSelectedInstrument(i); setIsOrdersPanelOpen(false); } }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Mobile Sticky Bottom Navigation Bar - Daytime Light Mode */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200 px-2 py-1.5 flex items-center justify-around shadow-xl safe-area-pb text-slate-700">
         <button

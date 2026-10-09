@@ -305,7 +305,7 @@ async function fetchFinmindData(dataset: string, dataId: string, startDate?: str
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': '市場資料-50000000-Tycoon/2.0',
+        'User-Agent': 'Stock5000-Tycoon/2.0',
         ...(currentFinmindToken ? { Authorization: `Bearer ${currentFinmindToken}` } : {}),
       },
     });
@@ -399,7 +399,7 @@ async function finmindRange(dataset: string, dataId: string, startDate: string, 
     const res = await fetch(url.toString(), {
       signal: controller.signal,
       headers: {
-        'User-Agent': '市場資料-50000000-Tycoon/2.0',
+        'User-Agent': 'Stock5000-Tycoon/2.0',
         ...(currentFinmindToken ? { Authorization: `Bearer ${currentFinmindToken}` } : {}),
       },
     });
@@ -732,7 +732,7 @@ app.get('/api/finmind/connection-test', async (req, res) => {
   try {
     const response = await fetch(`${testUrl}&token=${encodeURIComponent(token)}`, {
       headers: {
-        'User-Agent': '市場資料-50000000-Tycoon/2.0',
+        'User-Agent': 'Stock5000-Tycoon/2.0',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
@@ -936,7 +936,7 @@ async function getLiveStockSnapshots(): Promise<Map<string, any>> {
     const timeout = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': '市場資料-50000000-Tycoon/2.0' },
+      headers: { 'User-Agent': 'Stock5000-Tycoon/2.0' },
     });
     clearTimeout(timeout);
     if (res.ok) {
@@ -982,7 +982,7 @@ async function getLiveFuturesSnapshots(): Promise<Map<string, any>> {
     const timeout = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': '市場資料-50000000-Tycoon/2.0' },
+      headers: { 'User-Agent': 'Stock5000-Tycoon/2.0' },
     });
     clearTimeout(timeout);
     if (res.ok) {
@@ -1128,7 +1128,7 @@ app.get('/api/market/live-quotes', async (req, res) => {
     let open = q.open, high = q.high, low = q.low;
     let marketDate = q.date || null;
     let dataset = q.dataset || null;
-    let dataSource = isFinmind ? '市場行情' : kind === 'commodity' ? '本地快取（非市場資料，非即時）' : '本地快取（尚未成功從 更新）';
+    let dataSource = isFinmind ? '市場行情' : kind === 'commodity' ? '本地快取（非市場資料，非即時）' : '本地快取（尚未成功更新）';
     let fetchTime = q.fetchTime || (marketDate ? `${marketDate} 收盤` : '日期不明');
     let lastTradeTime = kind === 'futures' || kind === 'option' ? '13:45:00' : '13:30:00';
     let bestBidAsk: { fiveBids?: any[]; fiveAsks?: any[] } = {};
@@ -2306,7 +2306,7 @@ app.get('/api/market/query-quote', async (req, res) => {
     const limitDown = kind === 'tw_stock' ? calcTwseLimit(prevClose, false) : undefined;
     return res.json({
       success: true,
-      data_source: q.dataSource === '市場行情' ? '市場行情' : '本地快取（尚未成功從 更新）',
+      data_source: q.dataSource === '市場行情' ? '市場行情' : '本地快取（尚未成功更新）',
       is_mock: false,
       tokens_used: 0,
       data: {

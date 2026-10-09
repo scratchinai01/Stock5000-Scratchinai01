@@ -29,6 +29,7 @@ import { CommoditiesBoard } from './components/CommoditiesBoard';
 import { CryptoLiveBoard } from './components/CryptoLiveBoard';
 import { GlobalMarketRadarModal } from './components/GlobalMarketRadarModal';
 import { ProAnalysisModal } from './components/ProAnalysisModal';
+import { MobileShell } from './mobile/MobileShell';
 import { ResetPortfolioModal } from './components/ResetPortfolioModal';
 import { GeminiAuditSheetsModal } from './components/GeminiAuditSheetsModal';
 import { Term } from './components/Term';
@@ -180,6 +181,30 @@ export default function App() {
   const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => DEFAULT_INSTRUMENTS.map(placeholderInstrument));
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
   const [isProAnalysisOpen, setIsProAnalysisOpen] = useState(false);
+  // 手機版介面：寬度 < 768px 自動啟用；使用者可手動切換（記在 localStorage）
+  const [uiOverride, setUiOverride] = useState<'mobile' | 'desktop' | null>(() => {
+    try {
+      const v = localStorage.getItem('ui_mode_v1');
+      return v === 'mobile' || v === 'desktop' ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const isMobileUI = uiOverride ? uiOverride === 'mobile' : isNarrow;
+  const setUiMode = (mode: 'mobile' | 'desktop') => {
+    setUiOverride(mode);
+    try {
+      localStorage.setItem('ui_mode_v1', mode);
+    } catch {
+      /* ignore */
+    }
+  };
   const [activeView, setActiveView] = useState<'overview' | 'trading' | 'ppt_studio' | 'leaderboard' | 'commodities' | 'crypto'>('overview');
   const [isGlobalRadarOpen, setIsGlobalRadarOpen] = useState(false);
   const [isFinmindLiveConnected, setIsFinmindLiveConnected] = useState<boolean>(true);
@@ -1408,6 +1433,27 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-amber-200">
+      {isMobileUI && (
+        <MobileShell
+          instruments={instruments}
+          selectedInstrument={selectedInstrument}
+          onSelectInstrument={setSelectedInstrument}
+          isAuthenticated={isAuthenticated}
+          currentProfile={currentProfile}
+          profiles={profiles}
+          netAssetValue={netAssetValue}
+          totalReturnPct={totalReturnPct}
+          totalUnrealizedPnL={totalUnrealizedPnL}
+          onLogin={() => setIsPlayerSetupOpen(true)}
+          onExecuteTrade={handleExecuteTrade}
+          onClosePosition={handleClosePosition}
+          onOpenAdvancedTrade={inst => handleSelectInstrumentToTrade(inst)}
+          onOpenProAnalysis={() => setIsProAnalysisOpen(true)}
+          onSwitchToDesktop={() => setUiMode('desktop')}
+          lastUpdateTime={lastFinmindUpdateTime}
+        />
+      )}
+      {!isMobileUI && (<>
       {/* Top Header - Layer 1 (Portfolio Header) & Layer 2 (Core Actions) */}
       <header className="relative sm:sticky sm:top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs text-slate-900 transition-all">
         {isHeaderCollapsed ? (
@@ -2181,6 +2227,7 @@ export default function App() {
           </>
         )}
       </main>
+      </>)}
 
       {/* Trading Modal */}
       <TradingModal
@@ -2461,6 +2508,7 @@ export default function App() {
         />
       )}
 
+      {!isMobileUI && (<>
       {/* Mobile Sticky Bottom Navigation Bar - Daytime Light Mode */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200 px-2 py-1.5 flex items-center justify-around shadow-xl safe-area-pb text-slate-700">
         <button
@@ -2554,7 +2602,15 @@ export default function App() {
         <p className="mt-1 text-[11px] text-slate-500">
           涵蓋股票、長天期美債ETF、大盤ETF、台指期貨(大台/小台/個股期)、台指選擇權(TXO Buy/Sell Call/Put) 與個股認購認售權證
         </p>
+        <button
+          type="button"
+          onClick={() => setUiMode('mobile')}
+          className="mt-3 inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1.5 text-[12px] font-bold text-slate-700 hover:bg-slate-100"
+        >
+          📱 切換手機版介面
+        </button>
       </footer>
+      </>)}
     </div>
   );
 }

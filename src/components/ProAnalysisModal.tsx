@@ -281,6 +281,16 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
   const yearly = useMemo(() => (adjSeries ? yearlyReturns(adjSeries.date, adjSeries.close) : []), [adjSeries]);
   const season = useMemo(() => (adjSeries ? monthlySeasonality(adjSeries.date, adjSeries.close) : []), [adjSeries]);
   const dd = useMemo(() => (adjSeries ? drawdownSeries(adjSeries.close) : []), [adjSeries]);
+  useEffect(() => {
+    if (tab === 'backtest') {
+      try {
+        localStorage.setItem('pro_analysis_backtest_used', '1');
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [tab]);
+
   const bt = useMemo(() => (adjSeries && adjSeries.close.length > 2 ? backtest(adjSeries, params) : null), [adjSeries, params]);
 
   const ma = useMemo(() => {

@@ -6,6 +6,7 @@ import {
   StudentProfile,
 } from '../types/market';
 import { KLineChart } from './KLineChart';
+import { computeOrderCost } from '../utils/orderMath';
 import { LimitUpAlternativeModal } from './LimitUpAlternativeModal';
 import { SmartInstrumentSearchBoard } from './SmartInstrumentSearchBoard';
 import { CommoditiesBoard } from './CommoditiesBoard';
@@ -609,52 +610,8 @@ export const TradingModal: React.FC<TradingModalProps> = ({
       selectedInstrument.changePercent <= -9.8
     );
 
-  let totalCostOrMargin = 0;
-  let notionalValue = currentPrice * multiplier * quantity;
-
-  if (selectedInstrument.category === 'commodities') {
-    const marginPerContract = selectedInstrument.marginRequirement || 50000;
-    totalCostOrMargin = marginPerContract * quantity;
-    notionalValue = currentPrice * multiplier * 32.0 * quantity;
-  } else if (selectedInstrument.category === 'crypto') {
-    const sym = selectedInstrument.symbol.toUpperCase();
-    const isTwStable = sym === 'TWDT' || sym === 'TWDC';
-    const rate = isTwStable ? 1.0 : 32.5; // TWDT is 1:1 TWD; Global stablecoins are pegged to USD
-    notionalValue = currentPrice * (multiplier || 1) * rate * quantity;
-    if (orderAction === 'SHORT_SELL_CRYPTO') {
-      totalCostOrMargin = notionalValue * 0.5;
-    } else {
-      totalCostOrMargin = notionalValue;
-    }
-  } else if (selectedInstrument.category === 'us_stocks') {
-    totalCostOrMargin = notionalValue;
-  } else if (selectedInstrument.category === 'stocks') {
-    if (orderAction === 'BUY_STOCK') {
-      totalCostOrMargin = notionalValue;
-    } else if (orderAction === 'BUY_MARGIN_STOCK') {
-      totalCostOrMargin = notionalValue * 0.4;
-    } else if (orderAction === 'SHORT_SELL_STOCK') {
-      totalCostOrMargin = notionalValue * 0.9;
-    }
-  } else if (selectedInstrument.category === 'bonds' || selectedInstrument.category === 'etfs') {
-    if (orderAction === 'SHORT_SELL_ETF') {
-      totalCostOrMargin = notionalValue * 0.9;
-    } else {
-      totalCostOrMargin = notionalValue;
-    }
-  } else if (selectedInstrument.category === 'futures') {
-    const marginPerContract =
-      selectedInstrument.marginRequirement || (currentPrice * multiplier * 0.135);
-    totalCostOrMargin = marginPerContract * quantity;
-  } else if (selectedInstrument.category === 'options') {
-    if (orderAction === 'SELL_CALL_OPTION' || orderAction === 'SELL_PUT_OPTION') {
-      totalCostOrMargin = (selectedInstrument.marginRequirement || 65000) * quantity;
-    } else {
-      totalCostOrMargin = currentPrice * multiplier * quantity;
-    }
-  } else if (selectedInstrument.category === 'warrants') {
-    totalCostOrMargin = currentPrice * multiplier * quantity;
-  }
+  // 金額與保證金規則集中在 utils/orderMath（手機版共用）
+  const { totalCostOrMargin, notionalValue } = computeOrderCost(selectedInstrument, orderAction, currentPrice, quantity);
 
   const hasEnoughCash = availableCash >= totalCostOrMargin;
 

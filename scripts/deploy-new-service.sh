@@ -46,7 +46,7 @@ fi
 python3 -c 'import json,sys; print("FINMIND_API_TOKEN: " + json.dumps(sys.argv[1]))' "$FINMIND_TOKEN" >> "$ENV_FILE"
 unset FINMIND_TOKEN
 
-ARGS=(run deploy "$NEW_SERVICE" --source . --region "$REGION" --env-vars-file "$ENV_FILE" --allow-unauthenticated --memory 1Gi)
+ARGS=(run deploy "$NEW_SERVICE" --source . --region "$REGION" --env-vars-file "$ENV_FILE" --allow-unauthenticated --memory 1Gi --no-cpu-throttling)
 if [ -n "$SECRETS" ]; then
   ARGS+=(--set-secrets "$SECRETS")
 fi

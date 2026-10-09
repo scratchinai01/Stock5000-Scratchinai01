@@ -302,7 +302,10 @@ async function fetchFinmindData(dataset: string, dataId: string, startDate?: str
 // 其中台指期等數字甚至是 AI 編造的），從未自動更新。
 // 這裡改成定期向 FinMind 抓取最新日資料覆寫快取，並寫回磁碟。
 // =========================================================================
-const COMMODITY_SYMBOLS = new Set(['CL', 'BZ', 'NG', 'RB', 'GC', 'SI', 'PL', 'PA', 'ZS', 'ZC', 'ZW', 'ZL', 'ZM', 'KC', 'SB', 'CC', 'OJ', 'CT', 'HG', 'ALI', 'NI', 'ZN', 'LE', 'HE', 'GF']);
+const COMMODITY_SYMBOLS = new Set(['HO', 'CL', 'BZ', 'NG', 'RB', 'GC', 'SI', 'PL', 'PA', 'ZS', 'ZC', 'ZW', 'ZL', 'ZM', 'KC', 'SB', 'CC', 'OJ', 'CT', 'HG', 'ALI', 'NI', 'ZN', 'LE', 'HE', 'GF']);
+
+// 加密貨幣由 Binance 公開行情提供，不向 FinMind 查詢
+const CRYPTO_SYMBOLS = new Set(['BTC', 'ETH', 'SOL', 'BNB', 'DOGE', 'USDT', 'USDC', 'TWDT', 'XRP']);
 
 // 系統內代號 → FinMind 期貨代號（股票期貨代號依 FinMind TaiwanFutOptDailyInfo 查核）
 const FUTURES_CODE_MAP: Record<string, string> = {
@@ -327,7 +330,7 @@ function getContractMultiplier(sym: string): number {
 type SymbolKind = 'tw_stock' | 'futures' | 'option' | 'us_stock' | 'commodity';
 function classifySymbol(sym: string): SymbolKind {
   const s = sym.toUpperCase();
-  if (COMMODITY_SYMBOLS.has(s)) return 'commodity';
+  if (COMMODITY_SYMBOLS.has(s) || CRYPTO_SYMBOLS.has(s)) return 'commodity'; // 非 FinMind 商品
   if (/^[A-Z]{2,4}-\d+(\.\d+)?-(C|P|CALL|PUT)$/.test(s)) return 'option';
   if (FUTURES_CODE_MAP[s]) return 'futures';
   if (/^\d{4}F$/.test(s)) return 'futures';
@@ -341,6 +344,13 @@ const ymdTW = (d: Date) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ta
 const daysAgoTW = (n: number) => ymdTW(new Date(Date.now() - n * 86400000));
 const round2 = (n: number) => Number(n.toFixed(2));
 
+const finmindStats = { calls: 0, errors: 0, lastLatencyMs: 0, lastError: '' as string };
+
+/** 等某件事最多 ms 毫秒；逾時就先回傳，讓 API 不會卡住（原本會卡到 Cloud Run 300 秒逾時） */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
+  return Promise.race([p.catch(() => undefined), new Promise<undefined>(r => setTimeout(() => r(undefined), ms))]);
+}
+
 async function finmindRange(dataset: string, dataId: string, startDate: string, endDate?: string): Promise<any[]> {
   const url = new URL('https://api.finmindtrade.com/api/v4/data');
   url.searchParams.set('dataset', dataset);
@@ -350,8 +360,10 @@ async function finmindRange(dataset: string, dataId: string, startDate: string, 
   if (currentFinmindToken) url.searchParams.set('token', currentFinmindToken);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const t0 = Date.now();
   try {
+    finmindStats.calls++;
     const res = await fetch(url.toString(), {
       signal: controller.signal,
       headers: {
@@ -360,10 +372,15 @@ async function finmindRange(dataset: string, dataId: string, startDate: string, 
       },
     });
     const json: any = await res.json().catch(() => null);
+    finmindStats.lastLatencyMs = Date.now() - t0;
     if (!res.ok || !json || json.status !== 200) {
       throw new Error(`FinMind ${dataset}/${dataId} 失敗：HTTP ${res.status} ${json?.msg ?? ''}`.trim());
     }
     return Array.isArray(json.data) ? json.data : [];
+  } catch (e: any) {
+    finmindStats.errors++;
+    finmindStats.lastError = `${dataset}/${dataId}: ${e?.name === 'AbortError' ? '逾時 10 秒' : e?.message}`;
+    throw e;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -519,6 +536,7 @@ const trackedSymbols = new Set<string>(Object.keys(authenticQuotesCache));
 const refreshFailures = new Map<string, string>();
 let lastRefreshAt = 0;
 let refreshInFlight: Promise<void> | null = null;
+let refreshProgress = { done: 0, total: 0, startedAt: 0 };
 
 async function runWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {
   let idx = 0;
@@ -558,14 +576,21 @@ async function refreshAllQuotes(reason: string) {
       }
     }
 
+    // 台指期與權值股優先更新，畫面最常用
+    const priority = ['TX', 'MTX', 'TMF', '2330', '0050', '2317', '2454'];
+    singles.sort((a, b) => (priority.indexOf(a) + 1 || 99) - (priority.indexOf(b) + 1 || 99));
     let ok = 0;
-    await runWithConcurrency(singles, 5, async sym => {
+    refreshProgress = { done: 0, total: singles.length + optionGroups.size, startedAt: started };
+    console.log(`[FinMind Refresh] (${reason}) 開始更新 ${refreshProgress.total} 組`);
+    await runWithConcurrency(singles, 8, async sym => {
       try {
         await refreshSymbol(sym);
         refreshFailures.delete(sym);
         ok++;
       } catch (e: any) {
         refreshFailures.set(sym, e.message);
+      } finally {
+        refreshProgress.done++;
       }
     });
     for (const [id, syms] of optionGroups) {
@@ -613,7 +638,11 @@ refreshAllQuotes('startup').catch(e => console.error('[FinMind Refresh]', e));
 scheduleRefresh();
 
 /** 前端請求了快取裡沒有的代號：加入追蹤並立即抓一次 */
-async function ensureTracked(symbols: string[]) {
+async function ensureTracked(symbols: string[], waitMs = 6000) {
+  return withTimeout(ensureTrackedInner(symbols), waitMs);
+}
+
+async function ensureTrackedInner(symbols: string[]) {
   const fresh = symbols
     .map(s => s.trim().toUpperCase())
     .filter(s => s && !trackedSymbols.has(s) && classifySymbol(s) !== 'commodity' && s.length <= 20);
@@ -627,7 +656,7 @@ async function ensureTracked(symbols: string[]) {
       optionGroups.set(id, [...(optionGroups.get(id) || []), s]);
     } else singles.push(s);
   }
-  await runWithConcurrency(singles, 5, async s => {
+  await runWithConcurrency(singles, 8, async s => {
     try {
       await refreshSymbol(s);
       refreshFailures.delete(s);
@@ -1194,6 +1223,23 @@ async function getLiveFuturesSnapshots(): Promise<Map<string, any>> {
   return realTimeFuturesCache.data;
 }
 
+// 診斷用：查看 FinMind 自動更新狀態
+app.get('/api/finmind/refresh-status', (_req, res) => {
+  res.json({
+    tokenConfigured: Boolean(currentFinmindToken),
+    lastRefreshAt: lastRefreshAt ? new Date(lastRefreshAt).toISOString() : null,
+    refreshing: Boolean(refreshInFlight),
+    progress: refreshProgress,
+    trackedSymbols: trackedSymbols.size,
+    finmind: finmindStats,
+    failures: Object.fromEntries([...refreshFailures.entries()].slice(0, 40)),
+    sample: ['TX', '2330', '0050'].map(s => {
+      const q = authenticQuotesCache[s];
+      return q ? { symbol: s, price: q.close21, date: q.date, dataSource: q.dataSource ?? '舊快取' } : { symbol: s, price: null };
+    }),
+  });
+});
+
 app.get('/api/market/live-quotes', async (req, res) => {
   const session = getTaiwanMarketSession();
 
@@ -1203,10 +1249,13 @@ app.get('/api/market/live-quotes', async (req, res) => {
     .map(s => s.trim().toUpperCase())
     .filter(Boolean);
   // 伺服器剛啟動、第一次更新還沒完成時，先等它跑完，避免回傳舊快取
-  if (!lastRefreshAt && refreshInFlight) await refreshInFlight;
-  if (requested.length) await ensureTracked(requested);
+  // Cloud Run 在沒有請求時幾乎不給 CPU，背景計時器可能停擺；所以每次有人請求時檢查是否該更新。
+  // 更新在背景進行，這個請求最多只等幾秒，絕不能卡到逾時。
+  if (Date.now() - lastRefreshAt > refreshIntervalMs()) refreshAllQuotes('on-demand').catch(() => {});
+  if (!lastRefreshAt && refreshInFlight) await withTimeout(refreshInFlight, 8000);
+  if (requested.length) await ensureTracked(requested, 4000);
   if (req.query.force === 'true' && Date.now() - lastRefreshAt > 60 * 1000) {
-    await refreshAllQuotes('manual');
+    await withTimeout(refreshAllQuotes('manual'), 8000);
   }
 
   const stockSnaps = session.isTwseOpen ? await getLiveStockSnapshots() : new Map<string, any>();

@@ -1563,7 +1563,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-900 font-semibold truncate">
-                最新官方真實行情 (2026/10/02 收盤定格) · 涵蓋股票/債券/ETF/期貨/選擇權/美股/原物料
+                {selectedInstrument.isMock ? '⚠️ 尚未取得 FinMind 真實行情，暫停下單' : `FinMind 行情：${selectedInstrument.fetchTime || '資料時間不明'}`} · 涵蓋股票/債券/ETF/期貨/選擇權/美股/原物料
               </p>
             </div>
           </div>
@@ -2630,7 +2630,9 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      官方真實盤口 (2026/10/02 收盤定格 · 0 Token 消耗)
+                      {selectedInstrument.fiveBids?.length || selectedInstrument.fiveAsks?.length
+                        ? `FinMind 盤中最佳一檔 · ${selectedInstrument.fetchTime || ''}`
+                        : '收盤後無委買賣掛單資料'}
                     </span>
                   </div>
 
@@ -2683,13 +2685,12 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                         <span>委買價 (點擊填入)</span>
                       </div>
                       <div className="space-y-1">
-                        {(selectedInstrument.fiveBids || [
-                          { price: selectedInstrument.price, volume: 558 },
-                          { price: selectedInstrument.price - getTickSize(selectedInstrument.price), volume: 1480 },
-                          { price: selectedInstrument.price - getTickSize(selectedInstrument.price) * 2, volume: 1097 },
-                          { price: selectedInstrument.price - getTickSize(selectedInstrument.price) * 3, volume: 940 },
-                          { price: selectedInstrument.price - getTickSize(selectedInstrument.price) * 4, volume: 1438 },
-                        ]).map((b, idx) => {
+                        {!selectedInstrument.fiveBids?.length && (
+                          <div className="px-2.5 py-3 rounded-lg border border-dashed border-slate-200 text-[11px] text-slate-400 text-center">
+                            無委買資料
+                          </div>
+                        )}
+                        {(selectedInstrument.fiveBids || []).map((b, idx) => {
                           const maxVol = 2000;
                           const pct = Math.min(100, Math.round((b.volume / maxVol) * 100));
                           const isMatch = customPrice === b.price;
@@ -2731,13 +2732,12 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                         <span>委賣量</span>
                       </div>
                       <div className="space-y-1">
-                        {(selectedInstrument.fiveAsks || [
-                          { price: selectedInstrument.price + getTickSize(selectedInstrument.price), volume: 138 },
-                          { price: selectedInstrument.price + getTickSize(selectedInstrument.price) * 2, volume: 900 },
-                          { price: selectedInstrument.price + getTickSize(selectedInstrument.price) * 3, volume: 624 },
-                          { price: selectedInstrument.price + getTickSize(selectedInstrument.price) * 4, volume: 848 },
-                          { price: selectedInstrument.price + getTickSize(selectedInstrument.price) * 5, volume: 493 },
-                        ]).map((a, idx) => {
+                        {!selectedInstrument.fiveAsks?.length && (
+                          <div className="px-2.5 py-3 rounded-lg border border-dashed border-slate-200 text-[11px] text-slate-400 text-center">
+                            無委賣資料
+                          </div>
+                        )}
+                        {(selectedInstrument.fiveAsks || []).map((a, idx) => {
                           const maxVol = 2000;
                           const pct = Math.min(100, Math.round((a.volume / maxVol) * 100));
                           const isMatch = customPrice === a.price;
@@ -2773,17 +2773,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Ratio Bar: 內盤 (買方) vs 外盤 (賣方) */}
-                  <div className="pt-1">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 mb-1">
-                      <span className="text-emerald-800">內盤 54.41% (買方委託厚實)</span>
-                      <span className="text-rose-800">外盤 45.59%</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden flex">
-                      <div className="bg-emerald-500 h-full" style={{ width: '54.41%' }} />
-                      <div className="bg-rose-500 h-full" style={{ width: '45.59%' }} />
-                    </div>
-                  </div>
+                  {/* 內外盤比例原本是寫死的 54.41%，已移除 */}
                 </div>
 
                 {/* 3. 價格與數量步進器（券商標準三竹版型） */}

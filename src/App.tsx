@@ -132,6 +132,18 @@ export function deduplicateProfiles(list: StudentProfile[], currentId?: string):
   return result;
 }
 
+function placeholderInstrument(inst: InstrumentSpec): InstrumentSpec {
+  return {
+    ...inst,
+    isMock: true,
+    fiveBids: undefined,
+    fiveAsks: undefined,
+    avgPrice: undefined,
+    dataSource: '尚未取得 FinMind 行情（顯示的是內建佔位價，不可交易）',
+    fetchTime: '尚未取得 FinMind 行情',
+  };
+}
+
 export default function App() {
   const { openDrawer, totalLearnedCount } = useGlossary();
   const [profiles, setProfiles] = useState<StudentProfile[]>(() => {
@@ -162,8 +174,9 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     return sessionStorage.getItem('finmind_superuser_authenticated') === 'true';
   });
-  const [instruments, setInstruments] = useState<InstrumentSpec[]>(DEFAULT_INSTRUMENTS);
-  const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(DEFAULT_INSTRUMENTS[0]);
+  // 內建清單的價格只是佔位，收到 FinMind 行情前一律標示為不可交易，並移除編造的五檔掛單
+  const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => DEFAULT_INSTRUMENTS.map(placeholderInstrument));
+  const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
   const [activeView, setActiveView] = useState<'overview' | 'trading' | 'ppt_studio' | 'leaderboard' | 'commodities' | 'crypto'>('overview');
   const [isGlobalRadarOpen, setIsGlobalRadarOpen] = useState(false);
   const [isFinmindLiveConnected, setIsFinmindLiveConnected] = useState<boolean>(true);
@@ -849,10 +862,10 @@ export default function App() {
                 open: live.open ?? inst.open ?? live.currentPrice,
                 high: live.high ?? inst.high ?? Math.max(live.currentPrice, live.prevClose),
                 low: live.low ?? inst.low ?? Math.min(live.currentPrice, live.prevClose),
-                avgPrice: live.avgPrice ?? inst.avgPrice ?? live.currentPrice,
-                turnover: live.turnover ?? inst.turnover,
-                fiveBids: live.fiveBids ?? inst.fiveBids,
-                fiveAsks: live.fiveAsks ?? inst.fiveAsks,
+                avgPrice: live.avgPrice,
+                turnover: live.turnover,
+                fiveBids: live.fiveBids,
+                fiveAsks: live.fiveAsks,
                 limitUpPrice: live.limitUpPrice,
                 limitDownPrice: live.limitDownPrice,
                 isLimitUp: live.isLimitUp,
@@ -888,10 +901,10 @@ export default function App() {
               open: live.open ?? prev.open ?? live.currentPrice,
               high: live.high ?? prev.high ?? Math.max(live.currentPrice, live.prevClose),
               low: live.low ?? prev.low ?? Math.min(live.currentPrice, live.prevClose),
-              avgPrice: live.avgPrice ?? prev.avgPrice ?? live.currentPrice,
-              turnover: live.turnover ?? prev.turnover,
-              fiveBids: live.fiveBids ?? prev.fiveBids,
-              fiveAsks: live.fiveAsks ?? prev.fiveAsks,
+              avgPrice: live.avgPrice,
+              turnover: live.turnover,
+              fiveBids: live.fiveBids,
+              fiveAsks: live.fiveAsks,
               limitUpPrice: live.limitUpPrice,
               limitDownPrice: live.limitDownPrice,
               isLimitUp: live.isLimitUp,

@@ -1450,7 +1450,7 @@ export default function App() {
               <div>
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                   <h1 className="text-xs sm:text-base font-black text-slate-950 tracking-tight">
-                    市場資料 5000萬股市大富翁
+                    5000萬股市大富翁
                   </h1>
                   <span className="text-slate-300 hidden sm:inline">｜</span>
                   <div className="flex items-center gap-1.5">
@@ -2537,7 +2537,7 @@ export default function App() {
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-600 pb-20 sm:pb-6">
         <p className="font-semibold text-slate-700">
-          市場資料 5000萬股市大富翁實戰模擬系統 · 串接 台灣金融市場報價資料集 & Firebase 雲端遊戲紀錄存證
+          5000萬股市大富翁實戰模擬系統 · 串接台灣金融市場報價資料 & Firebase 雲端遊戲紀錄存證
         </p>
         <p className="mt-1 text-[11px] text-slate-500">
           涵蓋股票、長天期美債ETF、大盤ETF、台指期貨(大台/小台/個股期)、台指選擇權(TXO Buy/Sell Call/Put) 與個股認購認售權證

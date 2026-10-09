@@ -3202,7 +3202,7 @@ async function startServer() {
   });
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`市場資料 5000萬股市大富翁 Server running on http://0.0.0.0:${PORT}`);
+    console.log(`5000萬股市大富翁 Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

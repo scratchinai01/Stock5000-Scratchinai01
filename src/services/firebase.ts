@@ -475,7 +475,7 @@ export function exportClassroomData(profiles: StudentProfile[]): string {
   const exportPayload = {
     exportDate: new Date().toISOString(),
     schemaVersion: CURRENT_SCHEMA_VERSION,
-    platform: '市場資料 5000萬股市大富翁 (教師金融模擬平台)',
+    platform: '5000萬股市大富翁 (教師金融模擬平台)',
     studentCount: profiles.length,
     students: profiles.map(p => ({
       uid: p.uid || getOrGeneratePermanentUID(p.studentName),

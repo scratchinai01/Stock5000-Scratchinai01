@@ -32,6 +32,7 @@ import { ProAnalysisModal } from './components/ProAnalysisModal';
 import { MobileShell } from './mobile/MobileShell';
 import { OrdersView } from './mobile/OrderScreen';
 import { TermDetailSheet, type TryTarget } from './components/glossary/TermDetailSheet';
+import { PositionLessonSheet } from './components/glossary/PositionLessonSheet';
 import { applyOpenFill, applyCloseFill } from './utils/ledger';
 import { useOrderBook, type ClaimedFill, type ClientOrder, type OrderRequest } from './hooks/useOrderBook';
 import { usesOrderBook, roundToTick, positionPnL } from './utils/orderRules';
@@ -2385,6 +2386,7 @@ export default function App() {
 
       {/* 300 Financial Terms Educational Glossary Drawer */}
       <FinancialGlossaryDrawer />
+      <PositionLessonSheet instruments={instruments} profile={currentProfile} />
       <TermDetailSheet
         instruments={instruments}
         onTry={(t: TryTarget) => {

@@ -8,6 +8,7 @@ import {
   TermCategoryCode,
   TERM_CATEGORIES,
 } from '../data/financialTerms';
+import type { Position } from '../types/market';
 
 export interface UnlockedBadge {
   code: TermCategoryCode | 'master';
@@ -32,6 +33,11 @@ interface GlossaryContextType {
   openDrawer: (termId?: string, category?: TermCategoryCode) => void;
   closeDrawer: () => void;
   setActiveCategoryFilter: (category: TermCategoryCode | 'all') => void;
+
+  // 持倉小學堂（對帳單每一筆部位的教學卡）
+  lessonPosition: Position | null;
+  openPositionLesson: (pos: Position) => void;
+  closePositionLesson: () => void;
 
   // 名詞卡（詳情）
   detailTermId: string | null;
@@ -158,6 +164,9 @@ export const GlossaryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [markTermAsRead, recordTermClick]);
 
   const [detailTermId, setDetailTermId] = useState<string | null>(null);
+  const [lessonPosition, setLessonPosition] = useState<Position | null>(null);
+  const openPositionLesson = useCallback((pos: Position) => setLessonPosition(pos), []);
+  const closePositionLesson = useCallback(() => setLessonPosition(null), []);
   const openTermDetail = useCallback((termId: string) => {
     const t = TERMS_BY_ID.get(termId.toLowerCase()) || TERMS_BY_TITLE.get(termId.toLowerCase()) || TERMS_BY_ALIAS.get(termId.toLowerCase());
     if (!t) return;
@@ -249,6 +258,9 @@ export const GlossaryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     openDrawer,
     closeDrawer,
     setActiveCategoryFilter,
+    lessonPosition,
+    openPositionLesson,
+    closePositionLesson,
     detailTermId,
     openTermDetail,
     closeTermDetail,

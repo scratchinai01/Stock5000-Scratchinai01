@@ -89,7 +89,7 @@ export function TermDetailSheet({ instruments, onTry }: { instruments: Instrumen
   const back = () => setStack(s => (s.length > 1 ? s.slice(0, -1) : s));
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-end md:items-center justify-center" style={{ background: 'rgba(10,14,20,0.62)', backdropFilter: 'blur(3px)' }} onClick={g.closeTermDetail}>
+    <div className="fixed inset-0 z-[150] flex items-end md:items-center justify-center" style={{ background: 'rgba(10,14,20,0.62)', backdropFilter: 'blur(3px)' }} onClick={g.closeTermDetail}>
       <div
         role="dialog"
         aria-modal="true"

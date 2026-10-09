@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { StudentProfile, Position, TradeRecord, InstrumentSpec, AssetCategory, OrderAction } from '../types/market';
 import { getInstrumentTradingClock, getMarketSessionOverview, InstrumentClockResult } from '../utils/tradingClock';
+import { useGlossary } from '../context/GlossaryContext';
 
 interface TradeStatementModalProps {
   isOpen: boolean;
@@ -47,6 +48,7 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
   onOpenTrading,
   onSeedSamplePortfolio,
 }) => {
+  const { openPositionLesson } = useGlossary();
   const [activeTab, setActiveTab] = useState<'positions' | 'history'>('positions');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | 'all'>('all');
@@ -671,7 +673,7 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
 
                         return (
                           <tr key={pos.id} className="hover:bg-amber-50/40 transition">
-                            <td className="py-3 px-3.5">
+                            <td className="py-3 px-3.5 cursor-pointer" onClick={() => openPositionLesson(pos)} title="點一下看這筆部位的小學堂教學">
                               <div className="font-black text-slate-950 flex items-center gap-1.5">
                                 <span className="font-mono text-cyan-800 font-black bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-200">
                                   {pos.symbol}
@@ -753,6 +755,14 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
                                 )}
 
                                 <div className="flex items-center gap-1 mt-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => openPositionLesson(pos)}
+                                    title="這筆部位的小學堂教學，可下載成卡片"
+                                    className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 text-[13px] font-black transition cursor-pointer"
+                                  >
+                                    📖 小學堂
+                                  </button>
                                   {matchingInst && onViewInstrumentKLine && (
                                     <button
                                       type="button"

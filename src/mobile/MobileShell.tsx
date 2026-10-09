@@ -427,6 +427,7 @@ function positionValue(pos: Position) {
 
 function Portfolio(p: Props & { onOpen: (i: InstrumentSpec, to?: Tab) => void; onStartClose: (pos: Position) => void }) {
   const prof = p.currentProfile;
+  const g = useGlossary();
   const [shock, setShock] = useState(-3);
   const [closing, setClosing] = useState<Position | null>(null);
   if (!prof) return <LoginGate onLogin={p.onLogin} />;
@@ -520,6 +521,7 @@ function Portfolio(p: Props & { onOpen: (i: InstrumentSpec, to?: Tab) => void; o
                   </span>
                   <span className="flex flex-col items-end gap-1">
                     <span className="text-[15px] font-bold" style={{ ...mono, color: dirColor(x.unrealizedPnL) }}>{Math.round(x.unrealizedPnL).toLocaleString()}</span>
+                    <button type="button" onClick={() => g.openPositionLesson(x)} className="min-h-[32px] px-2.5 rounded-lg text-[12px] font-bold" style={{ background: C.accentBg, color: C.accent }}>📖 小學堂</button>
                     <button type="button" onClick={() => (usesOrderBook(x.category) ? p.onStartClose(x) : setClosing(x))} className="min-h-[32px] px-2.5 rounded-lg text-[12px] font-bold" style={{ border: `1px solid ${C.line2}`, color: C.sub }}>平倉</button>
                   </span>
                 </div>

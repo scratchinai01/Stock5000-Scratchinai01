@@ -36,7 +36,8 @@ interface GlossaryContextType {
 
   // 持倉小學堂（對帳單每一筆部位的教學卡）
   lessonPosition: Position | null;
-  openPositionLesson: (pos: Position) => void;
+  lessonMeta: LessonMeta | null;
+  openPositionLesson: (pos: Position, meta?: LessonMeta) => void;
   closePositionLesson: () => void;
 
   // 名詞卡（詳情）
@@ -55,6 +56,15 @@ interface GlossaryContextType {
   totalTermsCount: number;
   newlyUnlockedBadge: UnlockedBadge | null;
   clearNewlyUnlockedBadge: () => void;
+}
+
+/** 教學卡的來源：目前持倉、某筆建倉成交、某筆平倉成交 */
+export interface LessonMeta {
+  mode: 'position' | 'trade-open' | 'trade-close';
+  realizedPnL?: number;
+  tradeDate?: string;
+  recordId?: string;
+  rationale?: string;
 }
 
 const GlossaryContext = createContext<GlossaryContextType | undefined>(undefined);
@@ -165,7 +175,11 @@ export const GlossaryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [detailTermId, setDetailTermId] = useState<string | null>(null);
   const [lessonPosition, setLessonPosition] = useState<Position | null>(null);
-  const openPositionLesson = useCallback((pos: Position) => setLessonPosition(pos), []);
+  const [lessonMeta, setLessonMeta] = useState<LessonMeta | null>(null);
+  const openPositionLesson = useCallback((pos: Position, meta?: LessonMeta) => {
+    setLessonMeta(meta || null);
+    setLessonPosition(pos);
+  }, []);
   const closePositionLesson = useCallback(() => setLessonPosition(null), []);
   const openTermDetail = useCallback((termId: string) => {
     const t = TERMS_BY_ID.get(termId.toLowerCase()) || TERMS_BY_TITLE.get(termId.toLowerCase()) || TERMS_BY_ALIAS.get(termId.toLowerCase());
@@ -259,6 +273,7 @@ export const GlossaryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     closeDrawer,
     setActiveCategoryFilter,
     lessonPosition,
+    lessonMeta,
     openPositionLesson,
     closePositionLesson,
     detailTermId,

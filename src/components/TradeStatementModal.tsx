@@ -26,6 +26,8 @@ import {
 import { StudentProfile, Position, TradeRecord, InstrumentSpec, AssetCategory, OrderAction } from '../types/market';
 import { getInstrumentTradingClock, getMarketSessionOverview, InstrumentClockResult } from '../utils/tradingClock';
 import { useGlossary } from '../context/GlossaryContext';
+import { contractMultiplier } from '../utils/orderMath';
+import { pnlDirection } from '../utils/orderRules';
 
 interface TradeStatementModalProps {
   isOpen: boolean;
@@ -49,6 +51,43 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
   onSeedSamplePortfolio,
 }) => {
   const { openPositionLesson } = useGlossary();
+
+  /** 把一筆成交紀錄轉成教學卡（建倉：看成交後到現在；平倉：看已實現損益） */
+  const openTradeLesson = (rec: TradeRecord) => {
+    const isClose = rec.id.startsWith('close') || /平倉/.test(rec.dateLabel || '');
+    const inst = allInstruments.find(i => i.symbol === rec.symbol);
+    const held = (profile?.positions || []).find(p => p.symbol === rec.symbol && p.orderType === rec.action);
+    const fallbackMult =
+      rec.category === 'options' ? 50 : rec.category === 'futures' ? ({ TX: 200, MTX: 50, TMF: 10 } as Record<string, number>)[rec.symbol] ?? 2000 : 1000;
+    const mult = held?.unitMultiplier || (inst ? contractMultiplier(inst) : fallbackMult);
+    const live = inst && !inst.isMock && inst.price > 0 ? inst.price : null;
+    const realized = typeof rec.realizedPnL === 'number' ? rec.realizedPnL : 0;
+    const entry = isClose ? rec.price - realized / (rec.quantity * mult * pnlDirection(rec.action) || 1) : rec.price;
+    const pseudo: Position = {
+      id: rec.id,
+      symbol: rec.symbol,
+      name: rec.name,
+      category: rec.category,
+      orderType: rec.action,
+      entryPrice: Number(entry.toFixed(4)),
+      currentPrice: isClose ? rec.price : live ?? rec.price,
+      quantity: rec.quantity,
+      unitMultiplier: mult,
+      totalCostOrMargin: isClose ? 0 : rec.amount,
+      notionalValue: rec.price * rec.quantity * mult,
+      unrealizedPnL: 0,
+      unrealizedPnLPercent: 0,
+      entryDate: rec.dateLabel || rec.timestamp,
+      notes: rec.rationale,
+    };
+    openPositionLesson(pseudo, {
+      mode: isClose ? 'trade-close' : 'trade-open',
+      realizedPnL: isClose ? realized : undefined,
+      tradeDate: rec.dateLabel || rec.timestamp,
+      recordId: rec.id,
+      rationale: isClose ? '' : rec.rationale,
+    });
+  };
   const [activeTab, setActiveTab] = useState<'positions' | 'history'>('positions');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | 'all'>('all');
@@ -840,12 +879,13 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
                         <th className="py-3 px-3 text-right">成交總額 / 保證金</th>
                         <th className="py-3 px-3 text-right">平倉已實現損益</th>
                         <th className="py-3 px-3">投資理由與備註</th>
+                        <th className="py-3 px-3 text-center">紀念卡</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
                       {filteredHistory.map(rec => {
                         const badge = getActionBadge(rec.action);
-                        const hasRealized = typeof rec.realizedPnL === 'number';
+                        const hasRealized = typeof rec.realizedPnL === 'number' && (rec.id.startsWith('close') || /平倉/.test(rec.dateLabel || ''));
 
                         return (
                           <tr key={rec.id} className="hover:bg-slate-50 transition">
@@ -892,6 +932,16 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
 
                             <td className="py-3 px-3 text-[11px] text-slate-600 max-w-xs truncate">
                               {rec.rationale || '正常建倉委託'}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => openTradeLesson(rec)}
+                                title="這筆交易的小學堂教學，可下載成紀念卡"
+                                className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 text-[13px] font-black whitespace-nowrap cursor-pointer"
+                              >
+                                📖 小學堂
+                              </button>
                             </td>
                           </tr>
                         );

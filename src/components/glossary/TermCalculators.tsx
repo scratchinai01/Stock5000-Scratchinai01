@@ -3,7 +3,7 @@ import type { InstrumentSpec } from '../../types/market';
 import type { CalcKind } from '../../data/termDetails';
 import { priceLimits, roundToTick, stepTick, tickSize } from '../../utils/orderRules';
 
-/** 名詞卡的互動試算。預設值優先帶入系統的 FinMind 真實行情（有的話），沒有就用示意數字並標示。 */
+/** 名詞卡的互動試算。預設值優先帶入系統的 真實行情（有的話），沒有就用示意數字並標示。 */
 
 const INK = '#1f2630';
 const SUB = '#5b6573';
@@ -53,7 +53,7 @@ const Result: React.FC<{ label: string; value: React.ReactNode; color?: string; 
 
 const Source: React.FC<{ isLive: boolean; what: string }> = ({ isLive, what }) => (
   <div className="text-[15px]" style={{ color: SUB }}>
-    {isLive ? `預設值：${what}（FinMind 真實行情）` : `預設值為示意數字，可以自己改`}
+    {isLive ? `預設值：${what}（真實行情）` : `預設值為示意數字，可以自己改`}
   </div>
 );
 
@@ -200,7 +200,7 @@ function FuturesCalc({ instruments }: { instruments: InstrumentSpec[] }) {
         </div>
       </div>
       <div className="text-[15px]" style={{ color: SUB }}>
-        {inst ? `指數預設為 FinMind ${FUT[code].name}近月成交價。` : '指數為示意數字。'}
+        {inst ? `指數預設為市場資料 ${FUT[code].name}近月成交價。` : '指數為示意數字。'}
         保證金會隨行情調整，請到期交所網站查最新公告後填入，就能算出槓桿。
       </div>
     </div>
@@ -278,7 +278,7 @@ function OptionCalc({ instruments }: { instruments: InstrumentSpec[] }) {
         </svg>
       </div>
       <div className="text-[15px]" style={{ color: SUB }}>
-        {tx ? `指數預設為 FinMind 台指期近月成交價 ${fmt(tx.price)}。` : '指數為示意數字。'}權利金請自行輸入或參考行情頁。台指選擇權每點 50 元。
+        {tx ? `指數預設為 台指期近月成交價 ${fmt(tx.price)}。` : '指數為示意數字。'}權利金請自行輸入或參考行情頁。台指選擇權每點 50 元。
       </div>
     </div>
   );

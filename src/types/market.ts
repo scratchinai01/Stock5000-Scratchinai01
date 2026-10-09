@@ -71,14 +71,14 @@ export interface InstrumentSpec {
   turnover?: number;
   fiveBids?: { price: number; volume: number }[];
   fiveAsks?: { price: number; volume: number }[];
-  fetchTime?: string;         // FinMind 官方資料抓取時間 (例如 "2026-10-02 14:30:00 (收盤撮合)")
-  dataset?: string;           // FinMind 官方資料集 (例如 "TaiwanStockPrice")
+  fetchTime?: string;         // 官方資料抓取時間 (例如 "2026-10-02 14:30:00 (收盤撮合)")
+  dataset?: string;           // 官方資料集 (例如 "TaiwanStockPrice")
   lastTradeTime?: string;     // 最後成交時間 (e.g. "13:44:52" 或 "13:30:00")
   dataReceivedTime?: string;  // 資料取得時間 (e.g. "14:10:05")
   marketSession?: 'TRADING' | 'CLOSED'; // 交易狀態: TRADING 盤中撮合中 或 CLOSED 非交易時段
   sessionName?: string;       // 時段名稱 (e.g. "股票期貨非交易時段 (13:45~17:25)")
   nextSessionTime?: string;   // 下一交易時段 (e.g. "17:25 (夜盤開盤)")
-  dataSource?: string;        // 資料來源: FinMind 官方 API
+  dataSource?: string;        // 資料來源: 官方 API
   isMock?: boolean;           // 嚴格為 false
 }
 
@@ -106,7 +106,7 @@ export interface Position {
   marketSession?: 'TRADING' | 'CLOSED'; // 交易狀態: TRADING or CLOSED
   sessionName?: string;       // 時段說明
   nextSessionTime?: string;   // 下一交易時段
-  dataSource?: string;        // FinMind
+  dataSource?: string;        // 市場資料
   isMock?: boolean;
 }
 

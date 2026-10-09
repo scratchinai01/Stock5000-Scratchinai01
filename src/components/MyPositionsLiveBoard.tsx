@@ -267,7 +267,7 @@ export function MyPositionsLiveBoard({
             <div className="flex items-center gap-2">
               <span className="p-1 rounded-lg bg-amber-500 text-slate-950 font-black">7-LAYER</span>
               <h3 className="font-mono font-black text-amber-400 text-sm">
-                期貨與現貨即時行情資料流診斷報告 (FinMind ➔ Backend ➔ Frontend)
+                期貨與現貨即時行情資料流診斷報告 (市場資料 ➔ Backend ➔ Frontend)
               </h3>
             </div>
             <span className="text-[11px] text-emerald-300 font-mono font-bold bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-400/40">
@@ -295,7 +295,7 @@ export function MyPositionsLiveBoard({
             </div>
 
             <div className="bg-white/5 p-3 rounded-xl border border-white/10 space-y-1">
-              <span className="text-slate-400 font-bold block">3. FinMind Snapshot 連線</span>
+              <span className="text-slate-400 font-bold block">3. 市場資料 Snapshot 連線</span>
               <p className="text-slate-200">
                 • 端點：<span className="text-emerald-300">taiwan_stock_tick_snapshot</span><br />
                 • 期貨端點：<span className="text-emerald-300">taiwan_futures_snapshot</span><br />

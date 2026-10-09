@@ -942,7 +942,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
     setOrderAction(action);
     if (!hasEnoughCash || quantity <= 0) return;
     if (selectedInstrument.isMock) {
-      setFairTradeWarning(`🚫 ${selectedInstrument.name}（${selectedInstrument.symbol}）目前查無 FinMind 真實報價，無法下單。`);
+      setFairTradeWarning(`🚫 ${selectedInstrument.name}（${selectedInstrument.symbol}）目前查無 真實報價，無法下單。`);
       return;
     }
 
@@ -1447,9 +1447,9 @@ export const TradingModal: React.FC<TradingModalProps> = ({
     e.preventDefault();
     if (!hasEnoughCash || quantity <= 0) return;
 
-    // 沒有 FinMind 真實報價的商品不允許下單，避免用示範價格成交
+    // 沒有 真實報價的商品不允許下單，避免用示範價格成交
     if (selectedInstrument.isMock) {
-      setFairTradeWarning(`🚫 ${selectedInstrument.name}（${selectedInstrument.symbol}）目前查無 FinMind 真實報價，無法下單。`);
+      setFairTradeWarning(`🚫 ${selectedInstrument.name}（${selectedInstrument.symbol}）目前查無 真實報價，無法下單。`);
       return;
     }
 
@@ -1527,7 +1527,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-900 font-semibold truncate">
-                {selectedInstrument.isMock ? '⚠️ 尚未取得 FinMind 真實行情，暫停下單' : `FinMind 行情：${selectedInstrument.fetchTime || '資料時間不明'}`} · 涵蓋股票/債券/ETF/期貨/選擇權/美股/原物料
+                {selectedInstrument.isMock ? '⚠️ 尚未取得 真實行情，暫停下單' : `行情：${selectedInstrument.fetchTime || '資料時間不明'}`} · 涵蓋股票/債券/ETF/期貨/選擇權/美股/原物料
               </p>
             </div>
           </div>
@@ -2595,7 +2595,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                     <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       {selectedInstrument.fiveBids?.length || selectedInstrument.fiveAsks?.length
-                        ? `FinMind 盤中最佳一檔 · ${selectedInstrument.fetchTime || ''}`
+                        ? `盤中最佳一檔 · ${selectedInstrument.fetchTime || ''}`
                         : '收盤後無委買賣掛單資料'}
                     </span>
                   </div>
@@ -3554,7 +3554,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                   )}
                 </div>
 
-                {/* AI / FinMind Auto Quote Button */}
+                {/* AI / 市場資料 Auto Quote Button */}
                 <div className="pt-1">
                   <button
                     type="button"

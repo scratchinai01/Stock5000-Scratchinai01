@@ -2,7 +2,7 @@
  * 長期歷史日 K 資料來源（給「專業分析」使用）
  *
  * 優先讀 PayFireBase 的 Firestore 資料庫 stock-history（由 scripts/import-history.ts 匯入），
- * 一檔一年一份文件；若該股票尚未匯入，改直接向 FinMind 取原始＋還原股價。
+ * 一檔一年一份文件；若該股票尚未匯入，改直接向 取原始＋還原股價。
  * 回傳欄式陣列，節省傳輸量。
  */
 
@@ -10,7 +10,7 @@ export interface HistorySeries {
   symbol: string;
   name: string | null;
   market: string | null;
-  source: 'Firestore stock-history' | 'FinMind 即時查詢';
+  source: 'Firestore stock-history' | '即時查詢';
   date: string[];
   open: number[];
   high: number[];
@@ -83,7 +83,7 @@ async function fromFinMind(symbol: string, token: string): Promise<HistorySeries
   if (rows.length === 0) return null;
   const adjBy = new Map(adj.map(r => [r.date, r]));
   const out: HistorySeries = {
-    symbol, name: null, market: null, source: 'FinMind 即時查詢',
+    symbol, name: null, market: null, source: '即時查詢',
     date: [], open: [], high: [], low: [], close: [], volume: [], adj_open: [], adj_high: [], adj_low: [], adj_close: [],
   };
   for (const r of rows) {
@@ -106,7 +106,7 @@ export async function getHistory(symbol: string, token: string): Promise<History
   try {
     data = await fromFirestore(sym);
   } catch (e: any) {
-    console.warn(`[History] Firestore 讀取 ${sym} 失敗，改用 FinMind：${e.message}`);
+    console.warn(`[History] Firestore 讀取 ${sym} 失敗，改用市場資料：${e.message}`);
   }
   if (!data) data = await fromFinMind(sym, token);
   if (data) cache.set(sym, { at: Date.now(), data });

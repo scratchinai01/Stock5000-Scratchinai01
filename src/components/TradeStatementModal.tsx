@@ -252,7 +252,7 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-900 font-semibold mt-0.5">
-                FinMind 真實交易所連線存證 · 涵蓋股票/債券/ETF/期貨/選擇權全方位對帳
+                真實交易所連線存證 · 涵蓋股票/債券/ETF/期貨/選擇權全方位對帳
               </p>
             </div>
           </div>
@@ -656,7 +656,7 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
                         <th className="py-3 px-3">類別</th>
                         <th className="py-3 px-3">動作方向</th>
                         <th className="py-3 px-3 text-right">進場成本價</th>
-                        <th className="py-3 px-3 text-right">FinMind 報價</th>
+                        <th className="py-3 px-3 text-right">報價</th>
                         <th className="py-3 px-3 text-right">持倉數量</th>
                         <th className="py-3 px-3 text-right">名目總市值</th>
                         <th className="py-3 px-3 text-right">未實現損益 (報酬率)</th>
@@ -701,7 +701,7 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
                               NT$ {pos.entryPrice >= 1000 ? pos.entryPrice.toLocaleString() : pos.entryPrice}
                             </td>
 
-                            {/* FinMind 報價動態識別 (最新成交 vs 最後成交) */}
+                            {/* 報價動態識別 (最新成交 vs 最後成交) */}
                             <td className="py-3 px-3 text-right font-mono">
                               <div className="font-black text-slate-950 text-sm">
                                 NT$ {pos.currentPrice >= 1000 ? pos.currentPrice.toLocaleString() : pos.currentPrice}
@@ -770,7 +770,7 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
                                         onClose();
                                         onViewInstrumentKLine(matchingInst);
                                       }}
-                                      title="檢視 FinMind K 線存證"
+                                      title="檢視市場資料 K 線存證"
                                       className="p-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 transition cursor-pointer"
                                     >
                                       <Camera className="w-3.5 h-3.5" />
@@ -908,7 +908,7 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
         <div className="bg-slate-100 px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-medium shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-600" />
-            <span>FinMind 資料存證無縫同步至 Firebase 雲端伺服器</span>
+            <span>資料存證無縫同步至 Firebase 雲端伺服器</span>
           </div>
           <button
             type="button"

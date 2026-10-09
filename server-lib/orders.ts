@@ -3,7 +3,7 @@
  *
  * - 委託存在 PayFireBase Firestore（stock-history 資料庫的 sim_orders 集合），伺服器記憶體為主、寫入同步
  *   → Cloud Run 必須維持單一執行個體（--max-instances 1），否則兩台會各自撮合
- * - 每 10 秒（有有效委託時）抓 FinMind 即時快照判定成交，規則見 orderEngine.ts
+ * - 每 10 秒（有有效委託時）抓 即時快照判定成交，規則見 orderEngine.ts
  * - 成交回報放在委託上，前端用 /api/orders/claim 領取後記入學生帳戶（每筆只會被領一次）
  */
 import type { Express, Request, Response } from 'express';
@@ -32,7 +32,7 @@ import {
 
 export interface OrderDeps {
   getToken: () => string;
-  /** 伺服器的 FinMind 報價快取（日資料），含 close21、prevClose、date、contractMonth */
+  /** 伺服器的 報價快取（日資料），含 close21、prevClose、date、contractMonth */
   getCachedQuote: (symbol: string) => any | undefined;
   futuresCode: (symbol: string) => string;
 }
@@ -133,7 +133,7 @@ const inWindow = (tickAt: string, key: string) => {
   return t >= a && t < b;
 };
 
-// ───────────────────────── FinMind 即時快照 ─────────────────────────
+// ───────────────────────── 即時快照 ─────────────────────────
 type FeedKind = 'stock' | 'fut' | 'opt';
 const feedCache = new Map<string, { at: number; map: Map<string, any> }>();
 const FUT_PREFIX: Record<string, string> = { TX: 'TXF', MTX: 'MXF', TMF: 'TMF', TE: 'EXF', TF: 'FXF' };
@@ -157,7 +157,7 @@ async function fetchSnapshot(kind: FeedKind, dataId: string): Promise<Map<string
     for (const r of json.data) map.set(String(r[idField]).toUpperCase(), r);
     return map;
   } catch (e: any) {
-    console.warn(`[Orders] FinMind 快照 ${path} ${dataId} 失敗：${e.message}`);
+    console.warn(`[Orders] 快照 ${path} ${dataId} 失敗：${e.message}`);
     return null;
   } finally {
     clearTimeout(t);
@@ -292,7 +292,7 @@ async function processOrder(o: SimOrder, now: Date): Promise<SimOrder> {
     o = applyFills(o, matchAtClose(o, close), ts, () => newId('F'));
     if (isActiveStatus(o.status)) o = event({ ...o, status: 'EXPIRED' }, `收盤價 ${close} 未達委託價，未成交 ${remainingQty(o)} 失效`, ts);
   } else if (o.sessionDate && ts - new Date(`${o.sessionDate}T14:00:00+08:00`).getTime() > 36 * 3600000) {
-    o = event({ ...o, status: 'EXPIRED' }, '查無 FinMind 當日收盤資料，委託失效', ts);
+    o = event({ ...o, status: 'EXPIRED' }, '查無 當日收盤資料，委託失效', ts);
   }
   return o;
 }

@@ -91,7 +91,7 @@ export function PositionLessonSheet({ instruments, profile }: { instruments: Ins
   const fx = pos.category === 'commodities' || pos.category === 'crypto';
   const now = new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
 
-  // 選擇權：用台指期近月價估算內含價值（只有 FinMind 有真實報價時才顯示）
+  // 選擇權：用台指期近月價估算內含價值（只有 有真實報價時才顯示）
   let optionNote: string | null = null;
   const om = pos.category === 'options' ? pos.symbol.toUpperCase().match(/-(\d+(?:\.\d+)?)-(C|P|CALL|PUT)$/) : null;
   const tx = instruments.find(i => i.symbol === 'TX' && !i.isMock && i.price > 0);
@@ -233,7 +233,7 @@ export function PositionLessonSheet({ instruments, profile }: { instruments: Ins
 
               <div style={{ borderTop: `1px dashed ${LINE}`, paddingTop: 12, fontSize: 15, color: SUB, display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                 <span>5000萬股市大富翁 · 持倉小學堂</span>
-                <span>{instruments.some(i => i.symbol === pos.symbol && !i.isMock) ? '報價來源：FinMind' : '價格為系統最後記錄'} · {now}</span>
+                <span>{instruments.some(i => i.symbol === pos.symbol && !i.isMock) ? '報價來源：市場資料' : '價格為系統最後記錄'} · {now}</span>
               </div>
               <div style={{ fontSize: 14, color: SUB }}>模擬交易教學用途，不是投資建議。</div>
             </div>

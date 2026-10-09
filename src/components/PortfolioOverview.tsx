@@ -109,7 +109,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
   const [isDerivativesListCollapsed, setIsDerivativesListCollapsed] = useState(false);
   const [isMarketCatalogueCollapsed, setIsMarketCatalogueCollapsed] = useState(true);
 
-  // Full Market Stock Search (TWSE + US Stocks) & FinMind Live Query states
+  // Full Market Stock Search (TWSE + US Stocks) & 市場資料 Live Query states
   const [isSearchingStock, setIsSearchingStock] = useState(false);
   const [searchNotice, setSearchNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [stockSuggestions, setStockSuggestions] = useState<
@@ -163,7 +163,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
     if (!q) return;
 
     setIsSearchingStock(true);
-    setSearchNotice({ type: 'info', message: `正在連線 FinMind 官方資料庫查詢「${q}」...` });
+    setSearchNotice({ type: 'info', message: `正在連線 官方資料庫查詢「${q}」...` });
     setIsSearchDropdownOpen(false);
 
     try {
@@ -183,7 +183,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
         return;
       }
 
-      // 2. Query server for authentic live quote & specs from FinMind
+      // 2. Query server for authentic live quote & specs from 市場資料
       const res = await fetch('/api/gemini/quote-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,7 +211,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
         marginRequirement: d.marginRequirement || 0,
         description: isUs
           ? `🇺🇸 美股複委託標的：${d.name} (${d.symbol})，最新市價 US$ ${d.closePrice} (折合 NT$ ${Math.round(d.closePrice * 32).toLocaleString()})。`
-          : `台灣上市/上櫃真實標的：${d.name} (${d.symbol})，FinMind 撮合報價 NT$ ${d.closePrice}。`,
+          : `台灣上市/上櫃真實標的：${d.name} (${d.symbol})，撮合報價 NT$ ${d.closePrice}。`,
         klineHistory: d.klineHistory || [],
       };
 
@@ -230,7 +230,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
       console.warn('Search stock error:', err);
       setSearchNotice({
         type: 'error',
-        message: err.message || `連線 FinMind 查詢失敗，請檢查代號是否正確。`,
+        message: err.message || `連線 查詢失敗，請檢查代號是否正確。`,
       });
     } finally {
       setIsSearchingStock(false);
@@ -1514,7 +1514,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
             </div>
 
             <div className="flex items-center gap-2 w-full md:w-auto">
-              {/* Search Box with Autocomplete & Direct FinMind Lookup */}
+              {/* Search Box with Autocomplete & Direct 市場資料 Lookup */}
               <div className="relative flex-1 md:w-80">
                 <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
                   {isSearchingStock ? (
@@ -2077,7 +2077,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                 </span>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-400/30 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  API：FinMind 官方連線 (Sponsor $999/月 · 6,000次/hr)
+                  API：官方連線 (Sponsor $999/月 · 6,000次/hr)
                 </span>
                 <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono text-[10px] font-bold border border-rose-400/30">
                   Mock Data：❌ 徹底禁用
@@ -2125,7 +2125,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                     </span>
                   </div>
 
-                  {/* Instrument Name and Real FinMind Price */}
+                  {/* Instrument Name and Real 市場資料 Price */}
                   <div className="mb-2">
                     <div className="flex items-baseline justify-between">
                       <h4 className="text-base font-black text-slate-950 group-hover:text-amber-700 transition">
@@ -2182,7 +2182,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                       </div>
                     )}
 
-                    {/* FinMind Official Fetch Time & Real-Data Certification */}
+                    {/* 市場資料 Official Fetch Time & Real-Data Certification */}
                     <div className="mt-2.5 py-1 px-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-950 text-[10px] font-mono flex items-center justify-between">
                       <div className="flex items-center gap-1 font-bold">
                         <Clock className="w-3 h-3 text-emerald-600 shrink-0" />
@@ -2276,7 +2276,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                   ) : (
                     <Search className="w-4 h-4 text-slate-950" />
                   )}
-                  <span>{isSearchingStock ? '連線 FinMind 抓取中...' : `🔍 立即連線 FinMind 載入「${searchQuery.trim()}」並加入清單`}</span>
+                  <span>{isSearchingStock ? '連線 抓取中...' : `🔍 立即連線 載入「${searchQuery.trim()}」並加入清單`}</span>
                 </button>
                 <button
                   type="button"
@@ -2355,7 +2355,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
               </button>
             )}
             <span className="text-xs text-slate-600 font-mono font-bold hidden md:inline">
-              FinMind 官方真實行情存證
+              官方真實行情存證
             </span>
           </div>
         </div>

@@ -88,7 +88,7 @@ export const SmartInstrumentSearchBoard: React.FC<SmartInstrumentSearchBoardProp
     if (!q) return;
 
     setIsSearchingStock(true);
-    setSearchNotice({ type: 'info', message: `正在連線 FinMind 官方資料庫查詢「${q}」...` });
+    setSearchNotice({ type: 'info', message: `正在連線 官方資料庫查詢「${q}」...` });
     setIsSearchDropdownOpen(false);
 
     try {
@@ -107,7 +107,7 @@ export const SmartInstrumentSearchBoard: React.FC<SmartInstrumentSearchBoardProp
         return;
       }
 
-      // Query FinMind assistant
+      // Query 市場資料 assistant
       const res = await fetch('/api/gemini/quote-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -135,7 +135,7 @@ export const SmartInstrumentSearchBoard: React.FC<SmartInstrumentSearchBoardProp
         marginRequirement: d.marginRequirement || 0,
         description: isUs
           ? `🇺🇸 美股複委託標的：${d.name} (${d.symbol})，最新市價 US$ ${d.closePrice} (折合 NT$ ${Math.round(d.closePrice * 32).toLocaleString()})。`
-          : `台灣上市/上櫃真實標的：${d.name} (${d.symbol})，FinMind 撮合報價 NT$ ${d.closePrice}。`,
+          : `台灣上市/上櫃真實標的：${d.name} (${d.symbol})，撮合報價 NT$ ${d.closePrice}。`,
         klineHistory: d.klineHistory || [],
       };
 
@@ -154,7 +154,7 @@ export const SmartInstrumentSearchBoard: React.FC<SmartInstrumentSearchBoardProp
       console.warn('Search stock error:', err);
       setSearchNotice({
         type: 'error',
-        message: err.message || `連線 FinMind 查詢失敗，請檢查代號是否正確。`,
+        message: err.message || `連線 查詢失敗，請檢查代號是否正確。`,
       });
     } finally {
       setIsSearchingStock(false);
@@ -562,7 +562,7 @@ export const SmartInstrumentSearchBoard: React.FC<SmartInstrumentSearchBoardProp
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
           <span className="font-bold text-amber-300">⚡ 實時買賣報價撮合連線中</span>
-          <span className="text-[10px] text-slate-400 hidden sm:inline">(FinMind / 交易所即時更新)</span>
+          <span className="text-[10px] text-slate-400 hidden sm:inline">(市場資料 / 交易所即時更新)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-slate-400">更新: {new Date().toLocaleTimeString()}</span>

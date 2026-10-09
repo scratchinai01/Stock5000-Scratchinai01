@@ -1,7 +1,7 @@
 /**
- * FinMind 台股（上市＋上櫃）歷史日 K 匯入工具
+ * 台股（上市＋上櫃）歷史日 K 匯入工具
  *
- * 資料來源：FinMind TaiwanStockInfo / TaiwanStockPrice（原始）/ TaiwanStockPriceAdj（還原）
+ * 資料來源：市場資料 TaiwanStockInfo / TaiwanStockPrice（原始）/ TaiwanStockPriceAdj（還原）
  * 寫入目標：
  *   1. Firestore（PayFireBase 的具名資料庫，預設 stock-history）— 給網頁畫 K 線
  *        kline_daily/{代號}_{年份}  一檔一年一份文件，欄位為「欄式陣列」以節省空間
@@ -49,7 +49,7 @@ const todayTW = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Taipei'
 const DAILY_DATE = opt('date', todayTW())!;
 const log = (...a: any[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
-// ───────────────────────── FinMind ─────────────────────────
+// ───────────────────────── 市場資料 ─────────────────────────
 let lastCall = 0;
 let callCount = 0;
 async function finmind(dataset: string, params: Record<string, string>): Promise<any[]> {
@@ -74,14 +74,14 @@ async function finmind(dataset: string, params: Record<string, string>): Promise
       clearTimeout(t);
       const json: any = await res.json().catch(() => null);
       if (res.status === 402 || json?.status === 402) {
-        log(`⏸ FinMind 每小時額度用完，等 10 分鐘再繼續（已呼叫 ${callCount} 次）`);
+        log(`⏸ 每小時額度用完，等 10 分鐘再繼續（已呼叫 ${callCount} 次）`);
         await new Promise(r => setTimeout(r, 10 * 60 * 1000));
         continue;
       }
       if (!res.ok || !json || json.status !== 200) throw new Error(`HTTP ${res.status} ${json?.msg ?? ''}`);
       return Array.isArray(json.data) ? json.data : [];
     } catch (e: any) {
-      if (attempt >= 4) throw new Error(`FinMind ${dataset} ${JSON.stringify(params)} 失敗：${e.message}`);
+      if (attempt >= 4) throw new Error(`市場資料 ${dataset} ${JSON.stringify(params)} 失敗：${e.message}`);
       log(`↻ ${dataset} ${params.data_id ?? params.start_date} 第 ${attempt} 次失敗（${e.message}），稍後重試`);
       await new Promise(r => setTimeout(r, 5000 * attempt));
     }
@@ -161,7 +161,7 @@ function toYearDocs(info: StockInfo, bars: Bar[]) {
       adj_high: list.map(b => b.ah ?? null),
       adj_low: list.map(b => b.al ?? null),
       adj_close: list.map(b => b.ac ?? null),
-      source: 'FinMind TaiwanStockPrice / TaiwanStockPriceAdj',
+      source: '市場資料 TaiwanStockPrice / TaiwanStockPriceAdj',
     },
   }));
 }
@@ -242,7 +242,7 @@ async function cloudSink(): Promise<Sink> {
           schema: { fields: BQ_SCHEMA },
           timePartitioning: { type: 'MONTH', field: 'date' },
           clustering: { fields: ['stock_id'] },
-          description: 'FinMind 台股上市上櫃日K（原始＋還原）',
+          description: '台股上市上櫃日K（原始＋還原）',
         } as any);
         log(`✔ 已建立 BigQuery 表 ${BQ_DATASET}.${BQ_TABLE}`);
       }
@@ -270,7 +270,7 @@ async function cloudSink(): Promise<Sink> {
         const snap = await tx.get(ref);
         const d: any = snap.exists
           ? snap.data()
-          : { stock_id: info.stock_id, name: info.stock_name, market: info.market, year, date: [], open: [], high: [], low: [], close: [], volume: [], amount: [], adj_open: [], adj_high: [], adj_low: [], adj_close: [], source: 'FinMind TaiwanStockPrice / TaiwanStockPriceAdj' };
+          : { stock_id: info.stock_id, name: info.stock_name, market: info.market, year, date: [], open: [], high: [], low: [], close: [], volume: [], amount: [], adj_open: [], adj_high: [], adj_low: [], adj_close: [], source: '市場資料 TaiwanStockPrice / TaiwanStockPriceAdj' };
         let i = d.date.indexOf(bar.date);
         const vals: Record<string, any> = {
           open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v, amount: bar.m,
@@ -315,7 +315,7 @@ async function cloudSink(): Promise<Sink> {
       await bq.query({
         query: `CREATE OR REPLACE TABLE \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\`
                 PARTITION BY DATE_TRUNC(date, MONTH) CLUSTER BY stock_id
-                OPTIONS(description='FinMind 台股上市上櫃日K（原始＋還原）') AS
+                OPTIONS(description='台股上市上櫃日K（原始＋還原）') AS
                 SELECT * EXCEPT(rn) FROM (
                   SELECT *, ROW_NUMBER() OVER (PARTITION BY stock_id, date ORDER BY loaded_at DESC) AS rn
                   FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\`) WHERE rn = 1`,
@@ -432,7 +432,7 @@ async function runFull(sink: Sink) {
     if ((i + 1) % 25 === 0 || i === todo.length - 1) {
       const rate = (i + 1) / ((Date.now() - started) / 3600000);
       const etaMin = Math.round(((todo.length - i - 1) / rate) * 60);
-      log(`▶ ${i + 1}/${todo.length} 檔，累計 ${totalBars.toLocaleString()} 根日K，FinMind 呼叫 ${callCount} 次，預估剩 ${etaMin} 分鐘`);
+      log(`▶ ${i + 1}/${todo.length} 檔，累計 ${totalBars.toLocaleString()} 根日K，呼叫 ${callCount} 次，預估剩 ${etaMin} 分鐘`);
     }
   }
   await flush();
@@ -447,7 +447,7 @@ async function runDaily(sink: Sink) {
   // 999 方案可不指定 data_id，一次取得當天全部股票
   const raw = await finmind('TaiwanStockPrice', { start_date: date, end_date: date });
   if (raw.length === 0) {
-    log(`ℹ ${date} 沒有交易資料（休市日，或 FinMind 尚未更新），結束`);
+    log(`ℹ ${date} 沒有交易資料（休市日，或 尚未更新），結束`);
     return;
   }
   const adj = await finmind('TaiwanStockPriceAdj', { start_date: date, end_date: date });

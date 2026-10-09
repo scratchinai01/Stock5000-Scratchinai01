@@ -47,7 +47,7 @@ export const GeminiQuoteAssistantModal: React.FC<GeminiQuoteAssistantModalProps>
       return;
     }
 
-    // 2. Query Gemini & FinMind Quote Assistant endpoint
+    // 2. Query Gemini & 市場資料 Quote Assistant endpoint
     try {
       const res = await fetch('/api/gemini/quote-assistant', {
         method: 'POST',

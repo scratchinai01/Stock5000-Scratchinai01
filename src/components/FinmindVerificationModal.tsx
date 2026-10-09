@@ -116,7 +116,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
 
   const handleApplyToken = async () => {
     if (!inputToken.trim()) {
-      setTokenFeedback({ success: false, message: '請先輸入 FinMind API Token' });
+      setTokenFeedback({ success: false, message: '請先輸入市場資料 API Token' });
       return;
     }
 
@@ -132,7 +132,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
       if (res.ok && data.success) {
         setTokenFeedback({
           success: true,
-          message: `✅ FinMind Token 驗證成功並已生效！（Token 後 6 碼：...${data.tokenTail}）每 5 秒將以會員授權額度自動推播！`,
+          message: `✅ 市場資料 Token 驗證成功並已生效！（Token 後 6 碼：...${data.tokenTail}）每 5 秒將以會員授權額度自動推播！`,
         });
         setInputToken('');
         onTokenUpdated();
@@ -141,7 +141,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
       } else {
         setTokenFeedback({
           success: false,
-          message: data.message || 'FinMind Token 驗證未通過，請檢查是否複製完整。',
+          message: data.message || '市場資料 Token 驗證未通過，請檢查是否複製完整。',
         });
       }
     } catch (err: any) {
@@ -203,7 +203,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-lg sm:text-xl font-black text-slate-950 tracking-tight">
-                  FinMind 每 5 秒即時更新與 Token 授權確認中心
+                  每 5 秒即時更新與 Token 授權確認中心
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-950 border border-emerald-300 flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
@@ -211,7 +211,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
                 </span>
               </div>
               <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                確認 FinMind Token 正確生效、檢驗每 5 秒即時推播狀態、落實中午漲停公平撮合防弊
+                確認市場資料 Token 正確生效、檢驗每 5 秒即時推播狀態、落實中午漲停公平撮合防弊
               </p>
             </div>
           </div>
@@ -224,7 +224,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
           </button>
         </div>
 
-        {/* 1. FinMind Token Setup & Verification Card */}
+        {/* 1. 市場資料 Token Setup & Verification Card */}
         <div className="bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-100/70 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-sm">
           {/* AI Studio Secret Status Banner if Active */}
           <div className="bg-gradient-to-r from-blue-700 via-indigo-800 to-purple-800 text-white rounded-xl p-3.5 shadow-md space-y-2.5">
@@ -238,7 +238,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
                   </span>
                 </div>
                 <p className="mt-1 text-slate-200 leading-relaxed font-medium">
-                  系統後端已自動掛載您的 FinMind Sponsor 999 權限 Token（尾碼 <code className="font-mono bg-white/20 px-1 py-0.2 rounded text-yellow-300 font-bold">...{tokenInfo.tokenTail || '已就緒'}</code>），全面解鎖以下付費核心資料集：
+                  系統後端已自動掛載您的 行情資料授權 Token（尾碼 <code className="font-mono bg-white/20 px-1 py-0.2 rounded text-yellow-300 font-bold">...{tokenInfo.tokenTail || '已就緒'}</code>），全面解鎖以下付費核心資料集：
                 </p>
               </div>
             </div>
@@ -279,7 +279,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
               </div>
               <div>
                 <h4 className="text-sm font-black text-slate-950 flex items-center gap-2">
-                  <span>FinMind API Token 授權狀態確認</span>
+                  <span>市場資料 API Token 授權狀態確認</span>
                   {tokenInfo.hasToken ? (
                     <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white flex items-center gap-1 shadow-2xs">
                       <Check className="w-3 h-3" />
@@ -312,7 +312,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
           {/* Input & Action Form */}
           <div className="space-y-2">
             <label className="text-xs font-black text-slate-950 block">
-              {tokenInfo.isSecretInjected ? '手動覆蓋或測試其他 FinMind Token：' : '直接貼上 Token 或一鍵連線驗證：'}
+              {tokenInfo.isSecretInjected ? '手動覆蓋或測試其他市場資料 Token：' : '直接貼上 Token 或一鍵連線驗證：'}
             </label>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[280px]">
@@ -323,7 +323,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
                   type="text"
                   value={inputToken}
                   onChange={e => setInputToken(e.target.value)}
-                  placeholder="請在此貼上您的 FinMind API Token (例如：eyJhbGciOi...)"
+                  placeholder="請在此貼上您的市場資料 API Token (例如：eyJhbGciOi...)"
                   className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-white border-2 border-amber-400 rounded-xl focus:outline-none focus:border-amber-600 text-slate-950 font-bold placeholder:font-normal placeholder:text-slate-400 shadow-inner"
                 />
               </div>
@@ -386,7 +386,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
                   </span>
                 </h4>
                 <p className="text-[11px] text-emerald-950 font-medium mt-0.5">
-                  已收盤市場（台股 13:30 後、夜盤休市、美股非交易時段）100% 由本地已下載資料庫查詢，不再對外呼叫 FinMind API。
+                  已收盤市場（台股 13:30 後、夜盤休市、美股非交易時段）100% 由本地已下載資料庫查詢，不再對外呼叫市場資料 API。
                 </p>
               </div>
             </div>
@@ -461,7 +461,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
           {/* Card 2: Latency & Server Status */}
           <div className="bg-sky-50 border border-sky-300 rounded-2xl p-3.5 flex items-center justify-between shadow-2xs">
             <div>
-              <span className="text-[11px] font-bold text-sky-900 block">FinMind API 狀態</span>
+              <span className="text-[11px] font-bold text-sky-900 block">市場資料 API 狀態</span>
               <span className="text-sm font-black text-sky-950 flex items-center gap-1.5 mt-0.5">
                 <Wifi className="w-4 h-4 text-sky-700" />
                 {verifyResult ? verifyResult.status : '連線正常'}
@@ -501,7 +501,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
               className="mt-2 w-full py-1.5 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 text-amber-300 font-black text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingFull ? 'animate-spin' : ''}`} />
-              <span>⚡ 立即向 FinMind 強制重抓</span>
+              <span>⚡ 立即向 強制重抓</span>
             </button>
           </div>
         </div>
@@ -560,7 +560,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-xs font-black text-slate-950 flex items-center gap-1.5">
               <Search className="w-4 h-4 text-emerald-700" />
-              <span>單檔股票即時連線探針 (直接向 FinMind 官方 API 驗證)：</span>
+              <span>單檔股票即時連線探針 (直接向 官方 API 驗證)：</span>
             </h4>
             <div className="flex items-center gap-1 text-[11px] text-slate-600 font-bold">
               <span>快捷測試：</span>
@@ -599,7 +599,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 shadow-xs"
             >
               <Zap className={`w-3.5 h-3.5 ${isVerifying ? 'animate-spin' : ''}`} />
-              <span>{isVerifying ? '向 FinMind 查詢中...' : '向 FinMind 查詢最新資料'}</span>
+              <span>{isVerifying ? '向 查詢中...' : '向 查詢最新資料'}</span>
             </button>
           </div>
 
@@ -618,7 +618,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>
-                    FinMind 官方返回【{verifyResult.targetSymbol}】真實盤中數據 (資料集：{verifyResult.dataset})
+                    官方返回【{verifyResult.targetSymbol}】真實盤中數據 (資料集：{verifyResult.dataset})
                   </span>
                 </span>
                 <span className="font-mono text-[11px] text-slate-500">
@@ -678,7 +678,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-slate-200 pt-3">
           <span className="text-[11px] text-slate-500 font-medium">
-            數據來源：FinMind API 台灣證券交易所與期貨交易所即時資料集
+            數據來源：市場資料 API 台灣證券交易所與期貨交易所即時資料集
           </span>
           <button
             type="button"

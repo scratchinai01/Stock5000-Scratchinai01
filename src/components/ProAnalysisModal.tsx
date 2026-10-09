@@ -313,7 +313,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
             <span className="text-xl">🔬</span>
             <div>
               <div className="font-black text-slate-950">專業分析</div>
-              <div className="text-[11px] text-slate-500">FinMind 1994 年起歷史日K · 績效統計 · 策略回測</div>
+              <div className="text-[11px] text-slate-500">市場資料 1994 年起歷史日K · 績效統計 · 策略回測</div>
             </div>
           </div>
           <div className="relative ml-auto">
@@ -554,7 +554,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
                 <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 <span>
                   歷史績效不代表未來表現，回測結果僅供教學。資料只包含目前仍掛牌的公司，已下市公司不在其中（存活者偏差），
-                  實際回測報酬可能偏高。資料來源：{data.source}（FinMind TaiwanStockPrice／TaiwanStockPriceAdj），最新資料日 {lastDate}。
+                  實際回測報酬可能偏高。資料來源：{data.source}（市場資料 TaiwanStockPrice／TaiwanStockPriceAdj），最新資料日 {lastDate}。
                 </span>
               </div>
             </>

@@ -58,7 +58,7 @@ export const KLineChart: React.FC<KLineChartProps> = ({
   const [showBOLL, setShowBOLL] = useState(false);
   const [showVolume, setShowVolume] = useState(true);
 
-  // Remote data state from FinMind
+  // Remote data state from 市場資料
   const [bars, setBars] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -83,7 +83,7 @@ export const KLineChart: React.FC<KLineChartProps> = ({
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   // ─────────────────────────────────────────────────────────────
-  // 1. Fetch Real Data from FinMind Engine (/api/finmind/kline)
+  // 1. Fetch Real Data from 市場資料 Engine (/api/finmind/kline)
   // ─────────────────────────────────────────────────────────────
   const fetchKLineData = useCallback(async () => {
     setIsLoading(true);
@@ -100,11 +100,11 @@ export const KLineChart: React.FC<KLineChartProps> = ({
         setDatasetName(json.dataset || 'TaiwanStockPrice');
         setPanOffset(0); // reset to latest
       } else {
-        setFetchError(json.error || `FinMind API 查無此標的行情數據 (${res.status})`);
+        setFetchError(json.error || `市場資料 API 查無此標的行情數據 (${res.status})`);
         setBars([]);
       }
     } catch (err: any) {
-      setFetchError(`連線至 FinMind 失敗: ${err.message}`);
+      setFetchError(`連線至 失敗: ${err.message}`);
       setBars([]);
     } finally {
       setIsLoading(false);
@@ -700,7 +700,7 @@ export const KLineChart: React.FC<KLineChartProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `FinMind_${instrument.symbol}_${period}_${getSystemDateStr()}.csv`);
+    link.setAttribute('download', `Kline_${instrument.symbol}_${period}_${getSystemDateStr()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -750,13 +750,13 @@ export const KLineChart: React.FC<KLineChartProps> = ({
 
     ctx.fillStyle = '#94a3b8';
     ctx.font = '12px monospace';
-    ctx.fillText(`● 資料來源: FinMind 官方資料庫 (${datasetName})`, 50, 690);
+    ctx.fillText(`● 資料來源: 官方資料庫 (${datasetName})`, 50, 690);
     ctx.fillText(`● 數據審計: 100% 官方真實成交與報價數據 (Mock Data: OFF)`, 50, 710);
-    ctx.fillText(`● 授權說明: 遵循 FinMind 規範，專供學術報告與實務配置分析使用`, 50, 730);
+    ctx.fillText(`● 授權說明: 遵循 規範，專供學術報告與實務配置分析使用`, 50, 730);
 
     const dataUrl = exportCanvas.toDataURL('image/png');
     const link = document.createElement('a');
-    link.download = `FinMind_Professional_Chart_${instrument.symbol}_${period}_${benchmarkDate}.png`;
+    link.download = `Kline_Professional_Chart_${instrument.symbol}_${period}_${benchmarkDate}.png`;
     link.href = dataUrl;
     link.click();
 
@@ -827,7 +827,7 @@ export const KLineChart: React.FC<KLineChartProps> = ({
               {period.includes('m') ? '盤中分K資料' : '歷史收盤分析'}
             </span>
             <span className="text-[11px] text-slate-400 font-mono">
-              資料來源：<b className="text-slate-200">FinMind</b>
+              資料來源：<b className="text-slate-200">市場資料</b>
             </span>
           </div>
         </div>
@@ -1021,7 +1021,7 @@ export const KLineChart: React.FC<KLineChartProps> = ({
         {isLoading && (
           <div className="absolute inset-0 z-20 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center gap-2 text-amber-400 text-xs font-mono">
             <RefreshCw className="w-4 h-4 animate-spin" />
-            <span>FinMind 官方行情報價同步中...</span>
+            <span>官方行情報價同步中...</span>
           </div>
         )}
 
@@ -1031,7 +1031,7 @@ export const KLineChart: React.FC<KLineChartProps> = ({
               <AlertTriangle className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-rose-400 font-bold text-sm">🔴 FinMind 資料取得失敗</h3>
+              <h3 className="text-rose-400 font-bold text-sm">🔴 資料取得失敗</h3>
               <p className="text-xs text-slate-400 font-mono max-w-md">{fetchError}</p>
               <p className="text-[11px] text-slate-500">系統嚴格拒絕假資料 (Mock Data: OFF)，請確認代碼或稍後重試。</p>
             </div>
@@ -1061,7 +1061,7 @@ export const KLineChart: React.FC<KLineChartProps> = ({
         <div className="flex items-center gap-3 flex-wrap">
           <span className="flex items-center gap-1.5 text-cyan-400 font-bold">
             <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-            FinMind 官方資料庫
+            官方資料庫
           </span>
           <span>資料集: <b className="text-slate-300">{datasetName}</b></span>
           <span>最後行情時間: <b className="text-slate-200">{lastDataTime || benchmarkDate}</b></span>

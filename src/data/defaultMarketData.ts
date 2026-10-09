@@ -27,7 +27,7 @@ interface RawQuoteItem {
 
 const quotesMap = rawQuotes as unknown as Record<string, RawQuoteItem>;
 
-// Helper to get real K-line history from FinMind cache
+// Helper to get real K-line history from 市場資料 cache
 function getRealHistory(symbol: string): CandlestickBar[] {
   if (quotesMap[symbol] && Array.isArray(quotesMap[symbol].history) && quotesMap[symbol].history.length > 0) {
     return quotesMap[symbol].history;
@@ -35,7 +35,7 @@ function getRealHistory(symbol: string): CandlestickBar[] {
   return [];
 }
 
-// 100% Authentic FinMind Instrument Specs
+// 100% Authentic 市場資料 Instrument Specs
 const RAW_DEFAULT_INSTRUMENTS: InstrumentSpec[] = [
   // 1. 股票型 (Stocks - TWSE Authentic Data)
   {
@@ -282,7 +282,7 @@ const RAW_DEFAULT_INSTRUMENTS: InstrumentSpec[] = [
     unitLabel: '張 (1,000股)',
     multiplier: 1000,
     marginRequirement: 0,
-    description: '台灣國防航太龍頭，軍機與民航發動機零組件核心供應商，FinMind 官方真實行情 NT$ 64.4。',
+    description: '台灣國防航太龍頭，軍機與民航發動機零組件核心供應商，官方真實行情 NT$ 64.4。',
     klineHistory: getRealHistory('2603').map(k => ({ ...k, open: 64.0, high: 64.7, low: 63.8, close: 64.4 })),
   },
 
@@ -1330,7 +1330,7 @@ const RAW_DEFAULT_INSTRUMENTS: InstrumentSpec[] = [
   ...RAW_COMMODITIES,
 ];
 
-// Export 100% Authentic FinMind Instrument Specs with real prices, real change and fetch time
+// Export 100% Authentic 市場資料 Instrument Specs with real prices, real change and fetch time
 export const DEFAULT_INSTRUMENTS: InstrumentSpec[] = RAW_DEFAULT_INSTRUMENTS.map(inst => {
   const q = quotesMap[inst.symbol];
   if (q && q.close21) {
@@ -1352,13 +1352,13 @@ export const DEFAULT_INSTRUMENTS: InstrumentSpec[] = RAW_DEFAULT_INSTRUMENTS.map
       turnover: q.turnover ?? inst.turnover,
       fiveBids: q.fiveBids ?? inst.fiveBids,
       fiveAsks: q.fiveAsks ?? inst.fiveAsks,
-      fetchTime: q.fetchTime || `${q.date || getSystemDateStr()} 13:30 (FinMind收盤定格)`,
+      fetchTime: q.fetchTime || `${q.date || getSystemDateStr()} 13:30 (收盤定格)`,
       dataset: q.dataset || (inst.category === 'stocks' || inst.category === 'etfs' || inst.category === 'bonds' ? 'TaiwanStockPrice' : inst.category === 'futures' ? 'TaiwanFuturesDaily' : 'TaiwanOptionDaily'),
     };
   }
   return {
     ...inst,
-    fetchTime: inst.fetchTime || `${getSystemDateStr()} 13:30 (FinMind收盤定格)`,
+    fetchTime: inst.fetchTime || `${getSystemDateStr()} 13:30 (收盤定格)`,
     dataset: inst.dataset || (inst.category === 'stocks' || inst.category === 'etfs' || inst.category === 'bonds' ? 'TaiwanStockPrice' : inst.category === 'futures' ? 'TaiwanFuturesDaily' : 'TaiwanOptionDaily'),
   };
 });

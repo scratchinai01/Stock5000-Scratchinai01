@@ -37,6 +37,25 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json());
 
+// 畫面上不顯示資料供應商名稱：所有 JSON 回應（含 AI 生成文字）出門前統一替換
+const BRAND_RE = /fin\s*mind/gi;
+function scrubBrand(v: any, depth = 0): any {
+  if (depth > 12) return v;
+  if (typeof v === 'string') return /fin\s*mind/i.test(v) ? v.replace(BRAND_RE, '市場資料') : v;
+  if (Array.isArray(v)) return v.map(x => scrubBrand(x, depth + 1));
+  if (v && typeof v === 'object' && v.constructor === Object) {
+    const out: Record<string, any> = {};
+    for (const k of Object.keys(v)) out[k] = scrubBrand(v[k], depth + 1);
+    return out;
+  }
+  return v;
+}
+app.use((_req, res, next) => {
+  const orig = res.json.bind(res);
+  res.json = (body: any) => orig(scrubBrand(body));
+  next();
+});
+
 // Standard Cloud Run & Container Health Check Endpoint
 app.get('/healthz', (_req, res) => {
   res.status(200).send('OK');
@@ -206,16 +225,16 @@ function sanitizeAIOutput(text: string): string {
     .replace(/money888/g, '••••');
 }
 
-// Load authentic FinMind quotes cache from disk
+// Load authentic 市場資料 quotes cache from disk
 let authenticQuotesCache: Record<string, any> = {};
 const quotesFilePath = path.join(__dirname, 'src', 'data', 'realFinmindQuotes.json');
 try {
   if (fs.existsSync(quotesFilePath)) {
     authenticQuotesCache = JSON.parse(fs.readFileSync(quotesFilePath, 'utf8'));
-    console.log(`[FinMind] Loaded ${Object.keys(authenticQuotesCache).length} authentic market quotes from cache`);
+    console.log(`[市場資料] Loaded ${Object.keys(authenticQuotesCache).length} authentic market quotes from cache`);
   }
 } catch (e: any) {
-  console.warn('[FinMind] Could not load realFinmindQuotes.json:', e.message);
+  console.warn('[市場資料] Could not load realFinmindQuotes.json:', e.message);
 }
 
 // Load comprehensive Taiwan stock catalog (4,329 symbols TWSE & TPEx)
@@ -224,10 +243,10 @@ const catalogFilePath = path.join(__dirname, 'src', 'data', 'taiwanStockList.jso
 try {
   if (fs.existsSync(catalogFilePath)) {
     taiwanStockCatalog = JSON.parse(fs.readFileSync(catalogFilePath, 'utf8'));
-    console.log(`[FinMind] Loaded ${taiwanStockCatalog.length} Taiwan stock catalog items from disk`);
+    console.log(`[市場資料] Loaded ${taiwanStockCatalog.length} Taiwan stock catalog items from disk`);
   }
 } catch (e: any) {
-  console.warn('[FinMind] Could not load taiwanStockList.json:', e.message);
+  console.warn('[市場資料] Could not load taiwanStockList.json:', e.message);
 }
 
 // Load comprehensive US stock catalog (NYSE & NASDAQ)
@@ -253,23 +272,23 @@ try {
   console.warn('[Market] Could not load usStockList.json:', e.message);
 }
 
-// Cache for FinMind responses to speed up repeated queries and respect rate limits
+// Cache for 市場資料 responses to speed up repeated queries and respect rate limits
 const finmindCache = new Map<string, { timestamp: number; data: any }>();
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 分鐘快取已收盤/歷史資料，徹底杜絕重複查詢
 
-// User & Environment FinMind API Token management
+// User & Environment 市場資料 API Token management
 // ⚠️ Token 只能從環境變數 (AI Studio Secrets) 讀取，絕不寫死在程式碼裡（儲存庫是公開的）
 let currentFinmindToken = (process.env.FINMIND_API_TOKEN || process.env.FINMIND_TOKEN || '').trim();
 if (!currentFinmindToken) {
-  console.warn('[FinMind] 未設定 FINMIND_API_TOKEN，將以免費額度連線（每小時 300 次）');
+  console.warn('[市場資料] 未設定 FINMIND_API_TOKEN，將以免費額度連線（每小時 300 次）');
 }
 
-// Helper: proxy request to FinMind API with authentic data verification
+// Helper: proxy request to 市場資料 API with authentic data verification
 async function fetchFinmindData(dataset: string, dataId: string, startDate?: string) {
   const cacheKey = `${dataset}_${dataId}_${startDate || ''}`;
   const cached = finmindCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    console.log(`[FINMIND REQUEST] (Cached)\nstock_id: ${dataId}\ndataset: ${dataset}\nstart_date: ${startDate || 'latest'}\nend_date: latest\n[FINMIND RESPONSE]\nstatus: 200\nrecords: ${cached.data.length}\ndata_source: FinMind\nis_mock: false`);
+    console.log(`[FINMIND REQUEST] (Cached)\nstock_id: ${dataId}\ndataset: ${dataset}\nstart_date: ${startDate || 'latest'}\nend_date: latest\n[FINMIND RESPONSE]\nstatus: 200\nrecords: ${cached.data.length}\ndata_source: 市場資料\nis_mock: false`);
     return cached.data;
   }
 
@@ -286,18 +305,18 @@ async function fetchFinmindData(dataset: string, dataId: string, startDate?: str
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'FinMind-50000000-Tycoon/2.0',
+        'User-Agent': '市場資料-50000000-Tycoon/2.0',
         ...(currentFinmindToken ? { Authorization: `Bearer ${currentFinmindToken}` } : {}),
       },
     });
     clearTimeout(timeoutId);
     if (!res.ok) {
-      throw new Error(`FinMind API HTTP ${res.status}`);
+      throw new Error(`市場資料 API HTTP ${res.status}`);
     }
     const json = await res.json();
     if (json && json.data && json.data.length > 0) {
       finmindCache.set(cacheKey, { timestamp: Date.now(), data: json.data });
-      console.log(`[FINMIND REQUEST]\nstock_id: ${dataId}\ndataset: ${dataset}\nstart_date: ${startDate || 'latest'}\nend_date: latest\n\n[FINMIND RESPONSE]\nstatus: 200\nrecords: ${json.data.length}\ndata_source: FinMind\nis_mock: false`);
+      console.log(`[FINMIND REQUEST]\nstock_id: ${dataId}\ndataset: ${dataset}\nstart_date: ${startDate || 'latest'}\nend_date: latest\n\n[FINMIND RESPONSE]\nstatus: 200\nrecords: ${json.data.length}\ndata_source: 市場資料\nis_mock: false`);
       return json.data;
     }
   } catch (err) {
@@ -310,17 +329,17 @@ async function fetchFinmindData(dataset: string, dataId: string, startDate?: str
 }
 
 // =========================================================================
-// FinMind 自動更新引擎
+// 自動更新引擎
 // 原本報價全部來自 realFinmindQuotes.json 這個靜態檔（停在 10/01~10/02，
 // 其中台指期等數字甚至是 AI 編造的），從未自動更新。
-// 這裡改成定期向 FinMind 抓取最新日資料覆寫快取，並寫回磁碟。
+// 這裡改成定期向 抓取最新日資料覆寫快取，並寫回磁碟。
 // =========================================================================
 const COMMODITY_SYMBOLS = new Set(['HO', 'CL', 'BZ', 'NG', 'RB', 'GC', 'SI', 'PL', 'PA', 'ZS', 'ZC', 'ZW', 'ZL', 'ZM', 'KC', 'SB', 'CC', 'OJ', 'CT', 'HG', 'ALI', 'NI', 'ZN', 'LE', 'HE', 'GF']);
 
-// 加密貨幣由 Binance 公開行情提供，不向 FinMind 查詢
+// 加密貨幣由 Binance 公開行情提供，不向 查詢
 const CRYPTO_SYMBOLS = new Set(['BTC', 'ETH', 'SOL', 'BNB', 'DOGE', 'USDT', 'USDC', 'TWDT', 'XRP']);
 
-// 系統內代號 → FinMind 期貨代號（股票期貨代號依 FinMind TaiwanFutOptDailyInfo 查核）
+// 系統內代號 → 期貨代號（股票期貨代號依市場資料 TaiwanFutOptDailyInfo 查核）
 const FUTURES_CODE_MAP: Record<string, string> = {
   TX: 'TX', MTX: 'MTX', TMF: 'TMF',
   ZE: 'TE', ZF: 'TF', TE: 'TE', TF: 'TF',
@@ -343,7 +362,7 @@ function getContractMultiplier(sym: string): number {
 type SymbolKind = 'tw_stock' | 'futures' | 'option' | 'us_stock' | 'commodity';
 function classifySymbol(sym: string): SymbolKind {
   const s = sym.toUpperCase();
-  if (COMMODITY_SYMBOLS.has(s) || CRYPTO_SYMBOLS.has(s)) return 'commodity'; // 非 FinMind 商品
+  if (COMMODITY_SYMBOLS.has(s) || CRYPTO_SYMBOLS.has(s)) return 'commodity'; // 非 商品
   if (/^[A-Z]{2,4}-\d+(\.\d+)?-(C|P|CALL|PUT)$/.test(s)) return 'option';
   if (FUTURES_CODE_MAP[s]) return 'futures';
   if (/^\d{4}F$/.test(s)) return 'futures';
@@ -380,14 +399,14 @@ async function finmindRange(dataset: string, dataId: string, startDate: string, 
     const res = await fetch(url.toString(), {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'FinMind-50000000-Tycoon/2.0',
+        'User-Agent': '市場資料-50000000-Tycoon/2.0',
         ...(currentFinmindToken ? { Authorization: `Bearer ${currentFinmindToken}` } : {}),
       },
     });
     const json: any = await res.json().catch(() => null);
     finmindStats.lastLatencyMs = Date.now() - t0;
     if (!res.ok || !json || json.status !== 200) {
-      throw new Error(`FinMind ${dataset}/${dataId} 失敗：HTTP ${res.status} ${json?.msg ?? ''}`.trim());
+      throw new Error(`市場資料 ${dataset}/${dataId} 失敗：HTTP ${res.status} ${json?.msg ?? ''}`.trim());
     }
     return Array.isArray(json.data) ? json.data : [];
   } catch (e: any) {
@@ -416,7 +435,7 @@ function nearMonthRows<T extends { date: string; contract_date: string; trading_
 function writeQuote(sym: string, patch: Record<string, any>) {
   const prev = authenticQuotesCache[sym] || {};
   const next: Record<string, any> = { ...prev, symbol: sym, ...patch };
-  // 這些欄位原本是編造的（五檔掛單、均價、寫死的漲跌停），FinMind 日資料沒有，一律移除
+  // 這些欄位原本是編造的（五檔掛單、均價、寫死的漲跌停），日資料沒有，一律移除
   delete next.fiveBids;
   delete next.fiveAsks;
   delete next.avgPrice;
@@ -427,7 +446,7 @@ function writeQuote(sym: string, patch: Record<string, any>) {
 
 async function refreshTwStock(sym: string) {
   const rows = (await finmindRange('TaiwanStockPrice', sym, daysAgoTW(20))).filter(r => Number(r.close) > 0);
-  if (rows.length === 0) throw new Error(`FinMind 查無 ${sym} 股價`);
+  if (rows.length === 0) throw new Error(`查無 ${sym} 股價`);
   const latest = rows[rows.length - 1];
   const prevClose = rows.length > 1 ? Number(rows[rows.length - 2].close) : round2(latest.close - latest.spread);
   const change = round2(latest.close - prevClose);
@@ -443,8 +462,8 @@ async function refreshTwStock(sym: string) {
     turnover: latest.Trading_money,
     date: latest.date,
     dataset: 'TaiwanStockPrice',
-    dataSource: 'FinMind',
-    fetchTime: `${latest.date} 收盤 (FinMind TaiwanStockPrice)`,
+    dataSource: '市場行情',
+    fetchTime: `${latest.date} 收盤 (市場資料 TaiwanStockPrice)`,
   });
 }
 
@@ -452,7 +471,7 @@ async function refreshFutures(sym: string) {
   const code = FUTURES_CODE_MAP[sym.toUpperCase()];
   if (!code) throw new Error(`${sym} 沒有對應的期交所期貨代號`);
   const rows = nearMonthRows(await finmindRange('TaiwanFuturesDaily', code, daysAgoTW(14)));
-  if (rows.length === 0) throw new Error(`FinMind 查無 ${code} 近月期貨`);
+  if (rows.length === 0) throw new Error(`查無 ${code} 近月期貨`);
   const latest: any = rows[rows.length - 1];
   const prevClose = round2(latest.close - latest.spread);
   writeQuote(sym, {
@@ -471,14 +490,14 @@ async function refreshFutures(sym: string) {
     multiplier: getContractMultiplier(sym),
     date: latest.date,
     dataset: 'TaiwanFuturesDaily',
-    dataSource: 'FinMind',
-    fetchTime: `${latest.date} 一般盤收盤 ${code} ${String(latest.contract_date).trim()} (FinMind)`,
+    dataSource: '市場行情',
+    fetchTime: `${latest.date} 一般盤收盤 ${code} ${String(latest.contract_date).trim()}`,
   });
 }
 
 async function refreshUsStock(sym: string) {
   const rows = (await finmindRange('USStockPrice', sym, daysAgoTW(14))).filter(r => Number(r.Close) > 0);
-  if (rows.length === 0) throw new Error(`FinMind 查無美股 ${sym}`);
+  if (rows.length === 0) throw new Error(`查無美股 ${sym}`);
   const latest = rows[rows.length - 1];
   const prevClose = rows.length > 1 ? Number(rows[rows.length - 2].Close) : latest.Close;
   const change = round2(latest.Close - prevClose);
@@ -494,8 +513,8 @@ async function refreshUsStock(sym: string) {
     category: 'us_stocks',
     date: latest.date,
     dataset: 'USStockPrice',
-    dataSource: 'FinMind',
-    fetchTime: `${latest.date} 美股收盤 (FinMind USStockPrice)`,
+    dataSource: '市場行情',
+    fetchTime: `${latest.date} 美股收盤 (市場資料 USStockPrice)`,
   });
 }
 
@@ -503,7 +522,7 @@ async function refreshUsStock(sym: string) {
 async function refreshOptionsGroup(optionId: string, symbols: string[]) {
   const raw = await finmindRange('TaiwanOptionDaily', optionId, daysAgoTW(6));
   const rows = raw.filter((r: any) => (!r.trading_session || r.trading_session === 'position') && /^\d{6}$/.test(String(r.contract_date).trim()));
-  if (rows.length === 0) throw new Error(`FinMind 查無 ${optionId} 選擇權`);
+  if (rows.length === 0) throw new Error(`查無 ${optionId} 選擇權`);
   const dates = [...new Set(rows.map((r: any) => r.date))].sort();
   const latestDate = dates[dates.length - 1];
   const prevDate = dates.length > 1 ? dates[dates.length - 2] : null;
@@ -538,8 +557,8 @@ async function refreshOptionsGroup(optionId: string, symbols: string[]) {
       category: 'options',
       date: latest.date,
       dataset: 'TaiwanOptionDaily',
-      dataSource: 'FinMind',
-      fetchTime: `${latest.date} 一般盤收盤 ${optionId} ${nearMonth} (FinMind)`,
+      dataSource: '市場行情',
+      fetchTime: `${latest.date} 一般盤收盤 ${optionId} ${nearMonth}`,
     });
   }
 }
@@ -568,7 +587,7 @@ async function refreshSymbol(sym: string) {
   if (kind === 'futures') return refreshFutures(sym);
   if (kind === 'us_stock') return refreshUsStock(sym);
   if (kind === 'option') return refreshOptionsGroup(sym.toUpperCase().split('-')[0], [sym]);
-  throw new Error(`${sym} 不是 FinMind 提供的商品`);
+  throw new Error(`${sym} 不是 提供的商品`);
 }
 
 async function refreshAllQuotes(reason: string) {
@@ -594,7 +613,7 @@ async function refreshAllQuotes(reason: string) {
     singles.sort((a, b) => (priority.indexOf(a) + 1 || 99) - (priority.indexOf(b) + 1 || 99));
     let ok = 0;
     refreshProgress = { done: 0, total: singles.length + optionGroups.size, startedAt: started };
-    console.log(`[FinMind Refresh] (${reason}) 開始更新 ${refreshProgress.total} 組`);
+    console.log(`[市場資料 Refresh] (${reason}) 開始更新 ${refreshProgress.total} 組`);
     await runWithConcurrency(singles, 8, async sym => {
       try {
         await refreshSymbol(sym);
@@ -620,10 +639,10 @@ async function refreshAllQuotes(reason: string) {
     try {
       fs.writeFileSync(quotesFilePath, JSON.stringify(authenticQuotesCache, null, 2), 'utf8');
     } catch (e: any) {
-      console.warn('[FinMind Refresh] 寫回快取檔失敗：', e.message);
+      console.warn('[市場資料 Refresh] 寫回快取檔失敗：', e.message);
     }
     console.log(
-      `[FinMind Refresh] (${reason}) 成功 ${ok} 檔，失敗 ${refreshFailures.size} 檔，耗時 ${Date.now() - started}ms` +
+      `[市場資料 Refresh] (${reason}) 成功 ${ok} 檔，失敗 ${refreshFailures.size} 檔，耗時 ${Date.now() - started}ms` +
         (refreshFailures.size ? `\n  失敗：${[...refreshFailures.keys()].join(', ')}` : '')
     );
   })().finally(() => {
@@ -643,11 +662,11 @@ function refreshIntervalMs(): number {
 
 function scheduleRefresh() {
   setTimeout(async () => {
-    await refreshAllQuotes('scheduled').catch(e => console.error('[FinMind Refresh]', e));
+    await refreshAllQuotes('scheduled').catch(e => console.error('[市場資料 Refresh]', e));
     scheduleRefresh();
   }, refreshIntervalMs());
 }
-refreshAllQuotes('startup').catch(e => console.error('[FinMind Refresh]', e));
+refreshAllQuotes('startup').catch(e => console.error('[市場資料 Refresh]', e));
 scheduleRefresh();
 
 /** 前端請求了快取裡沒有的代號：加入追蹤並立即抓一次 */
@@ -686,7 +705,7 @@ async function ensureTrackedInner(symbols: string[]) {
   }
 }
 
-// 0.0 API: Official FinMind Real-Time Connection Audit Test (FINMIND_CONNECTION_TEST)
+// 0.0 API: Official 市場資料 Real-Time Connection Audit Test (FINMIND_CONNECTION_TEST)
 app.get('/api/finmind/connection-test', async (req, res) => {
   const token = currentFinmindToken;
   const isConfigured = Boolean(token && token.length > 0);
@@ -700,7 +719,7 @@ app.get('/api/finmind/connection-test', async (req, res) => {
     endpoint_called: testUrl,
     http_status: 0,
     records_received: 0,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
     account_email: 'scratchinai01@gmail.com',
     plan: 'Sponsor ($999/月)',
@@ -713,7 +732,7 @@ app.get('/api/finmind/connection-test', async (req, res) => {
   try {
     const response = await fetch(`${testUrl}&token=${encodeURIComponent(token)}`, {
       headers: {
-        'User-Agent': 'FinMind-50000000-Tycoon/2.0',
+        'User-Agent': '市場資料-50000000-Tycoon/2.0',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
@@ -742,12 +761,12 @@ app.get('/api/finmind/connection-test', async (req, res) => {
   });
 });
 
-// 0. API: Get all authentic FinMind quotes
+// 0. API: Get all authentic 市場資料 quotes
 app.get('/api/finmind/all-quotes', (req, res) => {
   const session = getTaiwanMarketSession();
   return res.json({
     success: true,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
     mock_data_disabled: true,
     benchmarkDate: session.twDateStr,
@@ -878,14 +897,14 @@ function getTaiwanMarketSession(): {
   };
 }
 
-// 0.1 API: Real-Time Live Market Ticker & Quotes Streaming (FinMind Sponsor Live Snapshots)
+// 0.1 API: Real-Time Live Market Ticker & Quotes Streaming (市場資料 Sponsor Live Snapshots)
 // 💡 使用者指示之核心架構優化：非交易時段 100% 使用本地已下載系統查詢；盤中則使用 30 秒全域共享快取，徹底杜絕 API 耗盡！
 const SNAPSHOT_CACHE_TTL_MS = 30 * 1000; // 30 秒伺服器共享快取，每小時最多僅呼叫 120 次，低於 6000 上限的 2%
 // 即時快照失敗時暫停一段時間再重試（原本一次失敗就永久停用，直到伺服器重啟）
 let snapshotBackoffUntil = 0;
 function backoffSnapshot(ms: number, why: string) {
   snapshotBackoffUntil = Date.now() + ms;
-  console.warn(`[FinMind Snapshot] ${why}，${Math.round(ms / 60000)} 分鐘後重試`);
+  console.warn(`[市場資料 Snapshot] ${why}，${Math.round(ms / 60000)} 分鐘後重試`);
 }
 
 let realTimeSnapshotCache: { timestamp: number; data: Map<string, any> } = {
@@ -917,7 +936,7 @@ async function getLiveStockSnapshots(): Promise<Map<string, any>> {
     const timeout = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'FinMind-50000000-Tycoon/2.0' },
+      headers: { 'User-Agent': '市場資料-50000000-Tycoon/2.0' },
     });
     clearTimeout(timeout);
     if (res.ok) {
@@ -932,7 +951,7 @@ async function getLiveStockSnapshots(): Promise<Map<string, any>> {
           map.set(item.stock_id, item);
         }
         realTimeSnapshotCache = { timestamp: now, data: map };
-        console.log(`[FINMIND SNAPSHOT] Synced ${map.size} live stocks from FinMind (Cache active for 30s)`);
+        console.log(`[FINMIND SNAPSHOT] Synced ${map.size} live stocks from 市場資料 (Cache active for 30s)`);
         return map;
       }
     } else {
@@ -963,7 +982,7 @@ async function getLiveFuturesSnapshots(): Promise<Map<string, any>> {
     const timeout = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'FinMind-50000000-Tycoon/2.0' },
+      headers: { 'User-Agent': '市場資料-50000000-Tycoon/2.0' },
     });
     clearTimeout(timeout);
     if (res.ok) {
@@ -1055,7 +1074,7 @@ app.get('/api/history/daily', async (req, res) => {
   }
 });
 
-// 診斷用：查看 FinMind 自動更新狀態
+// 診斷用：查看 自動更新狀態
 app.get('/api/finmind/refresh-status', (_req, res) => {
   res.json({
     tokenConfigured: Boolean(currentFinmindToken),
@@ -1075,7 +1094,7 @@ app.get('/api/finmind/refresh-status', (_req, res) => {
 app.get('/api/market/live-quotes', async (req, res) => {
   const session = getTaiwanMarketSession();
 
-  // 前端送來的代號（商品清單＋持倉）：沒追蹤過的立即向 FinMind 抓
+  // 前端送來的代號（商品清單＋持倉）：沒追蹤過的立即向 抓
   const requested = String(req.query.symbols || '')
     .split(',')
     .map(s => s.trim().toUpperCase())
@@ -1099,7 +1118,7 @@ app.get('/api/market/live-quotes', async (req, res) => {
     const q = authenticQuotesCache[sym];
     if (!q || !(Number(q.close21) > 0)) continue;
     const kind = classifySymbol(sym);
-    const isFinmind = q.dataSource === 'FinMind';
+    const isFinmind = q.dataSource === '市場行情';
 
     let currentPrice = Number(q.close21);
     let prevClose = Number(q.prevClose) || round2(currentPrice - (q.change || 0));
@@ -1109,12 +1128,12 @@ app.get('/api/market/live-quotes', async (req, res) => {
     let open = q.open, high = q.high, low = q.low;
     let marketDate = q.date || null;
     let dataset = q.dataset || null;
-    let dataSource = isFinmind ? 'FinMind' : kind === 'commodity' ? '本地快取（非 FinMind，非即時）' : '本地快取（尚未成功從 FinMind 更新）';
+    let dataSource = isFinmind ? '市場行情' : kind === 'commodity' ? '本地快取（非市場資料，非即時）' : '本地快取（尚未成功從 更新）';
     let fetchTime = q.fetchTime || (marketDate ? `${marketDate} 收盤` : '日期不明');
     let lastTradeTime = kind === 'futures' || kind === 'option' ? '13:45:00' : '13:30:00';
     let bestBidAsk: { fiveBids?: any[]; fiveAsks?: any[] } = {};
 
-    // 盤中：FinMind 即時快照覆蓋
+    // 盤中：即時快照覆蓋
     const snap = kind === 'tw_stock' ? stockSnaps.get(sym) : undefined;
     const txSnap = sym === 'TX' ? Array.from(futSnaps.values()).find((f: any) => f.futures_id?.startsWith('TX')) : undefined;
     const live = snap && snap.close > 0 ? snap : txSnap && txSnap.close > 0 ? txSnap : null;
@@ -1129,9 +1148,9 @@ app.get('/api/market/live-quotes', async (req, res) => {
       low = live.low ?? low;
       marketDate = String(live.date).slice(0, 10);
       lastTradeTime = String(live.date).slice(11, 19);
-      fetchTime = `${String(live.date).slice(0, 19)} (FinMind 盤中即時)`;
+      fetchTime = `${String(live.date).slice(0, 19)} (盤中即時)`;
       dataset = snap ? 'taiwan_stock_tick_snapshot' : 'taiwan_futures_snapshot';
-      dataSource = 'FinMind';
+      dataSource = '市場行情';
       if (live.buy_price > 0 || live.sell_price > 0) {
         bestBidAsk = {
           fiveBids: live.buy_price > 0 ? [{ price: live.buy_price, volume: live.buy_volume ?? 0 }] : [],
@@ -1201,18 +1220,18 @@ app.get('/api/market/live-quotes', async (req, res) => {
 
   const unavailable = requested
     .filter(s => !liveData[s])
-    .map(s => ({ symbol: s, reason: refreshFailures.get(s) || 'FinMind 無此商品資料' }));
+    .map(s => ({ symbol: s, reason: refreshFailures.get(s) || '無此商品資料' }));
 
   return res.json({
     success: true,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
     mock_data_disabled: true,
     isLive: true,
     isMarketOpen: session.isOpen,
     marketStatus: session.statusText,
     marketPhase: session.marketPhase,
-    source: 'FinMind',
+    source: '市場行情',
     serverTime: session.twTimeStr,
     fetch_time: session.twDateTimeStr,
     serverTimestamp: Date.now(),
@@ -1251,7 +1270,7 @@ app.get('/api/market/trading-clock-diagnostics', async (req, res) => {
       nextSessionTime: clock.nextSessionTime,
       isTradingNow: clock.isTrading,
       dataReceivedTime: session.twTimeStr,
-      dataSource: 'FinMind',
+      dataSource: '市場行情',
       isMock: false,
       tradingHoursRule:
         cat === 'futures' && (sym.endsWith('F') || sym === 'CDF' || sym === 'DHF')
@@ -1278,7 +1297,7 @@ app.get('/api/market/trading-clock-diagnostics', async (req, res) => {
   });
 });
 
-// 0.15 API: Get current FinMind Token status & verification details (Sponsor $999/mo Plan)
+// 0.15 API: Get current 市場資料 Token status & verification details (Sponsor $999/mo Plan)
 app.get('/api/finmind/token-status', (req, res) => {
   const hasToken = Boolean(currentFinmindToken && currentFinmindToken.trim().length > 0);
   let maskedToken = '未設定';
@@ -1299,7 +1318,7 @@ app.get('/api/finmind/token-status', (req, res) => {
     price: '$999 /月',
     rateLimit: '6,000 次/小時',
     datasetsCount: 97,
-    quotaInfo: '👑 FinMind Sponsor 贊助者方案（NT$ 999/月 · 6,000次/小時 · 97種資料集全開）',
+    quotaInfo: '👑 市場資料 Sponsor 贊助者方案（NT$ 999/月 · 6,000次/小時 · 97種資料集全開）',
     isVip999: true,
     status: hasToken ? 'TOKEN_ACTIVE' : 'NO_TOKEN',
     authorizedDatasets: [
@@ -1315,7 +1334,7 @@ app.get('/api/finmind/token-status', (req, res) => {
   });
 });
 
-// 0.16 API: Set & verify FinMind Token from user input
+// 0.16 API: Set & verify 市場資料 Token from user input
 app.post('/api/finmind/set-token', async (req, res) => {
   const { token } = req.body;
   const cleanToken = (token || '').trim();
@@ -1326,11 +1345,11 @@ app.post('/api/finmind/set-token', async (req, res) => {
     return res.json({
       success: true,
       hasToken: false,
-      message: '已清除 FinMind Token，回復為公開免費連線模式。',
+      message: '已清除市場資料 Token，回復為公開免費連線模式。',
     });
   }
 
-  // Live test against FinMind API with this token
+  // Live test against 市場資料 API with this token
   try {
     const testUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=2330&start_date=${daysAgoTW(10)}&token=${encodeURIComponent(
       cleanToken
@@ -1350,25 +1369,25 @@ app.post('/api/finmind/set-token', async (req, res) => {
         hasToken: true,
         tokenTail,
         maskedToken: `${cleanToken.slice(0, 4)}...${tokenTail}`,
-        message: 'FinMind Token 驗證成功！已成功連線並啟用每 5 秒即時會員授權推播。',
+        message: '市場資料 Token 驗證成功！已成功連線並啟用每 5 秒即時會員授權推播。',
       });
     } else {
       return res.status(400).json({
         success: false,
-        message: `FinMind Token 驗證未通過：${json.msg || 'Token is illegal.'}`,
+        message: `市場資料 Token 驗證未通過：${json.msg || 'Token is illegal.'}`,
         detail: json,
       });
     }
   } catch (err: any) {
     return res.status(500).json({
       success: false,
-      message: `連線 FinMind 驗證超時或失敗：${err.message}`,
+      message: `連線 驗證超時或失敗：${err.message}`,
     });
   }
 });
 
-// 0.2 API: Verify & Force Refresh FinMind Live Connection
-// Directly hits official FinMind API (api.finmindtrade.com), measures roundtrip latency, and confirms live sync
+// 0.2 API: Verify & Force Refresh 市場資料 Live Connection
+// Directly hits official 市場資料 API (api.finmindtrade.com), measures roundtrip latency, and confirms live sync
 app.get('/api/finmind/verify-live', async (req, res) => {
   const symbol = (req.query.symbol as string) || '2330';
   const startTime = Date.now();
@@ -1483,13 +1502,13 @@ app.get('/api/admin/superuser-info', async (req, res) => {
   });
 });
 
-// 0.3 API: Trigger Immediate Full Refresh from FinMind
+// 0.3 API: Trigger Immediate Full Refresh from 市場資料
 app.post('/api/finmind/refresh-all', async (req, res) => {
   finmindCache.clear();
   const now = new Date();
   return res.json({
     success: true,
-    message: '已強制重設 FinMind 緩存，即時全市場行情已重新同步！',
+    message: '已強制重設 緩存，即時全市場行情已重新同步！',
     timestamp: now.toISOString(),
     timeStr: now.toTimeString().split(' ')[0],
   });
@@ -1506,7 +1525,7 @@ app.post('/api/market/download-eod-data', async (req, res) => {
 
     return res.json({
       success: true,
-      message: `成功下載備份 ${quoteCount} 檔標的行情至本地系統！已收盤市場全面改由本地高速查詢，FinMind 外部 API 消耗量降至 0。`,
+      message: `成功下載備份 ${quoteCount} 檔標的行情至本地系統！已收盤市場全面改由本地高速查詢，外部 API 消耗量降至 0。`,
       quoteCount,
       fileSizeKb: (stats.size / 1024).toFixed(1),
       savedAt: session.twDateTimeStr,
@@ -1539,7 +1558,7 @@ app.get('/api/market/cache-metrics', async (req, res) => {
   });
 });
 
-// 1. API: FinMind Stock & ETF Price query (100% Genuine FinMind)
+// 1. API: 市場資料 Stock & ETF Price query (100% Genuine 市場資料)
 app.get('/api/finmind/stock-price', async (req, res) => {
   const dataId = (req.query.data_id as string) || '2330';
   const startDate = (req.query.start_date as string) || daysAgoTW(60);
@@ -1549,7 +1568,7 @@ app.get('/api/finmind/stock-price', async (req, res) => {
     if (data && Array.isArray(data) && data.length > 0) {
       return res.json({
         success: true,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         is_mock: false,
         dataset: 'TaiwanStockPrice',
         data_id: dataId,
@@ -1558,13 +1577,13 @@ app.get('/api/finmind/stock-price', async (req, res) => {
       });
     }
   } catch (err: any) {
-    console.error(`[DATA SOURCE] FinMind API Error for ${dataId}:`, err.message);
+    console.error(`[DATA SOURCE] 市場資料 API Error for ${dataId}:`, err.message);
   }
 
   if (authenticQuotesCache[dataId]) {
     return res.json({
       success: true,
-      data_source: 'FinMind',
+      data_source: '市場行情',
       is_mock: false,
       dataset: 'TaiwanStockPrice',
       data_id: dataId,
@@ -1575,13 +1594,13 @@ app.get('/api/finmind/stock-price', async (req, res) => {
 
   return res.status(502).json({
     success: false,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
-    error: `FinMind API 取得資料失敗 (代碼：${dataId})`,
+    error: `市場資料 API 取得資料失敗 (代碼：${dataId})`,
   });
 });
 
-// 2. API: FinMind Futures Price query
+// 2. API: 市場資料 Futures Price query
 app.get('/api/finmind/futures-price', async (req, res) => {
   const dataId = (req.query.data_id as string) || 'TX';
   const startDate = (req.query.start_date as string) || daysAgoTW(60);
@@ -1591,7 +1610,7 @@ app.get('/api/finmind/futures-price', async (req, res) => {
     if (data && Array.isArray(data) && data.length > 0) {
       return res.json({
         success: true,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         is_mock: false,
         dataset: 'TaiwanFuturesDaily',
         data_id: dataId,
@@ -1600,13 +1619,13 @@ app.get('/api/finmind/futures-price', async (req, res) => {
       });
     }
   } catch (err: any) {
-    console.error(`[DATA SOURCE] FinMind Futures API Error for ${dataId}:`, err.message);
+    console.error(`[DATA SOURCE] 市場資料 Futures API Error for ${dataId}:`, err.message);
   }
 
   if (authenticQuotesCache[dataId]) {
     return res.json({
       success: true,
-      data_source: 'FinMind',
+      data_source: '市場行情',
       is_mock: false,
       dataset: 'TaiwanFuturesDaily',
       data_id: dataId,
@@ -1617,13 +1636,13 @@ app.get('/api/finmind/futures-price', async (req, res) => {
 
   return res.status(502).json({
     success: false,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
-    error: `FinMind API 取得期貨資料失敗 (代碼：${dataId})`,
+    error: `市場資料 API 取得期貨資料失敗 (代碼：${dataId})`,
   });
 });
 
-// 2.0 API: Professional Multi-Period FinMind K-Line Engine (1d, 1w, 1M, 1m, 5m, 15m, 30m, 60m)
+// 2.0 API: Professional Multi-Period 市場資料 K-Line Engine (1d, 1w, 1M, 1m, 5m, 15m, 30m, 60m)
 app.get('/api/finmind/kline', async (req, res) => {
   const rawId = (req.query.data_id as string) || (req.query.symbol as string) || '2330';
   const period = ((req.query.period as string) || '1d').trim();
@@ -1637,7 +1656,7 @@ app.get('/api/finmind/kline', async (req, res) => {
   // TAIFEX Stock Futures Contract Mapping
   if (cleanId === '6285F' || cleanId === 'IJF') {
     finmindDataId = '6285';
-    isFutures = false; // FinMind stock dataset has deep daily history for underlying
+    isFutures = false; // 市場資料 stock dataset has deep daily history for underlying
   } else if (cleanId === '5483F' || cleanId === 'OQF') {
     finmindDataId = '5483';
     isFutures = false;
@@ -1679,10 +1698,10 @@ app.get('/api/finmind/kline', async (req, res) => {
       if (!minuteRaw || minuteRaw.length === 0) {
         return res.status(502).json({
           success: false,
-          data_source: 'FinMind',
+          data_source: '市場行情',
           dataset,
           is_mock: false,
-          error: `FinMind API 查無分K數據 (代碼：${rawId})`,
+          error: `市場資料 API 查無分K數據 (代碼：${rawId})`,
         });
       }
 
@@ -1713,7 +1732,7 @@ app.get('/api/finmind/kline', async (req, res) => {
           symbol: rawId,
           period: '1m',
           dataset,
-          data_source: 'FinMind',
+          data_source: '市場行情',
           is_mock: false,
           last_data_time: lastBar ? lastBar.datetime : session.twDateTimeStr,
           fetch_time: session.twDateTimeStr,
@@ -1772,7 +1791,7 @@ app.get('/api/finmind/kline', async (req, res) => {
         symbol: rawId,
         period,
         dataset,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         is_mock: false,
         last_data_time: lastBar ? lastBar.datetime : session.twDateTimeStr,
         fetch_time: session.twDateTimeStr,
@@ -1793,10 +1812,10 @@ app.get('/api/finmind/kline', async (req, res) => {
     if (!dailyRaw || dailyRaw.length === 0) {
       return res.status(502).json({
         success: false,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         dataset,
         is_mock: false,
-        error: `FinMind API 查無日線數據 (代碼：${rawId})`,
+        error: `市場資料 API 查無日線數據 (代碼：${rawId})`,
       });
     }
 
@@ -1838,7 +1857,7 @@ app.get('/api/finmind/kline', async (req, res) => {
         symbol: rawId,
         period: '1d',
         dataset,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         is_mock: false,
         last_data_time: lastBar ? lastBar.datetime : session.twDateTimeStr,
         fetch_time: session.twDateTimeStr,
@@ -1890,7 +1909,7 @@ app.get('/api/finmind/kline', async (req, res) => {
         symbol: rawId,
         period: '1w',
         dataset,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         is_mock: false,
         last_data_time: lastBar ? lastBar.datetime : session.twDateTimeStr,
         fetch_time: session.twDateTimeStr,
@@ -1939,7 +1958,7 @@ app.get('/api/finmind/kline', async (req, res) => {
         symbol: rawId,
         period: '1M',
         dataset,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         is_mock: false,
         last_data_time: lastBar ? lastBar.datetime : session.twDateTimeStr,
         fetch_time: session.twDateTimeStr,
@@ -1948,18 +1967,18 @@ app.get('/api/finmind/kline', async (req, res) => {
       });
     }
   } catch (err: any) {
-    console.error(`[FinMind KLine Error] ${rawId} ${period}:`, err.message);
+    console.error(`[市場資料 KLine Error] ${rawId} ${period}:`, err.message);
   }
 
   return res.status(502).json({
     success: false,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
-    error: `FinMind API 伺服器取得行情失敗 (代碼：${rawId})`,
+    error: `市場資料 API 伺服器取得行情失敗 (代碼：${rawId})`,
   });
 });
 
-// 2.1 API: FinMind 台股分K (TaiwanStockKBar) - Sponsor $999 Plan Feature
+// 2.1 API: 台股分K (TaiwanStockKBar) - Sponsor $999 Plan Feature
 app.get('/api/finmind/stock-kbar', async (req, res) => {
   const dataId = (req.query.data_id as string) || '2330';
   const session = getTaiwanMarketSession();
@@ -1975,7 +1994,7 @@ app.get('/api/finmind/stock-kbar', async (req, res) => {
     if (data && Array.isArray(data) && data.length > 0) {
       return res.json({
         success: true,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         dataset: 'TaiwanStockKBar',
         plan: 'Sponsor ($999/月)',
         data_id: dataId,
@@ -1984,18 +2003,18 @@ app.get('/api/finmind/stock-kbar', async (req, res) => {
       });
     }
   } catch (err: any) {
-    console.error(`[FinMind] TaiwanStockKBar error:`, err.message);
+    console.error(`[市場資料] TaiwanStockKBar error:`, err.message);
   }
 
   return res.status(502).json({
     success: false,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
-    error: `FinMind API 取得台股分K失敗 (代碼：${dataId})`,
+    error: `市場資料 API 取得台股分K失敗 (代碼：${dataId})`,
   });
 });
 
-// 2.2 API: FinMind 期貨分K (TaiwanFuturesKBar) - Sponsor $999 Plan Feature
+// 2.2 API: 期貨分K (TaiwanFuturesKBar) - Sponsor $999 Plan Feature
 app.get('/api/finmind/futures-kbar', async (req, res) => {
   const dataId = (req.query.data_id as string) || 'TX';
   const session = getTaiwanMarketSession();
@@ -2011,7 +2030,7 @@ app.get('/api/finmind/futures-kbar', async (req, res) => {
     if (data && Array.isArray(data) && data.length > 0) {
       return res.json({
         success: true,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         dataset: 'TaiwanFuturesKBar',
         plan: 'Sponsor ($999/月)',
         data_id: dataId,
@@ -2020,18 +2039,18 @@ app.get('/api/finmind/futures-kbar', async (req, res) => {
       });
     }
   } catch (err: any) {
-    console.error(`[FinMind] TaiwanFuturesKBar error:`, err.message);
+    console.error(`[市場資料] TaiwanFuturesKBar error:`, err.message);
   }
 
   return res.status(502).json({
     success: false,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
-    error: `FinMind API 取得期貨分K失敗 (代碼：${dataId})`,
+    error: `市場資料 API 取得期貨分K失敗 (代碼：${dataId})`,
   });
 });
 
-// 2.3 API: FinMind 台股即時逐筆 (TaiwanStockPriceTick) - Sponsor $999 Plan Feature
+// 2.3 API: 台股即時逐筆 (TaiwanStockPriceTick) - Sponsor $999 Plan Feature
 app.get('/api/finmind/stock-ticks', async (req, res) => {
   const dataId = (req.query.data_id as string) || '2330';
   const session = getTaiwanMarketSession();
@@ -2047,7 +2066,7 @@ app.get('/api/finmind/stock-ticks', async (req, res) => {
     if (data && Array.isArray(data) && data.length > 0) {
       return res.json({
         success: true,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         dataset: 'TaiwanStockPriceTick',
         plan: 'Sponsor ($999/月)',
         data_id: dataId,
@@ -2056,18 +2075,18 @@ app.get('/api/finmind/stock-ticks', async (req, res) => {
       });
     }
   } catch (err: any) {
-    console.error(`[FinMind] TaiwanStockPriceTick error:`, err.message);
+    console.error(`[市場資料] TaiwanStockPriceTick error:`, err.message);
   }
 
   return res.status(502).json({
     success: false,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
-    error: `FinMind API 取得台股即時逐筆失敗 (代碼：${dataId})`,
+    error: `市場資料 API 取得台股即時逐筆失敗 (代碼：${dataId})`,
   });
 });
 
-// 2.4 API: FinMind 期貨即時逐筆 (TaiwanFuturesTick) - Sponsor $999 Plan Feature
+// 2.4 API: 期貨即時逐筆 (TaiwanFuturesTick) - Sponsor $999 Plan Feature
 app.get('/api/finmind/futures-ticks', async (req, res) => {
   const dataId = (req.query.data_id as string) || 'TX';
   const session = getTaiwanMarketSession();
@@ -2078,7 +2097,7 @@ app.get('/api/finmind/futures-ticks', async (req, res) => {
     if (data && Array.isArray(data) && data.length > 0) {
       return res.json({
         success: true,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         dataset: 'TaiwanFuturesTick',
         plan: 'Sponsor ($999/月)',
         data_id: dataId,
@@ -2087,18 +2106,18 @@ app.get('/api/finmind/futures-ticks', async (req, res) => {
       });
     }
   } catch (err: any) {
-    console.error(`[FinMind] TaiwanFuturesTick error:`, err.message);
+    console.error(`[市場資料] TaiwanFuturesTick error:`, err.message);
   }
 
   return res.status(502).json({
     success: false,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
-    error: `FinMind API 取得期貨即時逐筆失敗 (代碼：${dataId})`,
+    error: `市場資料 API 取得期貨即時逐筆失敗 (代碼：${dataId})`,
   });
 });
 
-// 2.5 API: FinMind 期貨價差每筆成交 (TaiwanFuturesSpreadTick) - Sponsor $999 Plan Feature
+// 2.5 API: 期貨價差每筆成交 (TaiwanFuturesSpreadTick) - Sponsor $999 Plan Feature
 app.get('/api/finmind/futures-spread-ticks', async (req, res) => {
   const dataId = (req.query.data_id as string) || 'TX';
   const session = getTaiwanMarketSession();
@@ -2109,7 +2128,7 @@ app.get('/api/finmind/futures-spread-ticks', async (req, res) => {
     if (data && Array.isArray(data) && data.length > 0) {
       return res.json({
         success: true,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         dataset: 'TaiwanFuturesSpreadTick',
         plan: 'Sponsor ($999/月)',
         data_id: dataId,
@@ -2118,18 +2137,18 @@ app.get('/api/finmind/futures-spread-ticks', async (req, res) => {
       });
     }
   } catch (err: any) {
-    console.error(`[FinMind] TaiwanFuturesSpreadTick error:`, err.message);
+    console.error(`[市場資料] TaiwanFuturesSpreadTick error:`, err.message);
   }
 
   return res.status(502).json({
     success: false,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
-    error: `FinMind API 取得期貨價差資料失敗 (代碼：${dataId})`,
+    error: `市場資料 API 取得期貨價差資料失敗 (代碼：${dataId})`,
   });
 });
 
-// 2.6 API: FinMind 選擇權即時逐筆 (TaiwanOptionTick) - Sponsor $999 Plan Feature
+// 2.6 API: 選擇權即時逐筆 (TaiwanOptionTick) - Sponsor $999 Plan Feature
 app.get('/api/finmind/option-ticks', async (req, res) => {
   const dataId = (req.query.data_id as string) || 'TXO';
   const session = getTaiwanMarketSession();
@@ -2140,7 +2159,7 @@ app.get('/api/finmind/option-ticks', async (req, res) => {
     if (data && Array.isArray(data) && data.length > 0) {
       return res.json({
         success: true,
-        data_source: 'FinMind',
+        data_source: '市場行情',
         dataset: 'TaiwanOptionTick',
         plan: 'Sponsor ($999/月)',
         data_id: dataId,
@@ -2149,14 +2168,14 @@ app.get('/api/finmind/option-ticks', async (req, res) => {
       });
     }
   } catch (err: any) {
-    console.error(`[FinMind] TaiwanOptionTick error:`, err.message);
+    console.error(`[市場資料] TaiwanOptionTick error:`, err.message);
   }
 
   return res.status(502).json({
     success: false,
-    data_source: 'FinMind',
+    data_source: '市場行情',
     is_mock: false,
-    error: `FinMind API 取得選擇權即時逐筆失敗 (代碼：${dataId})`,
+    error: `市場資料 API 取得選擇權即時逐筆失敗 (代碼：${dataId})`,
   });
 });
 
@@ -2277,7 +2296,7 @@ app.get('/api/market/query-quote', async (req, res) => {
   }
 
 
-  // 1. FinMind（快取沒有就當場抓一次）
+  // 1. 市場資料（快取沒有就當場抓一次）
   await ensureTracked([sym]);
   if (authenticQuotesCache[sym] && Number(authenticQuotesCache[sym].close21) > 0 && classifySymbol(sym) !== 'commodity') {
     const q = authenticQuotesCache[sym];
@@ -2287,7 +2306,7 @@ app.get('/api/market/query-quote', async (req, res) => {
     const limitDown = kind === 'tw_stock' ? calcTwseLimit(prevClose, false) : undefined;
     return res.json({
       success: true,
-      data_source: q.dataSource === 'FinMind' ? 'FinMind' : '本地快取（尚未成功從 FinMind 更新）',
+      data_source: q.dataSource === '市場行情' ? '市場行情' : '本地快取（尚未成功從 更新）',
       is_mock: false,
       tokens_used: 0,
       data: {
@@ -2355,7 +2374,7 @@ app.get('/api/market/query-quote', async (req, res) => {
 
         return res.json({
           success: true,
-          data_source: 'Yahoo Finance（FinMind 查無此商品時的備援）',
+          data_source: 'Yahoo Finance（查無此商品時的備援）',
           is_mock: false,
           tokens_used: 0,
           data: {
@@ -2391,7 +2410,7 @@ app.get('/api/market/query-quote', async (req, res) => {
 });
 
 // 3. API: Gemini AI Quote & Derivative Pricing Assistant
-// First checks authentic FinMind cache and live API before invoking AI
+// First checks authentic 市場資料 cache and live API before invoking AI
 app.post('/api/gemini/quote-assistant', async (req, res) => {
   const { query, category, benchmarkDate } = req.body;
   if (!query) {
@@ -2420,7 +2439,7 @@ app.post('/api/gemini/quote-assistant', async (req, res) => {
       return res.status(404).json({
         success: false,
         notFound: true,
-        message: `FinMind 查無美股「${rawQuery}」的報價（${refreshFailures.get(targetSym) || '無資料'}），系統不會以假數字代替。`,
+        message: `查無美股「${rawQuery}」的報價（${refreshFailures.get(targetSym) || '無資料'}），系統不會以假數字代替。`,
         symbol: targetSym,
       });
     }
@@ -2481,7 +2500,7 @@ app.post('/api/gemini/quote-assistant', async (req, res) => {
   else if (targetSym.includes('TXO') || targetSym.endsWith('-C') || targetSym.endsWith('-P')) determinedCategory = 'options';
   else if (targetSym.length === 6 && (targetSym.endsWith('P') || targetSym.endsWith('F') || /^\d{6}$/.test(targetSym))) determinedCategory = 'warrants';
 
-  // 1. FinMind（快取沒有就當場抓一次）
+  // 1. 市場資料（快取沒有就當場抓一次）
   await ensureTracked([targetSym]);
   if (authenticQuotesCache[targetSym] && Number(authenticQuotesCache[targetSym].close21) > 0) {
     const q = authenticQuotesCache[targetSym];
@@ -2512,14 +2531,14 @@ app.post('/api/gemini/quote-assistant', async (req, res) => {
         unitDescription: kind === 'futures' || kind === 'option' ? '口' : '張 (1,000單位)',
         marginRequirement: kind === 'futures' ? Math.round(q.close21 * multiplier * 0.135) : 0,
         contractMultiplier: multiplier,
-        valuationReasoning: `${q.dataSource === 'FinMind' ? 'FinMind' : '本地快取'}行情：${q.name || resolvedName} ${q.date ?? ''} 價格 ${q.close21}。`,
+        valuationReasoning: `${q.dataSource === '市場行情' ? '市場行情' : '本地快取'}行情：${q.name || resolvedName} ${q.date ?? ''} 價格 ${q.close21}。`,
         klineHistory: q.history || [],
       },
       source: 'finmind_authentic_cache',
     });
   }
 
-  // 2. Second priority: Query real FinMind API directly
+  // 2. Second priority: Query real 市場資料 API directly
   try {
     const finmindRecords = await fetchFinmindData('TaiwanStockPrice', targetSym, daysAgoTW(20));
     if (finmindRecords && Array.isArray(finmindRecords) && finmindRecords.length > 0) {
@@ -2569,21 +2588,21 @@ app.post('/api/gemini/quote-assistant', async (req, res) => {
           unitDescription: determinedCategory === 'futures' ? '口' : '張 (1,000單位)',
           contractMultiplier: determinedCategory === 'futures' ? 2000 : 1000,
           marginRequirement: determinedCategory === 'futures' ? Math.round(currentPrice * 2000 * 0.135) : 0,
-          valuationReasoning: `FinMind 官方即時撮合成功：${stockName} 最新價格 NT$ ${currentPrice}。`,
+          valuationReasoning: `官方即時撮合成功：${stockName} 最新價格 NT$ ${currentPrice}。`,
         },
         source: 'finmind_live_api',
       });
     }
   } catch (fErr: any) {
-    console.warn('Direct FinMind query failed for:', targetSym, fErr.message);
+    console.warn('Direct 市場資料 query failed for:', targetSym, fErr.message);
   }
 
   // 3. User explicit rule: "Gemini AI不要代勞 模擬數據 找不到 就找不到"
-  // If not found in authentic cache or FinMind, strictly return 404 with no hallucinated data.
+  // If not found in authentic cache or 市場資料, strictly return 404 with no hallucinated data.
   return res.status(404).json({
     success: false,
     notFound: true,
-    message: `FinMind 官方資料庫查無「${rawQuery}」（代號：${targetSym}），請確認標的代號是否正確。系統已停用 AI 代勞模擬，嚴格禁止虛構行情。`,
+    message: `官方資料庫查無「${rawQuery}」（代號：${targetSym}），請確認標的代號是否正確。系統已停用 AI 代勞模擬，嚴格禁止虛構行情。`,
     symbol: cleanSym,
   });
 });
@@ -2716,13 +2735,13 @@ app.post('/api/gemini/macro-research', async (req, res) => {
 
 // 5. API: Gemini AI Financial Calculator (智能財務計算機 · 支援 Groq 10組免費金鑰輪詢池 + Gemini 備援)
 // Calculates position sizes, futures leverage, options breakeven, hedging ratios, and custom natural language scenarios
-/** 給 AI 的參考行情：一律來自 FinMind 快取，附資料日期；沒有資料就明講 */
+/** 給 AI 的參考行情：一律來自 快取，附資料日期；沒有資料就明講 */
 function referenceQuotesForAI(symbols: string[]): string {
   return [...new Set(symbols.map(s => String(s).toUpperCase()))]
     .map(sym => {
       const q = authenticQuotesCache[sym];
       if (!q || !(Number(q.close21) > 0)) return `- ${sym}：無報價`;
-      const src = q.dataSource === 'FinMind' ? 'FinMind' : '舊快取，可能過時';
+      const src = q.dataSource === '市場行情' ? '市場行情' : '舊快取，可能過時';
       return `- ${q.name || sym} (${sym})：${q.close21}，漲跌 ${q.change ?? '-'}（${q.date ?? '日期不明'}，${src}）`;
     })
     .join('\n');
@@ -2744,7 +2763,7 @@ app.post('/api/gemini/financial-calculator', async (req, res) => {
     const session = getTaiwanMarketSession();
     const prompt = `你是一位精通台灣證券與期貨交易所（TWSE & TAIFEX）法規與數學計算的量化操盤主管。
 使用者正在玩「5000萬台幣股市大富翁實戰模擬」，所有數據皆以系統即時撮合行情（當前系統時間：${session.twDateTimeStr}）為基準。
-以下是系統從 FinMind 取得的最新參考行情（日期即資料日期）：
+以下是系統從 取得的最新參考行情（日期即資料日期）：
 ${referenceQuotesForAI(['TX', 'MTX', 'TMF', '2330', instrument?.symbol].filter(Boolean))}
 契約乘數：大台每點200元、小台每點50元、微台每點10元、選擇權每點50元。
 
@@ -3032,18 +3051,18 @@ app.post('/api/gemini/audit-market-anomalies', async (req, res) => {
   try {
     const session = getTaiwanMarketSession();
     const prompt = `你是一位受聘於金融監督機構與頂級量化對沖基金的最高階首席稽核長與 AI 幻覺審計專家。
-使用者正在管理「5000萬股市大富翁實戰模擬系統」，現在需要你對目前的即時行情數據、FinMind 外部資料源品質，以及學員交易紀錄進行全面性的「資料真偽、數值異常與 AI 幻覺深度審計」。
+使用者正在管理「5000萬股市大富翁實戰模擬系統」，現在需要你對目前的即時行情數據、外部資料源品質，以及學員交易紀錄進行全面性的「資料真偽、數值異常與 AI 幻覺深度審計」。
 
 【系統當前環境】
 - 台灣市場時間: ${session.twDateTimeStr}
 - 台股開收盤狀態: ${session.isTwseOpen ? '盤中開市撮合中' : '已收盤 (官方收盤價嚴格鎖定)'}
 - 期貨市場狀態: ${session.isFuturesOpen ? '盤中撮合中' : '已收盤'}
-- FinMind 外部連線狀態: ${currentFinmindToken ? '已設定 Token' : '未設定 Token（免費額度）'}
-- 最近一次 FinMind 日資料更新: ${lastRefreshAt ? new Date(lastRefreshAt).toISOString() : '尚未成功更新'}
+- 外部連線狀態: ${currentFinmindToken ? '已設定 Token' : '未設定 Token（免費額度）'}
+- 最近一次 日資料更新: ${lastRefreshAt ? new Date(lastRefreshAt).toISOString() : '尚未成功更新'}
 - 更新失敗的代號: ${[...refreshFailures.keys()].slice(0, 30).join(', ') || '無'}
 - 指定檢查目標: ${targetSymbol || '全市場標的'}
 
-【FinMind 伺服器端參考行情（審計比對基準）】
+【伺服器端參考行情（審計比對基準）】
 ${referenceQuotesForAI(['TX', 'MTX', 'TMF', '2330', '2317', '2454', '0050', targetSymbol].filter(Boolean))}
 
 【待審計樣本數據】
@@ -3055,8 +3074,8 @@ ${referenceQuotesForAI(['TX', 'MTX', 'TMF', '2330', '2317', '2454', '0050', targ
 【稽核規則】
 1. 檢驗標的現價與昨收價差，是否符合台股 10% 漲跌幅限制規則。
 2. 檢驗委買委賣五檔報價合理性（買價 < 賣價，數量大於0，價位跳動級距正確）。
-3. 逐一比對「標的行情數據」與「FinMind 參考行情」：價格差異超過 1% 或資料日期不同者，一律標為 FAIL 並寫出兩邊數字。
-4. 資料日期早於最近交易日、來源不是 FinMind、或缺少日期者，標為 WARN（可能過時）。
+3. 逐一比對「標的行情數據」與「參考行情」：價格差異超過 1% 或資料日期不同者，一律標為 FAIL 並寫出兩邊數字。
+4. 資料日期早於最近交易日、來源不是市場資料、或缺少日期者，標為 WARN（可能過時）。
 5. 你無法上網查證，不得自行判斷價格「合理」或「真實」；只能依上述比對結果下結論，不得預設資料為真。
 6. 若無法比對（缺少參考行情），status 填 UNVERIFIED。
 7. 檢驗學員是否出現異常套利交易（例如中午漲停卻以昨收偷買）或資產異常。
@@ -3067,7 +3086,7 @@ ${referenceQuotesForAI(['TX', 'MTX', 'TMF', '2330', '2317', '2454', '0050', targ
   "overallStatus": "HEALTHY_VERIFIED | ISSUES_FOUND | UNVERIFIED（依比對結果擇一）",
   "overallScore": 0,
   "summaryTitle": "全市場行情與資料真偽審計摘要",
-  "summaryContent": "總結市場行情是否真實、有無幻覺偏誤，以及 FinMind 與快照數據的品質評估...",
+  "summaryContent": "總結市場行情是否真實、有無幻覺偏誤，以及 與快照數據的品質評估...",
   "finmindAssessment": {
     "isAuthentic": "true 或 false（依比對結果）",
     "dataSourceType": "依比對結果描述資料來源",
@@ -3078,7 +3097,7 @@ ${referenceQuotesForAI(['TX', 'MTX', 'TMF', '2330', '2317', '2454', '0050', targ
       "symbol": "2330",
       "name": "台積電",
       "status": "PASS",
-      "metrics": "前端價格 vs FinMind 參考價格、資料日期（此處僅為格式示範）",
+      "metrics": "前端價格 vs 參考價格、資料日期（此處僅為格式示範）",
       "findings": "審計發現與細節檢驗說明",
       "isHallucination": false
     }
@@ -3165,7 +3184,7 @@ async function startServer() {
     } else {
       console.warn('[Warning] dist directory not found in production. Fallback index generated.');
       app.get('*', (_req, res) => {
-        res.status(200).send('<!doctype html><html><body><h2>FinMind 實戰系統啟動中，請稍候重新整理...</h2></body></html>');
+        res.status(200).send('<!doctype html><html><body><h2>實戰系統啟動中，請稍候重新整理...</h2></body></html>');
       });
     }
   }
@@ -3183,7 +3202,7 @@ async function startServer() {
   });
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`FinMind 5000萬股市大富翁 Server running on http://0.0.0.0:${PORT}`);
+    console.log(`市場資料 5000萬股市大富翁 Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

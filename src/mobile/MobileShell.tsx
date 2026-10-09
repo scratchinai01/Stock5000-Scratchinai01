@@ -256,7 +256,7 @@ function Watchlist(p: Props & { watch: string[]; onOpen: (i: InstrumentSpec) => 
         );
       })}
       <div className="px-4 py-3 text-[12px] leading-relaxed" style={{ color: C.muted }}>
-        報價來源 FinMind{p.lastUpdateTime ? ` · 更新 ${p.lastUpdateTime}` : ''}。收盤後顯示最後收盤價，盤中自動更新。
+        報價來源市場資料{p.lastUpdateTime ? ` · 更新 ${p.lastUpdateTime}` : ''}。收盤後顯示最後收盤價，盤中自動更新。
       </div>
     </>
   );
@@ -291,7 +291,7 @@ function Quote(p: Props & { inst: InstrumentSpec; watched: boolean; onToggleWatc
       <div className="px-4 pt-1.5 pb-3 flex flex-col gap-2.5" style={{ background: C.bar, borderBottom: `1px solid ${C.line}` }}>
         {inst.isMock && (
           <div className="text-[12px] font-bold px-3 py-2 rounded-lg" style={{ background: C.accentBg, color: C.accent }}>
-            尚未取得 FinMind 真實行情，以下為佔位價，不可交易
+            尚未取得 真實行情，以下為佔位價，不可交易
           </div>
         )}
         <div className="flex items-baseline gap-3 flex-wrap">
@@ -333,7 +333,7 @@ function Quote(p: Props & { inst: InstrumentSpec; watched: boolean; onToggleWatc
             </div>
           ) : (
             <div className="px-4 py-6 rounded-xl text-center text-[14px] leading-relaxed" style={{ border: `1px dashed ${C.line2}`, color: C.muted }}>
-              目前沒有委買委賣掛單資料。<br />台股盤中（09:00–13:30）會顯示 FinMind 的最佳一檔買賣價。
+              目前沒有委買委賣掛單資料。<br />台股盤中（09:00–13:30）會顯示 的最佳一檔買賣價。
             </div>
           )
         )}

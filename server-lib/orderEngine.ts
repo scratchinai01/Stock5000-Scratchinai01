@@ -1,7 +1,7 @@
 /**
  * 模擬撮合引擎（純函式，不碰網路與資料庫，方便測試）
  *
- * 系統沒有真正的交易所委託簿，所以拿 FinMind 即時快照的「真實」資料判定是否成交：
+ * 系統沒有真正的交易所委託簿，所以拿 即時快照的「真實」資料判定是否成交：
  *   1. 對手價成交：買單價 ≥ 最佳賣價（賣單價 ≤ 最佳買價）→ 以對手價成交，數量最多吃到該檔掛單量
  *   2. 價格穿越：委託之後市場有成交價「低於」買單價（高於賣單價）→ 依價格優先原則必定輪得到，以委託價成交，
  *      數量不超過委託後新增的成交量
@@ -51,7 +51,7 @@ export interface SimOrder {
   status: OrderStatus;
   fills: Fill[];
   feed: 'snapshot' | 'eod';
-  feedKey: string | null; // FinMind 快照代號，例如 2330、TXFJ6、TXO42000J6
+  feedKey: string | null; // 快照代號，例如 2330、TXFJ6、TXO42000J6
   sessionKey: string | null; // 生效的交易盤別，例如 2026-10-09C、2026-10-09D、2026-10-08N
   sessionDate: string | null; // 收盤價撮合用的交易日
   baseline: Baseline | null;

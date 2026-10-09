@@ -342,7 +342,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
         totalReturnPct: 0,
         positions: [],
         tradeHistory: [],
-        benchmarkDate: 'FinMind 即時撮合',
+        benchmarkDate: '即時撮合',
         createdAt: Date.now(),
         updatedAt: Date.now(),
         isCurrentPlayer: true,

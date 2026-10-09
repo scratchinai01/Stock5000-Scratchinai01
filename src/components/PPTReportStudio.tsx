@@ -60,7 +60,7 @@ export const PPTReportStudio: React.FC<PPTReportStudioProps> = ({
               rationale: p.notes,
             })),
           },
-          benchmarkDate: 'FinMind 當下即時撮合',
+          benchmarkDate: '當下即時撮合',
         }),
       });
 
@@ -87,7 +87,7 @@ export const PPTReportStudio: React.FC<PPTReportStudioProps> = ({
     const md = `
 # ${aiReport?.reportTitle || '5000萬資產配置與衍生性商品實務操作報告'}
 **報告組別**：${currentProfile.studentName} (${currentProfile.teamName})
-**報價基準**：FinMind 當下即時價 · 涵蓋股票/債券/ETF/期貨/選擇權
+**報價基準**：當下即時價 · 涵蓋股票/債券/ETF/期貨/選擇權
 
 ## 一、總體經濟環境分析 (Macro Outlook)
 ${aiReport?.macroAnalysis?.interestRateCycle || '聯準會進入實質降息週期，債券殖利率倒掛修復，台灣出口動能強勁。'}
@@ -177,7 +177,7 @@ ${aiReport?.derivativesHedgingPlan?.optionsRole || '買進台指賣權作為防�
             </span>
           </div>
           <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-950/60 px-2.5 py-1 rounded border border-cyan-800">
-            FinMind 當下即時撮合價
+            當下即時撮合價
           </span>
         </div>
 

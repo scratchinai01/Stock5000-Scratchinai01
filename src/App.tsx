@@ -150,8 +150,8 @@ function placeholderInstrument(inst: InstrumentSpec): InstrumentSpec {
     fiveBids: undefined,
     fiveAsks: undefined,
     avgPrice: undefined,
-    dataSource: '尚未取得 FinMind 行情（顯示的是內建佔位價，不可交易）',
-    fetchTime: '尚未取得 FinMind 行情',
+    dataSource: '尚未取得 行情（顯示的是內建佔位價，不可交易）',
+    fetchTime: '尚未取得 行情',
   };
 }
 
@@ -188,7 +188,7 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     return sessionStorage.getItem('finmind_superuser_authenticated') === 'true';
   });
-  // 內建清單的價格只是佔位，收到 FinMind 行情前一律標示為不可交易，並移除編造的五檔掛單
+  // 內建清單的價格只是佔位，收到 行情前一律標示為不可交易，並移除編造的五檔掛單
   const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => DEFAULT_INSTRUMENTS.map(placeholderInstrument));
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
   const [isProAnalysisOpen, setIsProAnalysisOpen] = useState(false);
@@ -252,7 +252,7 @@ export default function App() {
     Array<{ id: string; time: string; latencyMs: number; tokenAttached: boolean; status: string }>
   >([]);
 
-  // Load FinMind Token status on mount
+  // Load 市場資料 Token status on mount
   const fetchTokenInfo = async () => {
     try {
       const res = await fetch('/api/finmind/token-status');
@@ -261,7 +261,7 @@ export default function App() {
         setTokenInfo(data);
       }
     } catch (e) {
-      console.warn('Failed to load FinMind token status:', e);
+      console.warn('Failed to load 市場資料 token status:', e);
     }
   };
 
@@ -927,12 +927,12 @@ export default function App() {
                 marketSession: live.marketSession,
                 sessionName: live.sessionName,
                 nextSessionTime: live.nextSessionTime,
-                dataSource: live.dataSource || 'FinMind',
-                isMock: Boolean(live.isStale), // 舊快取（非 FinMind 最新資料）不可交易
+                dataSource: live.dataSource || '市場行情',
+                isMock: Boolean(live.isStale), // 舊快取（非 最新資料）不可交易
               };
             }
             if (unavailableSymbols.has(inst.symbol)) {
-              return { ...inst, isMock: true, dataSource: 'FinMind 無此商品資料（顯示的是內建示範價，不可交易）' };
+              return { ...inst, isMock: true, dataSource: '無此商品資料（顯示的是內建示範價，不可交易）' };
             }
             return inst;
           })
@@ -966,12 +966,12 @@ export default function App() {
               marketSession: live.marketSession,
               sessionName: live.sessionName,
               nextSessionTime: live.nextSessionTime,
-              dataSource: live.dataSource || 'FinMind',
-              isMock: Boolean(live.isStale), // 舊快取（非 FinMind 最新資料）不可交易
+              dataSource: live.dataSource || '市場行情',
+              isMock: Boolean(live.isStale), // 舊快取（非 最新資料）不可交易
             };
           }
           if (unavailableSymbols.has(prev.symbol)) {
-            return { ...prev, isMock: true, dataSource: 'FinMind 無此商品資料（顯示的是內建示範價，不可交易）' };
+            return { ...prev, isMock: true, dataSource: '無此商品資料（顯示的是內建示範價，不可交易）' };
           }
           return prev;
         });
@@ -1030,7 +1030,7 @@ export default function App() {
                 marketSession: live.marketSession || 'CLOSED',
                 sessionName: live.sessionName || '非交易時段',
                 nextSessionTime: live.nextSessionTime || '17:25 (夜盤)',
-                dataSource: live.dataSource || 'FinMind',
+                dataSource: live.dataSource || '市場行情',
                 isMock: false,
               };
             });
@@ -1043,13 +1043,13 @@ export default function App() {
         );
       }
     } catch (err) {
-      console.warn('FinMind live quote sync err:', err);
+      console.warn('市場資料 live quote sync err:', err);
     } finally {
       if (force) setIsRefreshingFinmind(false);
     }
   };
 
-  // Adaptive FinMind quote sync and countdown ticker (Zero API quota exhaustion)
+  // Adaptive 市場資料 quote sync and countdown ticker (Zero API quota exhaustion)
   useEffect(() => {
     fetchLiveQuotes(true);
 
@@ -1450,7 +1450,7 @@ export default function App() {
               <div>
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                   <h1 className="text-xs sm:text-base font-black text-slate-950 tracking-tight">
-                    FinMind 5000萬股市大富翁
+                    市場資料 5000萬股市大富翁
                   </h1>
                   <span className="text-slate-300 hidden sm:inline">｜</span>
                   <div className="flex items-center gap-1.5">
@@ -2033,10 +2033,10 @@ export default function App() {
                 <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-black text-slate-950">
-                      行情檢視與 FinMind 當下即時價 K 線存證中心
+                      行情檢視與 當下即時價 K 線存證中心
                     </h2>
                     <p className="text-xs text-slate-600 font-medium">
-                      點擊切換上方商品以檢視 FinMind 當下即時行情、價量走勢與均線支撐，並直接進行下單或截圖保存於 PPT 簡報中。
+                      點擊切換上方商品以檢視 當下即時行情、價量走勢與均線支撐，並直接進行下單或截圖保存於 PPT 簡報中。
                     </p>
                   </div>
 
@@ -2187,7 +2187,7 @@ export default function App() {
             <div className="flex items-center justify-between pb-2 border-b border-slate-200">
               <h3 className="font-black text-slate-950 text-base flex items-center gap-2">
                 <Camera className="w-5 h-5 text-indigo-600" />
-                FinMind 歷史行情與量化技術分析：{viewingKLineInst.name} ({viewingKLineInst.symbol})
+                歷史行情與量化技術分析：{viewingKLineInst.name} ({viewingKLineInst.symbol})
               </h3>
               <button
                 onClick={() => setViewingKLineInst(null)}
@@ -2200,7 +2200,7 @@ export default function App() {
             <KLineChart
               instrument={viewingKLineInst}
               benchmarkDate={getSystemDateStr()}
-              orderRationale="依據 FinMind 官方收盤歷史資料集建倉分析，作為五千萬資產配置實戰憑證。"
+              orderRationale="依據 官方收盤歷史資料集建倉分析，作為五千萬資產配置實戰憑證。"
             />
 
             <div className="flex justify-end">
@@ -2215,7 +2215,7 @@ export default function App() {
         </div>
       )}
 
-      {/* FinMind Live Real-time Verification & Sync Center Modal */}
+      {/* 市場資料 Live Real-time Verification & Sync Center Modal */}
       <FinmindVerificationModal
         isOpen={isFinmindVerificationOpen}
         onClose={() => setIsFinmindVerificationOpen(false)}
@@ -2537,7 +2537,7 @@ export default function App() {
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-600 pb-20 sm:pb-6">
         <p className="font-semibold text-slate-700">
-          FinMind 5000萬股市大富翁實戰模擬系統 · 串接 FinMind 台灣金融市場報價資料集 & Firebase 雲端遊戲紀錄存證
+          市場資料 5000萬股市大富翁實戰模擬系統 · 串接 台灣金融市場報價資料集 & Firebase 雲端遊戲紀錄存證
         </p>
         <p className="mt-1 text-[11px] text-slate-500">
           涵蓋股票、長天期美債ETF、大盤ETF、台指期貨(大台/小台/個股期)、台指選擇權(TXO Buy/Sell Call/Put) 與個股認購認售權證

@@ -179,7 +179,7 @@ function Ticket(p: Props & { onSent: () => void }) {
   const closePnL = closePos ? positionPnL(closePos.orderType, closePos.entryPrice, priceType === 'LIMIT' ? price : inst.price, Math.min(qty, maxClose), closePos.unitMultiplier) : 0;
 
   let blockReason: string | null = null;
-  if (inst.isMock) blockReason = '無 FinMind 真實報價，暫停委託';
+  if (inst.isMock) blockReason = '無 真實報價，暫停委託';
   else if (!action) blockReason = intent === 'CLOSE' ? '沒有可平倉的部位' : '此商品不能新倉賣出';
   else if (priceErr) blockReason = priceErr;
   else if (!trading && (priceType === 'MARKET' || tif !== 'ROD')) blockReason = '非交易時段只接受限價 ROD 預約單';

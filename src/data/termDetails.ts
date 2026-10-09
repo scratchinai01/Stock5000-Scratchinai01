@@ -138,7 +138,7 @@ export const TERM_DETAILS: Record<string, TermDetail> = {
   },
   continuous_trading: {
     plain: '09:00–13:25 是逐筆交易：買單和賣單一到就撮合，價格可能每秒都在變。',
-    tip: '本系統用 FinMind 即時快照判斷成交，大約每 10 秒更新一次，比真實交易所慢一點。',
+    tip: '本系統用 即時快照判斷成交，大約每 10 秒更新一次，比真實交易所慢一點。',
   },
   closing_auction: {
     plain: '13:25–13:30 停止逐筆撮合，改成收集 5 分鐘的委託，13:30 一次撮合出收盤價。',
@@ -158,7 +158,7 @@ export const TERM_DETAILS: Record<string, TermDetail> = {
   },
   five_level_quote: {
     plain: '五檔報價顯示目前最好的 5 個委買價和 5 個委賣價，以及每個價位排隊的數量，可以看出買賣雙方的力道。',
-    tip: 'FinMind 即時快照只提供最佳一檔買賣價，本系統不會編造其他四檔。',
+    tip: '即時快照只提供最佳一檔買賣價，本系統不會編造其他四檔。',
     calc: 'orderBook',
   },
   bid_ask: {

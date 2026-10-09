@@ -555,7 +555,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                     <span>現有持倉部位明細 ({detailProfile.positions?.length || 0} 檔)</span>
                   </span>
                   <span className="text-[11px] text-slate-500 font-mono">
-                    計價基準：FinMind 官方真實收盤行情
+                    計價基準：官方真實收盤行情
                   </span>
                 </div>
 

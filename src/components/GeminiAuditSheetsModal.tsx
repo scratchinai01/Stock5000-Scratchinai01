@@ -363,7 +363,7 @@ export const GeminiAuditSheetsModal: React.FC<GeminiAuditSheetsModalProps> = ({
                     <Database className="w-6 h-6" />
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-500 font-bold block">FinMind 資料流檢驗</span>
+                    <span className="text-[11px] text-slate-500 font-bold block">資料流檢驗</span>
                     <span className="text-xs font-black text-slate-900">
                       {auditResult.finmindAssessment?.dataSourceType || '真實官方收盤定格快照'}
                     </span>
@@ -394,7 +394,7 @@ export const GeminiAuditSheetsModal: React.FC<GeminiAuditSheetsModalProps> = ({
                 </p>
                 {auditResult.finmindAssessment?.explanation && (
                   <div className="mt-2 pt-2 border-t border-indigo-200/50 text-[11px] text-indigo-900">
-                    <span className="font-bold">💡 FinMind 真實性分析：</span>
+                    <span className="font-bold">💡 真實性分析：</span>
                     <span>{auditResult.finmindAssessment.explanation}</span>
                   </div>
                 )}

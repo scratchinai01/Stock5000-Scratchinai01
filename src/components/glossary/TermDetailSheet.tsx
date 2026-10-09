@@ -4,6 +4,8 @@ import { TERM_DETAILS, type TermQuiz } from '../../data/termDetails';
 import { useGlossary } from '../../context/GlossaryContext';
 import type { InstrumentSpec } from '../../types/market';
 import { TermCalculator } from './TermCalculators';
+import { ReadingScaleSwitch } from './ReadingScaleSwitch';
+import { useReadingScale } from './useReadingScale';
 
 /** 名詞卡：點「詳情」後打開的完整學習頁 */
 
@@ -42,8 +44,8 @@ function autoQuiz(term: FinancialTerm): TermQuiz | null {
 function SectionTitle({ n, children, color }: { n: string; children: React.ReactNode; color: string }) {
   return (
     <div className="flex items-center gap-2 mb-2">
-      <span className="text-[11px] font-black tracking-[0.2em]" style={{ color, fontFamily: "'IBM Plex Mono', monospace" }}>{n}</span>
-      <span className="text-[15px] font-black" style={{ color: INK }}>{children}</span>
+      <span className="text-[15px] font-black tracking-[0.2em]" style={{ color, fontFamily: "'IBM Plex Mono', monospace" }}>{n}</span>
+      <span className="text-[19px] font-black" style={{ color: INK }}>{children}</span>
       <span className="flex-1 h-px" style={{ background: LINE }} />
     </div>
   );
@@ -93,7 +95,7 @@ export function TermDetailSheet({ instruments, onTry }: { instruments: Instrumen
         aria-modal="true"
         aria-label={`名詞卡：${term.t}`}
         onClick={e => e.stopPropagation()}
-        className="w-full md:w-[600px] h-[94dvh] md:h-auto md:max-h-[90vh] rounded-t-[28px] md:rounded-[28px] overflow-hidden flex flex-col shadow-2xl"
+        className="w-full md:w-[880px] h-[94dvh] md:h-auto md:max-h-[90vh] rounded-t-[28px] md:rounded-[28px] overflow-hidden flex flex-col shadow-2xl"
         style={{ background: PAPER, color: INK, fontFamily: "'Noto Sans TC', system-ui, sans-serif" }}
       >
         <TermBody key={term.id} term={term} instruments={instruments} canBack={stack.length > 1} onBack={back} onGo={go} onTry={onTry} scrollerRef={scroller} />
@@ -114,6 +116,7 @@ function TermBody({
   scrollerRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const g = useGlossary();
+  const { zoom } = useReadingScale();
   const cat = TERM_CATEGORIES[term.c];
   const color = ACCENT[term.c];
   const d = TERM_DETAILS[term.id];
@@ -153,34 +156,36 @@ function TermBody({
         <div className="relative flex items-center justify-between gap-2">
           <div className="flex items-center gap-1">
             {canBack && (
-              <button type="button" onClick={onBack} aria-label="回上一個名詞" className="w-10 h-10 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-[18px]">‹</button>
+              <button type="button" onClick={onBack} aria-label="回上一個名詞" className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-[24px]">‹</button>
             )}
-            <span className="px-2.5 py-1 rounded-full bg-white/15 text-[12px] font-bold">{cat.icon} {cat.name}</span>
+            <span className="px-2.5 py-1 rounded-full bg-white/15 text-[16px] font-bold">{cat.icon} {cat.name}</span>
           </div>
-          <button type="button" onClick={g.closeTermDetail} aria-label="關閉名詞卡" className="w-10 h-10 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-[18px]">✕</button>
+          <button type="button" onClick={g.closeTermDetail} aria-label="關閉名詞卡" className="w-12 h-12 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-[24px]">✕</button>
         </div>
         <div className="relative mt-4 flex items-end gap-3">
-          <span className="text-[44px] leading-none drop-shadow">{cat.icon}</span>
+          <span className="text-[52px] leading-none drop-shadow">{cat.icon}</span>
           <div className="min-w-0">
-            <h2 className="text-[28px] leading-tight font-black tracking-tight" style={{ fontFamily: "'Noto Serif TC', 'Noto Sans TC', serif" }}>{term.t}</h2>
-            {term.en && <div className="text-[13px] font-semibold opacity-80" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{term.en}</div>}
+            <h2 className="text-[32px] md:text-[44px] leading-tight font-black tracking-tight" style={{ fontFamily: "'Noto Serif TC', 'Noto Sans TC', serif" }}>{term.t}</h2>
+            {term.en && <div className="text-[17px] font-semibold opacity-80" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{term.en}</div>}
           </div>
         </div>
         <div className="relative mt-4 flex items-center gap-3">
           <div className="flex-1 h-1.5 rounded-full bg-white/25 overflow-hidden">
             <div className="h-full bg-white rounded-full transition-all duration-500" style={{ width: `${(catLearned / catTerms.length) * 100}%` }} />
           </div>
-          <span className="text-[12px] font-bold whitespace-nowrap">「{cat.badgeName}」{catLearned}/{catTerms.length}</span>
+          <span className="text-[16px] font-bold whitespace-nowrap">「{cat.badgeName}」{catLearned}/{catTerms.length}</span>
         </div>
+        <div className="relative mt-3"><ReadingScaleSwitch tone="dark" /></div>
       </div>
 
       {/* 內容 */}
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto overscroll-contain px-5 pt-5 pb-6 flex flex-col gap-6">
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto overscroll-contain">
+      <div className="px-5 sm:px-8 pt-5 pb-8 flex flex-col gap-7" style={{ zoom }}>
         <section>
           <SectionTitle n={num()} color={color}>一句話重點</SectionTitle>
-          <p className="text-[18px] leading-[1.7] font-bold" style={{ borderLeft: `4px solid ${color}`, paddingLeft: 12 }}>{term.s}</p>
+          <p className="text-[22px] leading-[1.7] font-bold" style={{ borderLeft: `4px solid ${color}`, paddingLeft: 12 }}>{term.s}</p>
           {term.aliases && term.aliases.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5 text-[12px]" style={{ color: SUB }}>
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[16px]" style={{ color: SUB }}>
               也叫：{term.aliases.map(a => <span key={a} className="px-2 py-0.5 rounded-full" style={{ background: '#efe9dc' }}>{a}</span>)}
             </div>
           )}
@@ -189,7 +194,7 @@ function TermBody({
         {d?.plain && (
           <section>
             <SectionTitle n={num()} color={color}>白話解說</SectionTitle>
-            <p className="text-[15px] leading-[1.85]">{d.plain}</p>
+            <p className="text-[19px] leading-[1.85]">{d.plain}</p>
           </section>
         )}
 
@@ -198,14 +203,14 @@ function TermBody({
             <SectionTitle n={num()} color={color}>想像一下</SectionTitle>
             {d.analogy && (
               <div className="rounded-2xl p-4 flex gap-3" style={{ background: '#fff', border: `1px solid ${LINE}` }}>
-                <span className="text-[22px]">💡</span>
-                <p className="text-[15px] leading-relaxed">{d.analogy}</p>
+                <span className="text-[26px]">💡</span>
+                <p className="text-[19px] leading-relaxed">{d.analogy}</p>
               </div>
             )}
             {d.example && (
               <div className="rounded-2xl p-4 flex gap-3" style={{ background: '#fff', border: `1px solid ${LINE}` }}>
-                <span className="text-[22px]">🧮</span>
-                <p className="text-[15px] leading-relaxed">{d.example}</p>
+                <span className="text-[26px]">🧮</span>
+                <p className="text-[19px] leading-relaxed">{d.example}</p>
               </div>
             )}
           </section>
@@ -226,8 +231,8 @@ function TermBody({
             <div className="grid gap-2.5">
               {d.myths.map((m, i) => (
                 <div key={i} className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
-                  <div className="px-4 py-2.5 text-[14px] flex gap-2" style={{ background: '#fdecee', color: '#8a1c27' }}><b>✗</b><span className="line-through decoration-1">{m.wrong}</span></div>
-                  <div className="px-4 py-2.5 text-[14px] flex gap-2 font-semibold" style={{ background: '#fff', color: INK }}><b style={{ color: DOWN }}>✓</b><span>{m.right}</span></div>
+                  <div className="px-4 py-2.5 text-[18px] flex gap-2" style={{ background: '#fdecee', color: '#8a1c27' }}><b>✗</b><span className="line-through decoration-1">{m.wrong}</span></div>
+                  <div className="px-4 py-2.5 text-[18px] flex gap-2 font-semibold" style={{ background: '#fff', color: INK }}><b style={{ color: DOWN }}>✓</b><span>{m.right}</span></div>
                 </div>
               ))}
             </div>
@@ -236,10 +241,10 @@ function TermBody({
 
         {d?.tip && (
           <section className="rounded-2xl p-4 flex gap-3" style={{ background: INK, color: '#f3efe6' }}>
-            <span className="text-[20px]">🎯</span>
+            <span className="text-[24px]">🎯</span>
             <div>
-              <div className="text-[12px] font-black tracking-wider mb-1" style={{ color: '#f5b301' }}>實戰提醒</div>
-              <p className="text-[14px] leading-relaxed">{d.tip}</p>
+              <div className="text-[16px] font-black tracking-wider mb-1" style={{ color: '#f5b301' }}>實戰提醒</div>
+              <p className="text-[18px] leading-relaxed">{d.tip}</p>
             </div>
           </section>
         )}
@@ -247,7 +252,7 @@ function TermBody({
         {quiz && (
           <section>
             <SectionTitle n={num()} color={color}>小測驗{learned ? '' : '（答對就收進學習紀錄）'}</SectionTitle>
-            <p className="text-[16px] font-bold leading-relaxed mb-3">{quiz.q}</p>
+            <p className="text-[20px] font-bold leading-relaxed mb-3">{quiz.q}</p>
             <div className="grid gap-2" role="radiogroup" aria-label="選項">
               {quiz.options.map((o, i) => {
                 const chosen = pick === i;
@@ -257,9 +262,9 @@ function TermBody({
                 const bd = reveal ? (correct ? DOWN : UP) : LINE;
                 return (
                   <button key={i} type="button" role="radio" aria-checked={chosen} onClick={() => answer(i)}
-                    className="text-left rounded-2xl px-4 py-3 text-[14px] leading-relaxed flex gap-3 items-start transition-all active:scale-[0.99]"
+                    className="text-left rounded-2xl px-4 py-3 text-[18px] leading-relaxed flex gap-3 items-start transition-all active:scale-[0.99]"
                     style={{ background: bg, border: `1.5px solid ${bd}` }}>
-                    <span className="flex-none w-6 h-6 rounded-full text-[12px] font-black flex items-center justify-center" style={{ background: reveal ? bd : '#efe9dc', color: reveal ? '#fff' : SUB }}>
+                    <span className="flex-none w-6 h-6 rounded-full text-[16px] font-black flex items-center justify-center" style={{ background: reveal ? bd : '#efe9dc', color: reveal ? '#fff' : SUB }}>
                       {reveal ? (correct ? '✓' : '✗') : 'ABCD'[i]}
                     </span>
                     <span>{o}</span>
@@ -268,7 +273,7 @@ function TermBody({
               })}
             </div>
             {pick !== null && (
-              <div className="mt-3 rounded-2xl px-4 py-3 text-[14px] leading-relaxed" style={{ background: pick === quiz.answer ? '#e6f5ec' : '#fff7e6', color: INK }}>
+              <div className="mt-3 rounded-2xl px-4 py-3 text-[18px] leading-relaxed" style={{ background: pick === quiz.answer ? '#e6f5ec' : '#fff7e6', color: INK }}>
                 <b style={{ color: pick === quiz.answer ? DOWN : '#b7791f' }}>{pick === quiz.answer ? (justLearned ? '答對了！已收進你的學習紀錄 🎉 ' : '答對了！') : '再想想，可以重選一次。'}</b>
                 {pick === quiz.answer && <span>{quiz.why}</span>}
               </div>
@@ -282,7 +287,7 @@ function TermBody({
             <div className="flex flex-wrap gap-2">
               {related.map(r => (
                 <button key={r.id} type="button" onClick={() => onGo(r.id)}
-                  className="min-h-[38px] px-3.5 rounded-full text-[14px] font-bold flex items-center gap-1.5 hover:shadow transition-shadow"
+                  className="min-h-[48px] px-4 rounded-full text-[19px] font-bold flex items-center gap-1.5 hover:shadow transition-shadow"
                   style={{ background: '#fff', border: `1px solid ${LINE}`, color: INK }}>
                   {g.isTermLearned(r.id) && <span style={{ color: DOWN }}>✓</span>}{r.t}
                   {TERM_DETAILS[r.id] && <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} aria-label="有完整名詞卡" />}
@@ -292,25 +297,26 @@ function TermBody({
           </section>
         )}
       </div>
+      </div>
 
       {/* 底部動作列 */}
       <div className="flex-none px-4 pt-3 flex items-center gap-2" style={{ borderTop: `1px solid ${LINE}`, background: PAPER, paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
         <button type="button" disabled={!prev} onClick={() => prev && onGo(prev.id)} aria-label={prev ? `上一個：${prev.t}` : '沒有上一個'}
-          className="w-11 h-11 rounded-full text-[18px] disabled:opacity-30 flex-none" style={{ border: `1px solid ${LINE}` }}>‹</button>
+          className="w-14 h-14 rounded-full text-[26px] disabled:opacity-30 flex-none" style={{ border: `1px solid ${LINE}` }}>‹</button>
         {d?.tryIt && onTry ? (
           <button type="button" onClick={() => { g.closeTermDetail(); onTry(d.tryIt!); }}
-            className="flex-1 min-h-[46px] rounded-full text-[15px] font-black text-white" style={{ background: color }}>
+            className="flex-1 min-h-[56px] rounded-full text-[20px] font-black text-white" style={{ background: color }}>
             {TRY_LABEL[d.tryIt]} →
           </button>
         ) : (
           <button type="button" onClick={() => g.toggleTermLearned(term.id)}
-            className="flex-1 min-h-[46px] rounded-full text-[15px] font-black"
+            className="flex-1 min-h-[56px] rounded-full text-[20px] font-black"
             style={learned ? { background: '#e6f5ec', color: DOWN } : { background: color, color: '#fff' }}>
             {learned ? '✓ 已學會（點一下取消）' : '我學會了'}
           </button>
         )}
         <button type="button" disabled={!next} onClick={() => next && onGo(next.id)} aria-label={next ? `下一個：${next.t}` : '沒有下一個'}
-          className="w-11 h-11 rounded-full text-[18px] disabled:opacity-30 flex-none" style={{ border: `1px solid ${LINE}` }}>›</button>
+          className="w-14 h-14 rounded-full text-[26px] disabled:opacity-30 flex-none" style={{ border: `1px solid ${LINE}` }}>›</button>
       </div>
     </>
   );

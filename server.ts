@@ -5,6 +5,17 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import Groq from 'groq-sdk';
+import { getInstrumentTradingClock as sharedInstrumentClock } from './src/utils/tradingClock';
+import {
+  setTwHolidays,
+  getTwHolidays,
+  parseTwseHolidaySchedule,
+  isTwTradingDay,
+  getTwHolidayName,
+  nextTwTradingDay,
+  previousTwTradingDay,
+  formatTradingDay,
+} from './src/utils/twHolidays';
 
 dotenv.config();
 
@@ -772,271 +783,17 @@ function snapToTwseTick(price: number): number {
   return Math.round(price / 5) * 5;
 }
 
-// Taiwan Stock Exchange (TWSE) & TAIFEX Precision Trading Clock per Instrument
+// 交易時鐘與前端共用同一份規則（含國定假日休市），避免兩邊判斷不一致
 function getInstrumentTradingClock(symbol: string, category?: string, now = new Date()) {
-  const sym = (symbol || '').toUpperCase().trim();
-  const twFormatter = new Intl.DateTimeFormat('zh-TW', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  const parts = twFormatter.formatToParts(now);
-  const partMap: Record<string, string> = {};
-  parts.forEach(p => (partMap[p.type] = p.value));
-
-  const twDateStr = `${partMap.year}-${partMap.month}-${partMap.day}`;
-  const twTimeStr = `${partMap.hour}:${partMap.minute}:${partMap.second}`;
-  const twDate = new Date(`${twDateStr}T${twTimeStr}+08:00`);
-  const day = twDate.getDay();
-  const hour = parseInt(partMap.hour, 10);
-  const minute = parseInt(partMap.minute, 10);
-  const timeNum = hour * 100 + minute;
-
-  const isWeekend = day === 0 || (day === 6 && timeNum >= 500) || (day === 1 && timeNum < 500);
-
-  // 1. 股價指數期貨與選擇權 (TX, MTX, TMF, TXO)
-  if (sym === 'TX' || sym === 'MTX' || sym === 'TMF' || sym.startsWith('TXF') || sym.startsWith('MXF') || sym.startsWith('TXO')) {
-    const isIndexOpt = sym.startsWith('TXO');
-    const classLabel = isIndexOpt ? '臺指選擇權 (TAIFEX)' : '股價指數期貨 (TAIFEX)';
-    if (isWeekend) {
-      return {
-        marketSession: 'CLOSED' as const,
-        sessionName: '週末休市 (非交易時段)',
-        nextSessionTime: '週一 08:45 (日盤開盤)',
-        classLabel,
-        isTrading: false,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    // 日盤: 08:45 ~ 13:45
-    if (day >= 1 && day <= 5 && timeNum >= 845 && timeNum < 1345) {
-      return {
-        marketSession: 'TRADING' as const,
-        sessionName: '指數日盤撮合中 (08:45~13:45)',
-        nextSessionTime: '13:45 (日盤收盤)',
-        classLabel,
-        isTrading: true,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    // 夜盤: 15:00 ~ 05:00
-    if ((day >= 1 && day <= 5 && timeNum >= 1500) || (day >= 2 && day <= 6 && timeNum < 500)) {
-      return {
-        marketSession: 'TRADING' as const,
-        sessionName: '指數夜盤撮合中 (15:00~05:00 隨美股跳動)',
-        nextSessionTime: '05:00 (夜盤收盤)',
-        classLabel,
-        isTrading: true,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    if (timeNum >= 1345 && timeNum < 1500) {
-      return {
-        marketSession: 'CLOSED' as const,
-        sessionName: '日夜盤中場清算 (非交易時段 13:45~15:00)',
-        nextSessionTime: '15:00 (夜盤開盤)',
-        classLabel,
-        isTrading: false,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    return {
-      marketSession: 'CLOSED' as const,
-      sessionName: '早盤前清算 (非交易時段 05:00~08:45)',
-      nextSessionTime: '08:45 (日盤開盤)',
-      classLabel,
-      isTrading: false,
-      twTimeStr,
-      twDateStr,
-    };
-  }
-
-  // 2. 股票期貨 (Stock Futures: 如 6285F, 5483F, 2634F, CDF, DHF, CZF, CCF, DVF, QDF, IJF, OQF, 或 category === 'futures')
-  if (
-    category === 'futures' ||
-    sym.endsWith('F') ||
-    ['CDF', 'DHF', 'CZF', 'CCF', 'DVF', 'QDF', 'IJF', 'OQF'].includes(sym)
-  ) {
-    const classLabel = '股票期貨 (TAIFEX)';
-    if (isWeekend) {
-      return {
-        marketSession: 'CLOSED' as const,
-        sessionName: '週末休市 (非交易時段)',
-        nextSessionTime: '週一 08:45 (日盤開盤)',
-        classLabel,
-        isTrading: false,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    // 一般交易時段 (日盤): 08:45 ~ 13:45
-    if (day >= 1 && day <= 5 && timeNum >= 845 && timeNum < 1345) {
-      return {
-        marketSession: 'TRADING' as const,
-        sessionName: '股票期貨日盤撮合中 (08:45~13:45)',
-        nextSessionTime: '13:45 (日盤收盤)',
-        classLabel,
-        isTrading: true,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    // 盤後交易時段 (夜盤): 17:25 ~ 05:00 (⚠️ 官方期交所規章：股票類期貨夜盤為 17:25 開盤！)
-    if ((day >= 1 && day <= 5 && timeNum >= 1725) || (day >= 2 && day <= 6 && timeNum < 500)) {
-      return {
-        marketSession: 'TRADING' as const,
-        sessionName: '股票期貨夜盤撮合中 (17:25~05:00)',
-        nextSessionTime: '05:00 (夜盤收盤)',
-        classLabel,
-        isTrading: true,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    if (timeNum >= 1345 && timeNum < 1725) {
-      return {
-        marketSession: 'CLOSED' as const,
-        sessionName: '盤後清算休市 (非交易時段 13:45~17:25)',
-        nextSessionTime: '17:25 (夜盤開盤)',
-        classLabel,
-        isTrading: false,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    return {
-      marketSession: 'CLOSED' as const,
-      sessionName: '早盤前清算 (非交易時段 05:00~08:45)',
-      nextSessionTime: '08:45 (日盤開盤)',
-      classLabel,
-      isTrading: false,
-      twTimeStr,
-      twDateStr,
-    };
-  }
-
-  // 3. 美股複委託現貨 (US Stocks: NYSE / NASDAQ)
-  if (category === 'us_stocks' || ['NVDA', 'AAPL', 'TSLA', 'TSM', 'MSFT', 'GOOGL', 'AMZN', 'QQQ', 'SPY', 'SOXX'].includes(sym)) {
-    const classLabel = '美股複委託 (NYSE/NASDAQ)';
-    const isUsWeekend = day === 0 || (day === 6 && timeNum >= 400) || (day === 1 && timeNum < 2130);
-    const isUsOpen = !isUsWeekend && (timeNum >= 2130 || timeNum < 400);
-    if (isUsOpen) {
-      return {
-        marketSession: 'TRADING' as const,
-        sessionName: '美股常規盤撮合中 (21:30~04:00)',
-        nextSessionTime: '04:00 (美股收盤)',
-        classLabel,
-        isTrading: true,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    return {
-      marketSession: 'CLOSED' as const,
-      sessionName: '美股收盤定格 (支援預約圈存委託)',
-      nextSessionTime: isUsWeekend ? '週一 21:30 (美股開盤)' : '今晚 21:30 (美股開盤)',
-      classLabel,
-      isTrading: false,
-      twTimeStr,
-      twDateStr,
-    };
-  }
-
-  // 4. 全球大宗原物料商品期貨 (CME / NYMEX / ICE / LME)
-  if (
-    category === 'commodities' ||
-    ['CL', 'BZ', 'NG', 'RB', 'GC', 'SI', 'PL', 'PA', 'ZS', 'ZC', 'ZW', 'ZL', 'ZM', 'KC', 'SB', 'CC', 'OJ', 'CT', 'HG', 'ALI', 'NI', 'ZN', 'LE', 'HE', 'GF'].includes(sym)
-  ) {
-    const classLabel = '全球原物料期貨 (CME/NYMEX/ICE)';
-    const isCommodityWeekend = (day === 6 && timeNum >= 500) || day === 0 || (day === 1 && timeNum < 600);
-    const isDailyBreak = timeNum >= 500 && timeNum < 600;
-    const isTrading = !isCommodityWeekend && !isDailyBreak;
-
-    if (isTrading) {
-      return {
-        marketSession: 'TRADING' as const,
-        sessionName: '全球原物料撮合中 (24H國際連線)',
-        nextSessionTime: '05:00 (每日結算清算)',
-        classLabel,
-        isTrading: true,
-        twTimeStr,
-        twDateStr,
-      };
-    }
-    return {
-      marketSession: 'CLOSED' as const,
-      sessionName: isDailyBreak ? '每日清算休息 (05:00~06:00)' : '週末休市定格',
-      nextSessionTime: isDailyBreak ? '06:00 (開盤)' : '週一 06:00 (開盤)',
-      classLabel,
-      isTrading: false,
-      twTimeStr,
-      twDateStr,
-    };
-  }
-
-  // 5. 現貨股票 / ETF / 債券 / 權證 (TWSE Cash Market)
-  const classLabel = (category === 'warrants' || (sym.length === 6 && /^\d{5}[P|Q|C]$/.test(sym))) ? '認購/認售權證 (TWSE)' : '現貨股票/ETF (TWSE)';
-  if (isWeekend || day === 0 || day === 6) {
-    return {
-      marketSession: 'CLOSED' as const,
-      sessionName: '週末休市 (非交易時段)',
-      nextSessionTime: '週一 09:00 (開盤撮合)',
-      classLabel,
-      isTrading: false,
-      twTimeStr,
-      twDateStr,
-    };
-  }
-  if (timeNum >= 900 && timeNum < 1330) {
-    return {
-      marketSession: 'TRADING' as const,
-      sessionName: '集中市場盤中撮合中 (09:00~13:30)',
-      nextSessionTime: '13:30 (收盤撮合)',
-      classLabel,
-      isTrading: true,
-      twTimeStr,
-      twDateStr,
-    };
-  }
-  if (timeNum >= 1400 && timeNum < 1430) {
-    return {
-      marketSession: 'TRADING' as const,
-      sessionName: '盤後定價交易中 (14:00~14:30)',
-      nextSessionTime: '14:30 (盤後收盤)',
-      classLabel,
-      isTrading: true,
-      twTimeStr,
-      twDateStr,
-    };
-  }
-  if (timeNum >= 1330 && timeNum < 1400) {
-    return {
-      marketSession: 'CLOSED' as const,
-      sessionName: '等待盤後定價 (非交易時段 13:30~14:00)',
-      nextSessionTime: '14:00 (盤後定價交易)',
-      classLabel,
-      isTrading: false,
-      twTimeStr,
-      twDateStr,
-    };
-  }
+  const c = sharedInstrumentClock(symbol, category, now);
   return {
-    marketSession: 'CLOSED' as const,
-    sessionName: '收盤定格 (非交易時段)',
-    nextSessionTime: '次日 09:00 (開盤撮合)',
-    classLabel,
-    isTrading: false,
-    twTimeStr,
-    twDateStr,
+    marketSession: c.marketSession,
+    sessionName: c.sessionName,
+    nextSessionTime: c.nextSessionTime,
+    classLabel: c.classLabel,
+    isTrading: c.isTradingNow,
+    twTimeStr: c.twTimeStr,
+    twDateStr: c.twDateStr,
   };
 }
 
@@ -1078,18 +835,25 @@ function getTaiwanMarketSession(): {
   const minute = parseInt(partMap.minute, 10);
   const timeNum = hour * 100 + minute;
 
-  // 1. 股票現貨集中市場 (TWSE): 週一至週五 09:00 ~ 13:30
-  const isTwseOpen = day >= 1 && day <= 5 && timeNum >= 900 && timeNum <= 1330;
+  // 國定假日／補假（證交所公告）
+  const isTodayTrading = isTwTradingDay(twDateStr);
+  const yesterdayDate = new Date(`${twDateStr}T12:00:00+08:00`);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+  const isYesterdayTrading = isTwTradingDay(yesterdayDate.toISOString().slice(0, 10));
+  const holidayName = getTwHolidayName(twDateStr);
+
+  // 1. 股票現貨集中市場 (TWSE): 交易日 09:00 ~ 13:30
+  const isTwseOpen = isTodayTrading && timeNum >= 900 && timeNum <= 1330;
 
   // 2. 期貨市場 (TAIFEX): 日盤 (08:45~13:45) + 夜盤 (15:00~次日05:00)
   // 全天交易長達 19 小時，涵蓋歐美股市開盤與重大經濟數據發布
-  const isFuturesDayOpen = day >= 1 && day <= 5 && timeNum >= 845 && timeNum <= 1345;
+  const isFuturesDayOpen = isTodayTrading && timeNum >= 845 && timeNum <= 1345;
   const isFuturesNightOpen =
-    (day >= 1 && day <= 5 && timeNum >= 1500) || // 週一至週五 15:00 ~ 23:59
-    (day >= 2 && day <= 6 && timeNum <= 500); // 週二至週六 00:00 ~ 05:00
+    (isTodayTrading && timeNum >= 1500) || // 交易日 15:00 ~ 23:59
+    (isYesterdayTrading && timeNum <= 500); // 前一天是交易日的凌晨 00:00 ~ 05:00
   const isFuturesOpen = isFuturesDayOpen || isFuturesNightOpen;
 
-  let sessionStatus = '⚪ 現貨與期貨非交易時段 (官方行情鎖定)';
+  let sessionStatus = holidayName ? `⚪ ${holidayName}，台股與期貨休市` : '⚪ 現貨與期貨非交易時段 (官方行情鎖定)';
   if (isTwseOpen && isFuturesDayOpen) {
     sessionStatus = '🟢 現貨與期貨日盤全面交易中 (09:00~13:30 / 08:45~13:45)';
   } else if (!isTwseOpen && isFuturesDayOpen) {
@@ -1222,6 +986,49 @@ async function getLiveFuturesSnapshots(): Promise<Map<string, any>> {
   }
   return realTimeFuturesCache.data;
 }
+
+// 台股休市日：向證交所 OpenAPI 抓最新公告，每天更新一次；抓不到就用內建名單
+let holidaySource = '內建名單（證交所 115 年公告）';
+async function refreshTwHolidays() {
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch('https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule', { signal: controller.signal });
+    clearTimeout(t);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const map = parseTwseHolidaySchedule(await res.json());
+    if (Object.keys(map).length > 0) {
+      setTwHolidays(map);
+      holidaySource = `證交所 OpenAPI（${new Date().toISOString().slice(0, 10)} 更新）`;
+      console.log(`[Holidays] 已載入證交所休市日 ${Object.keys(map).length} 筆`);
+    }
+  } catch (e: any) {
+    console.warn('[Holidays] 無法取得證交所休市日，使用內建名單：', e.message);
+  }
+}
+refreshTwHolidays();
+setInterval(refreshTwHolidays, 24 * 60 * 60 * 1000);
+
+app.get('/api/market/calendar', (_req, res) => {
+  const session = getTaiwanMarketSession();
+  const today = session.twDateStr;
+  const upcoming = Object.entries(getTwHolidays())
+    .filter(([d]) => d >= today)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, 10)
+    .map(([date, name]) => ({ date, name }));
+  res.json({
+    today,
+    isTradingDay: isTwTradingDay(today),
+    holidayName: getTwHolidayName(today),
+    nextTradingDay: nextTwTradingDay(today),
+    nextTradingDayLabel: formatTradingDay(nextTwTradingDay(today)),
+    previousTradingDay: previousTwTradingDay(today),
+    holidays: getTwHolidays(),
+    upcoming,
+    source: holidaySource,
+  });
+});
 
 // 診斷用：查看 FinMind 自動更新狀態
 app.get('/api/finmind/refresh-status', (_req, res) => {

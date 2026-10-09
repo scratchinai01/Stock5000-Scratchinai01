@@ -9,6 +9,7 @@ import {
   ImmutableTransaction,
 } from './types/market';
 import { DEFAULT_INSTRUMENTS, INITIAL_STUDENT_PROFILES } from './data/defaultMarketData';
+import { setTwHolidays } from './utils/twHolidays';
 import { PortfolioOverview } from './components/PortfolioOverview';
 import { TradingModal } from './components/TradingModal';
 import { PPTReportStudio } from './components/PPTReportStudio';
@@ -225,6 +226,14 @@ export default function App() {
       console.warn('Failed to load FinMind token status:', e);
     }
   };
+
+  // 台股休市日以伺服器（證交所公告）為準，跨年度自動更新
+  useEffect(() => {
+    fetch('/api/market/calendar')
+      .then(r => r.json())
+      .then(d => d?.holidays && setTwHolidays(d.holidays))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchTokenInfo();

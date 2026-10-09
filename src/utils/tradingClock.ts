@@ -22,6 +22,8 @@
  *    - 其餘時間全面休市 (CLOSED)
  */
 
+import { getTwHolidayClosure, getTwHolidayName } from './twHolidays';
+
 export type InstrumentClass =
   | 'STOCK_FUTURES'
   | 'INDEX_FUTURES'
@@ -152,6 +154,42 @@ export function getInstrumentTradingClock(
   const timeNum = hour * 100 + minute;
 
   const isWeekend = day === 0 || (day === 6 && timeNum >= 500) || (day === 1 && timeNum < 500);
+
+  // ─────────────────────────────────────────────────────────────
+  // 台灣國定假日／補假休市（證交所公告），現貨、期貨、選擇權、權證都適用
+  // ─────────────────────────────────────────────────────────────
+  const twClasses: InstrumentClass[] = ['STOCK_FUTURES', 'STOCK_OPTIONS', 'INDEX_FUTURES', 'INDEX_OPTIONS', 'CASH_EQUITY', 'WARRANT'];
+  if (twClasses.includes(instClass)) {
+    const isCash = instClass === 'CASH_EQUITY' || instClass === 'WARRANT';
+    const hasNightSession =
+      instClass === 'INDEX_FUTURES' ||
+      instClass === 'INDEX_OPTIONS' ||
+      (instClass === 'STOCK_FUTURES' &&
+        (TAIFEX_NIGHT_STOCK_FUTURES.has(symClean) || TAIFEX_NIGHT_STOCK_FUTURES.has(symClean.replace(/F$/, ''))));
+    const closure = getTwHolidayClosure(twDateStr, timeNum, {
+      hasNightSession,
+      dayOpenTime: isCash ? '09:00' : '08:45',
+    });
+    if (closure) {
+      const classLabel = isCash
+        ? (instClass === 'WARRANT' ? '認購/認售權證 (TWSE)' : '現貨股票/ETF (TWSE)')
+        : instClass === 'INDEX_FUTURES' ? '指數期貨 (TAIFEX)' : instClass === 'INDEX_OPTIONS' ? '指數選擇權 (TAIFEX)' : '股票期貨 (TAIFEX)';
+      return {
+        symbol,
+        instrumentClass: instClass,
+        classLabel,
+        marketSession: 'CLOSED',
+        sessionName: closure.sessionName,
+        nextSessionTime: closure.nextSessionTime,
+        isTradingNow: false,
+        canTradeNow: false,
+        hasNightTrading: hasNightSession,
+        tradingRules: '依證交所公告之國定假日休市',
+        twTimeStr,
+        twDateStr,
+      };
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────
   // 0. 加密貨幣與穩定幣 (Crypto 24/7: BTC, ETH, USDT, USDC)
@@ -623,6 +661,7 @@ export function getGlobalMarketStatusOverview(targetDate: Date = new Date()): {
   markets: GlobalMarketStation[];
 } {
   const twOverview = getMarketSessionOverview(targetDate);
+  const twHoliday = getTwHolidayName(twOverview.twDateStr);
   const usClock = getInstrumentTradingClock('NVDA', 'us_stocks', targetDate);
   const clClock = getInstrumentTradingClock('CL', 'commodities', targetDate);
   const gcClock = getInstrumentTradingClock('GC', 'commodities', targetDate);
@@ -638,7 +677,7 @@ export function getGlobalMarketStatusOverview(targetDate: Date = new Date()): {
       icon: '🇹🇼',
       isOpen: twOverview.isCashOpen,
       statusBadge: twOverview.isCashOpen ? 'OPEN' : 'CLOSED',
-      statusText: twOverview.isCashOpen ? '🟢 OPEN (盤中撮合)' : '🔴 CLOSED (已收盤)',
+      statusText: twOverview.isCashOpen ? '🟢 OPEN (盤中撮合)' : twHoliday ? `🔴 CLOSED (${twHoliday}休市)` : '🔴 CLOSED (已收盤)',
       tradingHours: '09:00 ~ 13:30 (盤後定價 14:00~14:30)',
       note: '現貨股票、ETF、債券',
     },
@@ -655,6 +694,8 @@ export function getGlobalMarketStatusOverview(targetDate: Date = new Date()): {
         ? '🟢 OPEN (日盤撮合)'
         : twOverview.isTxNightOpen
         ? '🟢 OPEN (夜盤交易中)'
+        : twHoliday
+        ? `🔴 CLOSED (${twHoliday}休市)`
         : '🔴 CLOSED (中場清算/休市)',
       tradingHours: '日盤 08:45~13:45 ｜ 夜盤 15:00~次日05:00',
       note: '大台、小台、微台、選擇權',

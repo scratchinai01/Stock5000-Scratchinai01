@@ -170,6 +170,9 @@ export const GlobalMarketRadarModal: React.FC<GlobalMarketRadarModalProps> = ({
                           }`}>
                             {m.isOpen ? '🟢 OPEN' : '🔴 CLOSED'}
                           </span>
+                          {!m.isOpen && m.statusText.includes('休市') && (
+                            <span className="text-[10px] text-rose-300 block mt-1">{m.statusText.replace('🔴 CLOSED ', '')}</span>
+                          )}
                         </div>
                       </div>
                     ))}

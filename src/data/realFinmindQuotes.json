@@ -300,7 +300,7 @@
     "volume": 113187922,
     "date": "2026-10-01",
     "dataset": "TaiwanStockPrice",
-    "fetchTime": "2026-10-01 13:30 (FinMind收盤定格)"
+    "fetchTime": "2026-10-01 13:30 (市場資料收盤定格)"
   },
   "00981": {
     "symbol": "00981",
@@ -314,7 +314,7 @@
     "changePct": 1.51,
     "volume": 111416000,
     "date": "2026-10-01",
-    "fetchTime": "2026-10-01 13:30 (FinMind收盤定格)",
+    "fetchTime": "2026-10-01 13:30 (市場資料收盤定格)",
     "dataset": "TaiwanStockPrice"
   },
   "0050": {
@@ -583,7 +583,7 @@
     "volume": 3490946,
     "date": "2026-10-01",
     "dataset": "TaiwanStockPrice",
-    "fetchTime": "2026-10-01 13:30 (FinMind收盤定格)"
+    "fetchTime": "2026-10-01 13:30 (市場資料收盤定格)"
   },
   "00937B": {
     "symbol": "00937B",
@@ -598,7 +598,7 @@
     "volume": 72386589,
     "date": "2026-10-01",
     "dataset": "TaiwanStockPrice",
-    "fetchTime": "2026-10-01 13:30 (FinMind收盤定格)"
+    "fetchTime": "2026-10-01 13:30 (市場資料收盤定格)"
   },
   "00933B": {
     "symbol": "00933B",
@@ -613,7 +613,7 @@
     "volume": 9571584,
     "date": "2026-10-01",
     "dataset": "TaiwanStockPrice",
-    "fetchTime": "2026-10-01 13:30 (FinMind收盤定格)"
+    "fetchTime": "2026-10-01 13:30 (市場資料收盤定格)"
   },
   "00751B": {
     "symbol": "00751B",
@@ -628,7 +628,7 @@
     "volume": 7318730,
     "date": "2026-10-01",
     "dataset": "TaiwanStockPrice",
-    "fetchTime": "2026-10-01 13:30 (FinMind收盤定格)"
+    "fetchTime": "2026-10-01 13:30 (市場資料收盤定格)"
   },
   "00713": {
     "symbol": "00713",

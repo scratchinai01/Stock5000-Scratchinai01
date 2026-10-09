@@ -288,10 +288,15 @@ async function cloudSink(): Promise<Sink> {
         d.count = d.date.length;
         tx.set(ref, d);
       });
-      await db.collection('kline_meta').doc(info.stock_id).set(
-        { stock_id: info.stock_id, name: info.stock_name, market: info.market, industry: info.industry, lastDate: bar.date, updatedAt: new Date().toISOString() },
-        { merge: true }
-      );
+      // 只更新已完成全量匯入的股票的 meta（避免沒有完整歷史的股票被當成已匯入）
+      const metaRef = db.collection('kline_meta').doc(info.stock_id);
+      const meta = await metaRef.get();
+      if (meta.exists && meta.data()?.firstDate) {
+        await metaRef.set(
+          { name: info.stock_name, market: info.market, industry: info.industry, lastDate: bar.date, years: FieldValue.arrayUnion(year), updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+      }
     },
     async appendBq(rows) {
       await loadNdjson(rows, 'WRITE_APPEND');

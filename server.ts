@@ -16,6 +16,7 @@ import {
   previousTwTradingDay,
   formatTradingDay,
 } from './src/utils/twHolidays';
+import { getHistory } from './server-lib/history';
 
 dotenv.config();
 
@@ -1028,6 +1029,22 @@ app.get('/api/market/calendar', (_req, res) => {
     upcoming,
     source: holidaySource,
   });
+});
+
+// 專業分析：長期歷史日K（原始＋還原），優先讀 Firestore stock-history
+app.get('/api/history/daily', async (req, res) => {
+  const symbol = String(req.query.symbol || '').trim();
+  try {
+    const data = await getHistory(symbol, currentFinmindToken);
+    if (!data) {
+      return res.status(404).json({ success: false, message: `查無「${symbol}」的歷史資料（僅支援台股上市、上櫃代號）` });
+    }
+    const catalog = taiwanStockCatalog.find(c => c.symbol === data.symbol);
+    res.set('Cache-Control', 'public, max-age=600');
+    return res.json({ success: true, ...data, name: data.name ?? catalog?.name ?? null });
+  } catch (e: any) {
+    return res.status(502).json({ success: false, message: `取得歷史資料失敗：${e.message}` });
+  }
 });
 
 // 診斷用：查看 FinMind 自動更新狀態

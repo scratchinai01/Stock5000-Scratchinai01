@@ -28,6 +28,7 @@ import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { CommoditiesBoard } from './components/CommoditiesBoard';
 import { CryptoLiveBoard } from './components/CryptoLiveBoard';
 import { GlobalMarketRadarModal } from './components/GlobalMarketRadarModal';
+import { ProAnalysisModal } from './components/ProAnalysisModal';
 import { ResetPortfolioModal } from './components/ResetPortfolioModal';
 import { GeminiAuditSheetsModal } from './components/GeminiAuditSheetsModal';
 import { Term } from './components/Term';
@@ -178,6 +179,7 @@ export default function App() {
   // 內建清單的價格只是佔位，收到 FinMind 行情前一律標示為不可交易，並移除編造的五檔掛單
   const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => DEFAULT_INSTRUMENTS.map(placeholderInstrument));
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
+  const [isProAnalysisOpen, setIsProAnalysisOpen] = useState(false);
   const [activeView, setActiveView] = useState<'overview' | 'trading' | 'ppt_studio' | 'leaderboard' | 'commodities' | 'crypto'>('overview');
   const [isGlobalRadarOpen, setIsGlobalRadarOpen] = useState(false);
   const [isFinmindLiveConnected, setIsFinmindLiveConnected] = useState<boolean>(true);
@@ -1746,6 +1748,17 @@ export default function App() {
               <span>📈 行情分析</span>
             </button>
 
+            {/* 5b. 專業分析：30 年歷史、績效統計、策略回測 */}
+            <button
+              type="button"
+              onClick={() => setIsProAnalysisOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl font-bold text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition flex items-center gap-1.5 cursor-pointer"
+              title="長期走勢、年化報酬、最大回撤、夏普值與策略回測"
+            >
+              <span>🔬</span>
+              <span>專業分析</span>
+            </button>
+
             {/* 6. AI 財務分析 - 紫色/藍色標識 */}
             <button
               type="button"
@@ -2425,6 +2438,11 @@ export default function App() {
       <ContextualTermBanner />
 
       {/* 🌐 全球 7 大市場 × 24/7 交易時鐘雷達 Modal */}
+      <ProAnalysisModal
+        isOpen={isProAnalysisOpen}
+        onClose={() => setIsProAnalysisOpen(false)}
+        initialSymbol={selectedInstrument?.symbol}
+      />
       <GlobalMarketRadarModal
         isOpen={isGlobalRadarOpen}
         onClose={() => setIsGlobalRadarOpen(false)}

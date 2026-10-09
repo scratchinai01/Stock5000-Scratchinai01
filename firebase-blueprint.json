@@ -1,0 +1,226 @@
+{
+  "entities": {
+    "Player": {
+      "title": "Player",
+      "description": "Financial simulation student profile and 50M structured portfolio state with immutable transactions and schemaVersion 3",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique deterministic player document ID"
+        },
+        "uid": {
+          "type": "string",
+          "description": "Permanent immutable student UID"
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Official student ID number"
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Student display name"
+        },
+        "teamName": {
+          "type": "string",
+          "description": "Student research team name"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "description": "Schema version indicator for zero-loss migrations (default: 3)"
+        },
+        "characterRole": {
+          "type": "string",
+          "description": "Selected character role ID"
+        },
+        "roleTitle": {
+          "type": "string",
+          "description": "Title of the player role"
+        },
+        "avatarEmoji": {
+          "type": "string",
+          "description": "Avatar emoji"
+        },
+        "strategyBadge": {
+          "type": "string",
+          "description": "Strategy badge tag"
+        },
+        "customMotto": {
+          "type": "string",
+          "description": "Trading motto"
+        },
+        "initialCapital": {
+          "type": "number",
+          "description": "Initial capital (50,000,000)"
+        },
+        "availableCash": {
+          "type": "number",
+          "description": "Available cash"
+        },
+        "marginDeposits": {
+          "type": "number",
+          "description": "Futures margin deposits"
+        },
+        "benchmarkDate": {
+          "type": "string",
+          "description": "Benchmark trade date"
+        },
+        "netAssetValue": {
+          "type": "number",
+          "description": "Calculated total Net Asset Value"
+        },
+        "totalReturnPct": {
+          "type": "number",
+          "description": "Calculated total return percentage"
+        },
+        "positions": {
+          "type": "array",
+          "description": "Current open positions"
+        },
+        "tradeHistory": {
+          "type": "array",
+          "description": "Past trade execution history"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Timestamp of last update"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp of creation"
+        }
+      },
+      "required": ["id", "studentName", "initialCapital", "availableCash"]
+    },
+    "ImmutableTransaction": {
+      "title": "ImmutableTransaction",
+      "description": "Append-only trade transaction ledger entry that cannot be deleted",
+      "type": "object",
+      "properties": {
+        "transactionId": {
+          "type": "string",
+          "description": "Unique transaction ID"
+        },
+        "uid": {
+          "type": "string",
+          "description": "Student UID"
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Student display name"
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Instrument symbol"
+        },
+        "name": {
+          "type": "string",
+          "description": "Instrument name"
+        },
+        "category": {
+          "type": "string",
+          "description": "Asset category"
+        },
+        "side": {
+          "type": "string",
+          "description": "Trade side: BUY, SELL, SHORT, COVER"
+        },
+        "orderType": {
+          "type": "string",
+          "description": "Order execution type"
+        },
+        "price": {
+          "type": "number",
+          "description": "Executed price"
+        },
+        "quantity": {
+          "type": "number",
+          "description": "Executed quantity in shares or contracts"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Gross amount"
+        },
+        "marginUsed": {
+          "type": "number",
+          "description": "Margin reserved"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Academic trading rationale"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp string"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status: FILLED, CANCELLED"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "description": "Schema version (3)"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Epoch timestamp"
+        }
+      },
+      "required": ["transactionId", "uid", "symbol", "side", "price", "quantity", "amount"]
+    },
+    "BackupSnapshot": {
+      "title": "BackupSnapshot",
+      "description": "Point-in-Time Recovery and scheduled backup snapshot of class state",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Snapshot ID"
+        },
+        "snapshotTime": {
+          "type": "string",
+          "description": "Formatted snapshot time"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Epoch timestamp"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Trigger reason (daily, pre_migration, manual)"
+        },
+        "totalStudents": {
+          "type": "number",
+          "description": "Count of students in snapshot"
+        },
+        "totalTransactions": {
+          "type": "number",
+          "description": "Count of transactions in snapshot"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "description": "Schema version (3)"
+        },
+        "dataJson": {
+          "type": "string",
+          "description": "Serialized JSON data payload"
+        }
+      },
+      "required": ["id", "timestamp", "dataJson"]
+    }
+  },
+  "firestore": {
+    "/players/{playerId}": {
+      "schema": "Player",
+      "description": "Collection of financial simulation players and structured portfolio state"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "ImmutableTransaction",
+      "description": "Append-only immutable transaction ledger entries"
+    },
+    "/backups/{backupId}": {
+      "schema": "BackupSnapshot",
+      "description": "Point-in-Time recovery snapshots and backups"
+    }
+  }
+}

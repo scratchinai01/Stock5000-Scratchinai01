@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidPlayer(data) {
+      return data.keys().hasAll(['id', 'studentName', 'initialCapital', 'availableCash'])
+        && data.id is string && data.id.size() <= 128
+        && data.studentName is string && data.studentName.size() > 0 && data.studentName.size() <= 100
+        && data.initialCapital is number
+        && data.availableCash is number
+        && (!('password' in data) || data.password is string);
+    }
+
+    // 1. Students / Players collection with schemaVersion 3 support
+    match /players/{playerId} {
+      allow read: if true;
+      allow create: if isValidId(playerId) && isValidPlayer(incoming());
+      allow update: if isValidId(playerId) && isValidPlayer(incoming());
+      allow delete: if true;
+    }
+
+    // 2. Immutable Transaction Ledger: Append-Only (NO UPDATE, NO DELETE!)
+    match /transactions/{transactionId} {
+      allow read: if true;
+      allow create: if isValidId(transactionId);
+      allow update: if false; // Strict immutability
+      allow delete: if false; // Strict append-only
+    }
+
+    // 3. Backup Snapshots for PITR Point-in-Time Recovery
+    match /backups/{backupId} {
+      allow read: if true;
+      allow create: if isValidId(backupId);
+      allow update: if isValidId(backupId);
+      allow delete: if true;
+    }
+
+    // 4. Audit Log
+    match /audit_logs/{logId} {
+      allow read: if true;
+      allow create: if isValidId(logId);
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Default catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -97,6 +97,15 @@ export const MobileShell: React.FC<Props> = props => {
     open(i, 'order');
   };
   const activeOrders = props.orders.filter(o => isActiveStatus(o.status)).length;
+  // 其他元件（例如名詞卡的「去下單試試」）可以切換手機版分頁
+  useEffect(() => {
+    const onNav = (e: Event) => {
+      const to = (e as CustomEvent<Tab>).detail;
+      if (to) setTab(to);
+    };
+    window.addEventListener('m-nav', onNav);
+    return () => window.removeEventListener('m-nav', onNav);
+  }, []);
   const toggleWatch = (sym: string) => setWatch(w => (w.includes(sym) ? w.filter(s => s !== sym) : [...w, sym]));
   const needLogin = !props.isAuthenticated && (tab === 'order' || tab === 'portfolio' || tab === 'rank');
 
@@ -390,8 +399,11 @@ function TermCard({ inst }: { inst: InstrumentSpec }) {
           className="min-h-[36px] px-3 rounded-lg text-[13px] font-bold" style={{ border: `1px solid ${C.line2}`, color: learned ? C.muted : C.text }}>
           {learned ? '已學會' : '我學會了 +1'}
         </button>
-        <button type="button" onClick={() => g.openDrawer(term.id)} className="min-h-[36px] px-3 rounded-lg text-[13px] font-bold" style={{ color: C.muted }}>
-          看更多名詞
+        <button type="button" onClick={() => g.openTermDetail(term.id)} className="min-h-[36px] px-3 rounded-lg text-[13px] font-black" style={{ background: C.accent, color: C.bg }}>
+          詳情 →
+        </button>
+        <button type="button" onClick={() => g.openDrawer(term.id)} className="min-h-[36px] px-2 rounded-lg text-[13px] font-bold" style={{ color: C.muted }}>
+          全部名詞
         </button>
       </div>
     </div>

@@ -31,6 +31,7 @@ import { GlobalMarketRadarModal } from './components/GlobalMarketRadarModal';
 import { ProAnalysisModal } from './components/ProAnalysisModal';
 import { MobileShell } from './mobile/MobileShell';
 import { OrdersView } from './mobile/OrderScreen';
+import { TermDetailSheet, type TryTarget } from './components/glossary/TermDetailSheet';
 import { applyOpenFill, applyCloseFill } from './utils/ledger';
 import { useOrderBook, type ClaimedFill, type ClientOrder, type OrderRequest } from './hooks/useOrderBook';
 import { usesOrderBook, roundToTick, positionPnL } from './utils/orderRules';
@@ -154,7 +155,7 @@ function placeholderInstrument(inst: InstrumentSpec): InstrumentSpec {
 }
 
 export default function App() {
-  const { openDrawer, totalLearnedCount } = useGlossary();
+  const { openDrawer, closeDrawer, totalLearnedCount } = useGlossary();
   const [profiles, setProfiles] = useState<StudentProfile[]>(() => {
     const saved = localStorage.getItem('finmind_student_profiles_v3_authentic');
     if (saved) {
@@ -2384,6 +2385,15 @@ export default function App() {
 
       {/* 300 Financial Terms Educational Glossary Drawer */}
       <FinancialGlossaryDrawer />
+      <TermDetailSheet
+        instruments={instruments}
+        onTry={(t: TryTarget) => {
+          closeDrawer();
+          if (t === 'analysis') return setIsProAnalysisOpen(true);
+          if (isMobileUI) return window.dispatchEvent(new CustomEvent('m-nav', { detail: t === 'order' ? 'order' : t === 'portfolio' ? 'portfolio' : 'quote' }));
+          if (t === 'order' && isAuthenticated) setIsTradingModalOpen(true);
+        }}
+      />
 
       {/* Contextual Scenario Proactive Guidance Toast */}
       <ContextualTermBanner />

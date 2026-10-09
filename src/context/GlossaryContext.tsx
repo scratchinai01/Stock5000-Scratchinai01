@@ -33,6 +33,11 @@ interface GlossaryContextType {
   closeDrawer: () => void;
   setActiveCategoryFilter: (category: TermCategoryCode | 'all') => void;
 
+  // 名詞卡（詳情）
+  detailTermId: string | null;
+  openTermDetail: (termId: string) => void;
+  closeTermDetail: () => void;
+
   // Contextual Trigger
   contextualTerm: FinancialTerm | null;
   triggerContextualTerm: (termIdOrTitle: string) => void;
@@ -152,6 +157,25 @@ export const GlossaryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setIsDrawerOpen(true);
   }, [markTermAsRead, recordTermClick]);
 
+  const [detailTermId, setDetailTermId] = useState<string | null>(null);
+  const openTermDetail = useCallback((termId: string) => {
+    const t = TERMS_BY_ID.get(termId.toLowerCase()) || TERMS_BY_TITLE.get(termId.toLowerCase()) || TERMS_BY_ALIAS.get(termId.toLowerCase());
+    if (!t) return;
+    setDetailTermId(t.id);
+    recordTermClick(t.id); // 打開名詞卡只算瀏覽；答對小測驗或按「我學會了」才算學會
+  }, [recordTermClick]);
+  const closeTermDetail = useCallback(() => setDetailTermId(null), []);
+  // 分享連結：網址加上 #term=名詞代號 就直接打開名詞卡（老師可以把連結貼給學生）
+  useEffect(() => {
+    const fromHash = () => {
+      const m = window.location.hash.match(/^#term=([\w-]+)/);
+      if (m) openTermDetail(decodeURIComponent(m[1]));
+    };
+    fromHash();
+    window.addEventListener('hashchange', fromHash);
+    return () => window.removeEventListener('hashchange', fromHash);
+  }, [openTermDetail]);
+
   const closeDrawer = useCallback(() => {
     setIsDrawerOpen(false);
   }, []);
@@ -225,6 +249,9 @@ export const GlossaryProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     openDrawer,
     closeDrawer,
     setActiveCategoryFilter,
+    detailTermId,
+    openTermDetail,
+    closeTermDetail,
     contextualTerm,
     triggerContextualTerm,
     dismissContextualTerm,

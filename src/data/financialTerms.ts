@@ -203,7 +203,7 @@ export const FINANCIAL_TERMS: FinancialTerm[] = [
   { id: 'limit_up', t: '漲停板', c: 'trd', s: '當日允許的最高價（昨收×1.1），到了通常買不太到。', aliases: ['漲停', '鎖漲停'], rel: ['limit_down', 'price_limit'] },
   { id: 'limit_down', t: '跌停板', c: 'trd', s: '當日允許的最低價（昨收×0.9），到了通常賣不掉。', aliases: ['跌停', '鎖跌停'], rel: ['limit_up', 'price_limit'] },
   { id: 'price_limit', t: '漲跌幅限制', c: 'trd', s: '台股每日漲跌上限10%，期貨與其他商品另有規定。', aliases: ['10%限制', '漲跌幅'] },
-  { id: 'tick_size', t: '升降單位(跳動點)', c: 'trd', s: '報價最小跳動間隔，如15–50元的股票每跳0.1元。', aliases: ['跳動點', 'Tick'] },
+  { id: 'tick_size', t: '升降單位(跳動點)', c: 'trd', s: '報價最小跳動間隔，例如10–50元的股票每跳0.05元、50–100元每跳0.1元。', aliases: ['跳動點', 'Tick'] },
   { id: 'lot_size', t: '一張(整張)', c: 'trd', s: '股票最小交易單位，1張=1,000股。', aliases: ['整股', '千股', '一張股票'] },
   { id: 'odd_lot', t: '零股', c: 'trd', s: '不滿1張的股數，小資金也能買，累積滿1張可轉整張。', aliases: ['零星股', '碎股'] },
   { id: 'intraday_odd_lot', t: '盤中零股', c: 'trd', s: '09:00–13:30與大盤同步交易的零股市場，採即時撮合。', aliases: ['盤中零股交易', '零股即時撮合'] },

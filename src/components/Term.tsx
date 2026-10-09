@@ -17,7 +17,7 @@ interface TermProps {
 }
 
 export const Term: React.FC<TermProps> = ({ id, children, className = '', hideIcon = false }) => {
-  const { isTermLearned, toggleTermLearned, markTermAsRead, openDrawer } = useGlossary();
+  const { isTermLearned, toggleTermLearned, markTermAsRead, openDrawer, openTermDetail } = useGlossary();
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -95,7 +95,7 @@ export const Term: React.FC<TermProps> = ({ id, children, className = '', hideIc
   const handleOpenInDrawer = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsOpen(false);
-    openDrawer(term.id, term.c);
+    openTermDetail(term.id);
   };
 
   return (

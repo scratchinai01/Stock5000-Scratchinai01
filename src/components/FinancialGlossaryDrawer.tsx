@@ -36,8 +36,7 @@ export const FinancialGlossaryDrawer: React.FC = () => {
     markTermAsRead,
     unlockedBadges,
     totalLearnedCount,
-    totalTermsCount,
-  } = useGlossary();
+    totalTermsCount, openTermDetail } = useGlossary();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTerm, setSelectedTerm] = useState<FinancialTerm | null>(null);
@@ -75,7 +74,7 @@ export const FinancialGlossaryDrawer: React.FC = () => {
 
   const handleSelectTerm = (term: FinancialTerm) => {
     setSelectedTerm(term);
-    markTermAsRead(term.id);
+    openTermDetail(term.id);
   };
 
   return (

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AI_ENABLED } from '../utils/aiFeatures';
 import { StudentProfile, InstrumentSpec, PPTOutlineResponse } from '../types/market';
 import { KLineChart } from './KLineChart';
 import {
@@ -137,14 +138,14 @@ ${aiReport?.derivativesHedgingPlan?.optionsRole || '買進台指賣權作為防�
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
-          <button
+          {AI_ENABLED && <button
             onClick={handleGenerateAiReport}
             disabled={loadingAi}
             className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-950 transition"
           >
             <Sparkles className="w-4 h-4" />
             <span>{loadingAi ? 'Gemini 研析撰寫中...' : 'Gemini AI 智能撰寫/潤飾講稿'}</span>
-          </button>
+          </button>}
 
           <button
             onClick={handleCopyFullMarkdown}

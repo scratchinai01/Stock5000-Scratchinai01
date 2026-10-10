@@ -38,6 +38,24 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json());
 
+// ── AI 功能全站關閉（Groq / Gemini 每次呼叫都會產生費用）──
+// 需要時在 Cloud Run 設定 ENABLE_AI=1 才會放行
+const AI_ENABLED = process.env.ENABLE_AI === '1';
+const AI_PATHS = new Set([
+  '/api/gemini/macro-research',
+  '/api/gemini/financial-calculator',
+  '/api/gemini/audit-market-anomalies',
+  '/api/groq/test',
+  '/api/groq/keys',
+  '/api/groq/stockq-analyze',
+]);
+app.use((req, res, next) => {
+  if (!AI_ENABLED && AI_PATHS.has(req.path)) {
+    return res.status(410).json({ success: false, message: '此功能已停用' });
+  }
+  next();
+});
+
 // 畫面上不顯示資料供應商名稱：所有 JSON 回應（含 AI 生成文字）出門前統一替換
 const BRAND_RE = /fin\s*mind/gi;
 function scrubBrand(v: any, depth = 0): any {
@@ -2772,11 +2790,6 @@ function referenceQuotesForAI(symbols: string[]): string {
     .join('\n');
 }
 
-app.post('/api/gemini/financial-calculator', (_req, res, next) => {
-  // AI 財務計算機已下架（每次呼叫都會產生 AI 費用）
-  if (process.env.ENABLE_AI_CALCULATOR !== '1') return res.status(410).json({ success: false, message: '此功能已停用' });
-  next();
-});
 app.post('/api/gemini/financial-calculator', async (req, res) => {
   const {
     calcType, // 'position_sizing' | 'futures_leverage' | 'options_breakeven' | 'hedging_ratio' | 'custom_prompt'
@@ -2894,6 +2907,7 @@ ${referenceQuotesForAI(['TX', 'MTX', 'TMF', '2330', instrument?.symbol].filter(B
 
 // 1. GET /api/groq/status
 app.get('/api/groq/status', (req, res) => {
+  if (!AI_ENABLED) return res.json({ success: true, disabled: true, totalSlots: 0, configuredCount: 0, slots: [] });
   const configuredCount = groqSlots.filter(s => s.key && s.key.length > 5).length;
   return res.json({
     success: true,

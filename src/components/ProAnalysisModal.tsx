@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Search, LineChart as LineIcon, BarChart3, FlaskConical, Loader2, AlertTriangle, Info, Triangle, ShieldAlert, BrainCircuit } from 'lucide-react';
 import { StockLearn } from './StockLearn';
+import { LearnStudy } from './LearnStudy';
 import { PatternScreener } from './PatternScreener';
 import { RiskRadar, RiskStock } from './RiskRadar';
 import {
@@ -211,7 +212,7 @@ const Stat: React.FC<{ label: string; value: string; sub?: string; tone?: string
 );
 
 // ───────────────────────── 主元件 ─────────────────────────
-type Tab = 'trend' | 'stats' | 'backtest' | 'learn' | 'stockRisk' | 'pattern' | 'risk';
+type Tab = 'trend' | 'stats' | 'backtest' | 'learn' | 'stockRisk' | 'pattern' | 'risk' | 'cycle';
 export type ProMode = 'stock' | 'scan';
 const STOCK_TABS = ['trend', 'stats', 'backtest', 'learn', 'stockRisk'] as const;
 
@@ -396,7 +397,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
             <span className="text-2xl">{mode === 'stock' ? '🔬' : '🔎'}</span>
             <div>
               <div className="font-black text-slate-950 text-lg">{mode === 'stock' ? '個股分析' : '全市場海搜'}</div>
-              <div className="text-[12px] text-slate-500">{mode === 'stock' ? '一次看一檔：1994 年起長期走勢 · 績效統計 · 策略回測 · 個股學習 · 個股下跌預警' : '每天收盤後掃描全市場：三角收斂突破 · 下跌預警排行'}</div>
+              <div className="text-[12px] text-slate-500">{mode === 'stock' ? '一次看一檔：1994 年起長期走勢 · 績效統計 · 策略回測 · 個股學習 · 個股下跌預警' : '每天收盤後掃描全市場：三角收斂突破 · 下跌預警排行 · 循環股學習研究'}</div>
             </div>
           </div>
           <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200" role="tablist" aria-label="切換分析模式">
@@ -438,7 +439,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
           <div className={`flex flex-wrap gap-1 ${mode === 'stock' ? 'ml-auto' : ''}`}>
             {(mode === 'stock'
               ? ([['trend', '長期走勢', LineIcon], ['stats', '績效統計', BarChart3], ['backtest', '策略回測', FlaskConical], ['learn', '個股學習', BrainCircuit], ['stockRisk', '個股下跌預警', ShieldAlert]] as const)
-              : ([['pattern', '三角收斂突破', Triangle], ['risk', '下跌預警排行', ShieldAlert]] as const)
+              : ([['pattern', '三角收斂突破', Triangle], ['risk', '下跌預警排行', ShieldAlert], ['cycle', '循環股學習', BrainCircuit]] as const)
             ).map(([id, label, Icon]) => (
               <button key={id} type="button" onClick={() => setTab(id)}
                 className={`px-3.5 py-2 rounded-lg text-[14px] font-black flex items-center gap-1.5 border ${tab === id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`}>
@@ -475,6 +476,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
         <div className="p-4 space-y-4">
           {tab === 'pattern' && <PatternScreener onOpenSymbol={sym => { pick(sym); setTab('trend'); }} />}
           {tab === 'risk' && <RiskRadar holdings={holdings} onOpenSymbol={sym => { pick(sym); setTab('stockRisk'); }} />}
+          {tab === 'cycle' && <LearnStudy onOpenSymbol={sym => { pick(sym); setTab('learn'); }} />}
           {tab === 'stockRisk' && <RiskStock symbol={symbol} onOpenScan={() => setTab('risk')} />}
           {(isStockData || tab === 'learn') && loading && <div className="flex items-center gap-2 text-slate-600 text-sm"><Loader2 className="w-4 h-4 animate-spin" />讀取 {symbol} 歷史資料中…（第一次可能需要幾秒）</div>}
           {(isStockData || tab === 'learn') && error && <div className="flex items-center gap-2 text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm"><AlertTriangle className="w-4 h-4" />{error}</div>}

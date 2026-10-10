@@ -59,3 +59,6 @@ export const getPatternBacktest = () => readDoc('pattern_scan', 'backtest');
 /** 台股下跌預警（教學版） */
 export const getRiskLatest = () => readLatest('risk_scan');
 export const getRiskBacktest = () => readDoc('risk_scan', 'backtest');
+
+/** 循環股學習研究 */
+export const getLearnDoc = (id: 'study' | 'cyclicality') => readDoc('learn_scan', id);

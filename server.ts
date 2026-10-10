@@ -16,7 +16,7 @@ import {
   previousTwTradingDay,
   formatTradingDay,
 } from './src/utils/twHolidays';
-import { getHistory } from './server-lib/history';
+import { getHistory, historyCacheStats } from './server-lib/history';
 import { registerOrderRoutes } from './server-lib/orders';
 import { getPatternLatest, getPatternBacktest } from './server-lib/patternStore';
 
@@ -1105,7 +1105,8 @@ app.get('/api/pattern/backtest', async (_req, res) => {
 app.get('/api/history/daily', async (req, res) => {
   const symbol = String(req.query.symbol || '').trim();
   try {
-    const data = await getHistory(symbol, currentFinmindToken);
+    const cat = taiwanStockCatalog.find(c => c.symbol === symbol.trim().toUpperCase());
+    const data = await getHistory(symbol, currentFinmindToken, cat ? { name: cat.name, market: cat.type === 'tpex' ? 'tpex' : cat.type === 'twse' ? 'twse' : null } : undefined);
     if (!data) {
       return res.status(404).json({ success: false, message: `查無「${symbol}」的歷史資料（僅支援台股上市、上櫃代號）` });
     }
@@ -1125,6 +1126,7 @@ app.get('/api/finmind/refresh-status', (_req, res) => {
     refreshing: Boolean(refreshInFlight),
     progress: refreshProgress,
     trackedSymbols: trackedSymbols.size,
+    historyCache: historyCacheStats(),
     finmind: finmindStats,
     failures: Object.fromEntries([...refreshFailures.entries()].slice(0, 40)),
     sample: ['TX', '2330', '0050'].map(s => {

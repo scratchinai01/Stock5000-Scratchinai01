@@ -48,6 +48,15 @@ const MIN_INTERVAL_MS = Number(process.env.FINMIND_MIN_INTERVAL_MS || 800);
 const todayTW = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Taipei' }).format(new Date());
 const DAILY_DATE = opt('date', todayTW())!;
 const log = (...a: any[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
+/** BigQuery 查詢參數在這個環境曾被當成 NULL（刪除沒生效），改成驗證後直接寫入 SQL */
+const sqlDate = (d: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error(`日期格式錯誤：${d}`);
+  return `DATE '${d}'`;
+};
+const sqlIds = (ids: string[]) => {
+  for (const id of ids) if (!/^[0-9A-Za-z]{1,12}$/.test(id)) throw new Error(`代號格式錯誤：${id}`);
+  return ids.map(id => `'${id}'`).join(',');
+};
 
 // ───────────────────────── 市場資料 ─────────────────────────
 let lastCall = 0;
@@ -309,12 +318,13 @@ async function cloudSink(): Promise<Sink> {
       await loadNdjson(rows, 'WRITE_APPEND');
     },
     async replaceBqDay(date, rows) {
-      await bq.query({
-        query: `DELETE FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\` WHERE date = @d`,
-        params: { d: date },
-        types: { d: 'DATE' },
+      const [job] = await bq.createQueryJob({
+        query: `DELETE FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\` WHERE date = ${sqlDate(date)}`,
         location: BQ_LOCATION,
       });
+      await job.getQueryResults();
+      const [meta] = await job.getMetadata();
+      log(`🧹 BigQuery 先刪除 ${date} 舊資料 ${meta.statistics?.query?.numDmlAffectedRows ?? '?'} 筆`);
       await loadNdjson(rows, 'WRITE_APPEND');
     },
     async dedupeBq() {
@@ -334,9 +344,7 @@ async function cloudSink(): Promise<Sink> {
       const [rows] = await bq.query({
         query: `WITH p AS (SELECT MAX(date) d FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\` WHERE date < @d AND date >= DATE_SUB(@d, INTERVAL 30 DAY))
                 SELECT CAST(t.date AS STRING) AS d, t.stock_id, t.adj_close FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\` t, p
-                WHERE t.date = p.d AND t.date >= DATE_SUB(@d, INTERVAL 30 DAY)`,
-        params: { d: date },
-        types: { d: 'DATE' },
+                WHERE t.date = p.d AND t.date >= DATE_SUB(@d, INTERVAL 30 DAY)`.replace(/@d/g, sqlDate(date)),
         location: BQ_LOCATION,
       });
       const adj = new Map<string, number>();
@@ -356,12 +364,11 @@ async function cloudSink(): Promise<Sink> {
     },
     async replaceBqStocks(ids, rows) {
       if (ids.length === 0) return;
-      await bq.query({
-        query: `DELETE FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\` WHERE stock_id IN UNNEST(@ids)`,
-        params: { ids },
-        types: { ids: ['STRING'] },
+      const [job] = await bq.createQueryJob({
+        query: `DELETE FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\` WHERE stock_id IN (${sqlIds(ids)})`,
         location: BQ_LOCATION,
       });
+      await job.getQueryResults();
       await loadNdjson(rows, 'WRITE_APPEND');
     },
     async close() {

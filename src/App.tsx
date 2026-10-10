@@ -18,7 +18,6 @@ import { GeminiQuoteAssistantModal } from './components/GeminiQuoteAssistantModa
 import { KLineChart } from './components/KLineChart';
 import { PlayerSetupModal } from './components/PlayerSetupModal';
 import { LockedTradingHallGate } from './components/LockedTradingHallGate';
-import { GeminiCalculatorModal } from './components/GeminiCalculatorModal';
 import { FinmindVerificationModal } from './components/FinmindVerificationModal';
 import { AdminManagementModal } from './components/AdminManagementModal';
 import { TradeStatementModal } from './components/TradeStatementModal';
@@ -281,8 +280,6 @@ export default function App() {
   const [tradingModalStep, setTradingModalStep] = useState<'select_category' | 'order_form'>('select_category');
   const [tradingInitialAction, setTradingInitialAction] = useState<OrderAction | undefined>(undefined);
   const [isGeminiAssistantOpen, setIsGeminiAssistantOpen] = useState(false);
-  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
-  const [calculatorTargetInst, setCalculatorTargetInst] = useState<InstrumentSpec | null>(null);
   const [viewingKLineInst, setViewingKLineInst] = useState<InstrumentSpec | null>(null);
   const [isTradeStatementOpen, setIsTradeStatementOpen] = useState(false);
   const [isDerivativesModalOpen, setIsDerivativesModalOpen] = useState(false);
@@ -392,7 +389,6 @@ export default function App() {
     setIsAdminModalOpen(false);
     setIsTradingModalOpen(false);
     setIsTradeStatementOpen(false);
-    setIsCalculatorOpen(false);
     setIsGeminiAssistantOpen(false);
     setIsFinmindVerificationOpen(false);
     setIsSecurityCenterOpen(false);
@@ -451,28 +447,6 @@ export default function App() {
   const handleOpenGeneralTrading = () => {
     setTradingInitialAction(undefined);
     setTradingModalStep('select_category');
-    setIsTradingModalOpen(true);
-  };
-
-  const handleOpenCalculator = (inst?: InstrumentSpec) => {
-    setCalculatorTargetInst(inst || selectedInstrument);
-    setIsCalculatorOpen(true);
-  };
-
-  const handleApplyOrderFromCalculator = (order: {
-    symbol: string;
-    name: string;
-    category: any;
-    orderType: any;
-    price: number;
-    quantity: number;
-    notes: string;
-  }) => {
-    const inst = instruments.find(i => i.symbol === order.symbol);
-    if (inst) {
-      setSelectedInstrument(inst);
-    }
-    setTradingModalStep('order_form');
     setIsTradingModalOpen(true);
   };
 
@@ -1711,22 +1685,6 @@ export default function App() {
               <span>專業分析</span>
             </button>
 
-            {/* 6. AI 財務分析 - 紫色/藍色標識 */}
-            <button
-              type="button"
-              onClick={() => {
-                if (!isAuthenticated) {
-                  setIsPlayerSetupOpen(true);
-                  return;
-                }
-                handleOpenCalculator();
-              }}
-              className="px-3.5 py-1.5 rounded-xl font-bold text-indigo-950 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Bot className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{isAuthenticated ? '🧮 AI 財務分析' : '🔒 AI 財務分析'}</span>
-            </button>
-
             {/* 7. 全班排行 */}
             <button
               type="button"
@@ -2005,7 +1963,6 @@ export default function App() {
                 onViewInstrumentKLine={inst => setViewingKLineInst(inst)}
                 allInstruments={instruments}
                 onEditPlayer={() => setIsPlayerSetupOpen(true)}
-                onOpenCalculator={handleOpenCalculator}
                 onSelectInstrumentToTrade={handleSelectInstrumentToTrade}
                 onResetToAutonomousCash={handleResetToAutonomousCash}
                 onOpenResetPortfolio={() => setIsResetModalOpen(true)}
@@ -2113,7 +2070,6 @@ export default function App() {
                   onSelectInstrumentToTrade={handleSelectInstrumentToTrade}
                   onOpenTrading={handleOpenGeneralTrading}
                   onViewInstrumentKLine={inst => setViewingKLineInst(inst)}
-                  onOpenCalculator={inst => handleOpenCalculator(inst || selectedInstrument)}
                   isSuperUser={isSuperUser}
                 />
               </div>
@@ -2153,23 +2109,8 @@ export default function App() {
           setIsTradingModalOpen(false);
           setIsGeminiAssistantOpen(true);
         }}
-        onOpenCalculator={() => {
-          setIsTradingModalOpen(false);
-          handleOpenCalculator(selectedInstrument);
-        }}
         onOpenGlossary={openDrawer}
         onExecuteTrade={handleModalTrade}
-      />
-
-      {/* Gemini AI Financial Calculator Modal */}
-      <GeminiCalculatorModal
-        isOpen={isCalculatorOpen}
-        onClose={() => setIsCalculatorOpen(false)}
-        currentProfile={currentProfile || profiles[0]}
-        allInstruments={instruments}
-        initialInstrument={calculatorTargetInst || selectedInstrument}
-        onApplyTradeOrder={handleApplyOrderFromCalculator}
-        isSuperUser={isSuperUser}
       />
 
       {/* Gemini Quote Assistant Modal */}

@@ -695,15 +695,15 @@ export const TradingBottomTools: React.FC<TradingBottomToolsProps> = ({
           {/* ─── Bottom Tools Utility Footer Bar ─── */}
           <div className="p-3 sm:p-4 bg-slate-100 border-t border-slate-200 shrink-0 flex items-center justify-between gap-2 flex-wrap text-xs">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <button
+              {onOpenCalculator && <button
                 type="button"
-                onClick={() => onOpenCalculator && onOpenCalculator(selectedInstrument)}
+                onClick={() => onOpenCalculator(selectedInstrument)}
                 className="px-3 py-2 rounded-xl bg-white hover:bg-indigo-50 text-indigo-950 border border-indigo-200 font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs min-h-[38px] active:scale-95"
                 title="開啟 AI 損益與保證金計算機"
               >
                 <Calculator className="w-3.5 h-3.5 text-indigo-600" />
                 <span>🧮 AI 計算機</span>
-              </button>
+              </button>}
 
               {onOpenGlossary && (
                 <button

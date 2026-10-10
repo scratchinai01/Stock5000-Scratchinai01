@@ -1915,7 +1915,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
       )}
 
       {/* 3. 快速功能 (4 Clean Utilities) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className={`grid grid-cols-2 ${onOpenCalculator ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-3`}>
         <button
           type="button"
           onClick={onOpenStatement}
@@ -1958,9 +1958,9 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
           </div>
         </button>
 
-        <button
+        {onOpenCalculator && <button
           type="button"
-          onClick={() => onOpenCalculator?.()}
+          onClick={() => onOpenCalculator()}
           className="p-3.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 transition text-left flex items-center gap-3 shadow-2xs cursor-pointer group"
         >
           <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-800 flex items-center justify-center font-black group-hover:scale-105 transition">
@@ -1970,7 +1970,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
             <span className="font-black text-slate-950 text-xs block">AI 財務分析</span>
             <span className="text-[11px] text-slate-500 font-medium">量化評價模型</span>
           </div>
-        </button>
+        </button>}
       </div>
 
       {/* 3. Market Quotes Hall - Clean, professional financial interface */}

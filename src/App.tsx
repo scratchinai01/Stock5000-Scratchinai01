@@ -190,6 +190,8 @@ export default function App() {
   const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => DEFAULT_INSTRUMENTS.map(placeholderInstrument));
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
   const [isProAnalysisOpen, setIsProAnalysisOpen] = useState(false);
+  const [proMode, setProMode] = useState<'stock' | 'scan'>('stock');
+  const openPro = (m: 'stock' | 'scan') => { setProMode(m); setIsProAnalysisOpen(true); };
   // 手機版介面：寬度 < 768px 自動啟用；使用者可手動切換（記在 localStorage）
   const [uiOverride, setUiOverride] = useState<'mobile' | 'desktop' | null>(() => {
     try {
@@ -1297,7 +1299,8 @@ export default function App() {
           onExecuteTrade={handleModalTrade}
           onClosePosition={handleCloseRequest}
           onOpenAdvancedTrade={inst => handleSelectInstrumentToTrade(inst)}
-          onOpenProAnalysis={() => setIsProAnalysisOpen(true)}
+          onOpenProAnalysis={() => openPro('stock')}
+          onOpenScan={() => openPro('scan')}
           onSwitchToDesktop={() => setUiMode('desktop')}
           lastUpdateTime={lastFinmindUpdateTime}
           orders={orderBook.orders}
@@ -1549,12 +1552,22 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={() => setIsProAnalysisOpen(true)}
+                  onClick={() => openPro('stock')}
                   className="px-3.5 py-2 rounded-xl font-black text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-                  title="30 年走勢、績效統計、策略回測、型態選股、下跌預警"
+                  title="一次看一檔：長期走勢、績效統計、策略回測、個股下跌預警"
                 >
                   <span>🔬</span>
-                  <span>專業分析</span>
+                  <span>個股分析</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openPro('scan')}
+                  className="px-3.5 py-2 rounded-xl font-black text-indigo-950 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                  title="每天收盤後掃描全市場：三角收斂突破、下跌預警排行"
+                >
+                  <span>🔎</span>
+                  <span>全市場海搜</span>
                 </button>
 
                 <button
@@ -2033,7 +2046,7 @@ export default function App() {
         instruments={instruments}
         onTry={(t: TryTarget) => {
           closeDrawer();
-          if (t === 'analysis') return setIsProAnalysisOpen(true);
+          if (t === 'analysis') return openPro('stock');
           if (isMobileUI) return window.dispatchEvent(new CustomEvent('m-nav', { detail: t === 'order' ? 'order' : t === 'portfolio' ? 'portfolio' : 'quote' }));
           if (t === 'order' && isAuthenticated) setIsTradingModalOpen(true);
         }}
@@ -2047,6 +2060,7 @@ export default function App() {
         isOpen={isProAnalysisOpen}
         onClose={() => setIsProAnalysisOpen(false)}
         initialSymbol={selectedInstrument?.symbol}
+        mode={proMode}
         holdings={(currentProfile?.positions || []).filter(p => p.category === 'stocks').map(p => ({ symbol: p.symbol, name: p.name }))}
       />
       <GlobalMarketRadarModal

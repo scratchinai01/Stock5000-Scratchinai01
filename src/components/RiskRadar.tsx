@@ -309,7 +309,7 @@ const LevelBadge = ({ level, score, small }: { level: number; score: number; sma
   </span>
 );
 
-function RiskCard({ r, open, onToggle, onOpenSymbol, extra }: { r: Row; open: boolean; onToggle: () => void; onOpenSymbol: (s: string) => void; extra?: React.ReactNode }) {
+function RiskCard({ r, open, onToggle, onOpenSymbol, extra, single }: { r: Row; open: boolean; onToggle: () => void; onOpenSymbol: (s: string) => void; extra?: React.ReactNode; single?: boolean }) {
   const { base, lift } = React.useContext(LiftCtx);
   const [card, setCard] = useState(false);
   return (
@@ -323,7 +323,7 @@ function RiskCard({ r, open, onToggle, onOpenSymbol, extra }: { r: Row; open: bo
         <span className="text-[16px] font-mono">{r.close.toLocaleString()}</span>
         <span className={`text-[16px] font-mono font-bold ${r.chg1 < 0 ? 'text-emerald-700' : r.chg1 > 0 ? 'text-red-600' : 'text-slate-600'}`}>{pct(r.chg1, 2)}</span>
         <Spark hist={r.hist} />
-        <span className="ml-auto flex items-center gap-1">{extra}{open ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}</span>
+        <span className="ml-auto flex items-center gap-1">{extra}{!single && (open ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />)}</span>
       </div>
       {open && (
         <div className="border-t border-slate-200 p-4 grid lg:grid-cols-2 gap-5">
@@ -369,7 +369,7 @@ function RiskCard({ r, open, onToggle, onOpenSymbol, extra }: { r: Row; open: bo
             <div className={`rounded-xl border p-3 text-[16px] ${LEVEL[r.level].soft}`}>{LEVEL[r.level].emoji} {LEVEL[r.level].label}：{LEVEL[r.level].note}</div>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setCard(true)} className="min-h-[44px] px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-[16px] font-black">📖 教學卡片（可下載）</button>
-              <button type="button" onClick={() => onOpenSymbol(r.id)} className="min-h-[44px] px-4 rounded-xl bg-slate-900 text-white text-[16px] font-black">看長期走勢與回測 →</button>
+              {!single && <button type="button" onClick={() => onOpenSymbol(r.id)} className="min-h-[44px] px-4 rounded-xl bg-slate-900 text-white text-[16px] font-black">看個股分析 →</button>}
             </div>
           </div>
         </div>
@@ -757,3 +757,54 @@ function RulesView() {
     </div>
   );
 }
+
+// ───────────────────────── 個股下跌預警（個股分析用） ─────────────────────────
+/** 只看單一股票：六大因子、33 項利空清單、警戒分數、教學卡片 */
+export const RiskStock: React.FC<{ symbol: string; onOpenScan: () => void }> = ({ symbol, onOpenScan }) => {
+  const [latest, setLatest] = useState<Latest | null>(null);
+  const [bt, setBt] = useState<Backtest | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [watch, setWatch] = useState<string[]>(loadWatch);
+  useEffect(() => {
+    let off = false;
+    const get = (u: string) => fetch(u).then(async r => (r.ok ? r.json() : Promise.reject(new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`))));
+    get('/api/risk/latest').then(j => !off && setLatest(j)).catch(e => !off && setErr(e.message));
+    get('/api/risk/backtest').then(j => !off && setBt(j)).catch(() => {});
+    return () => { off = true; };
+  }, []);
+  if (err) return <ErrorBox text={err} />;
+  if (!latest) return <Loading text="讀取今日風險分數…" />;
+  const r = latest.rows.find(x => x.id === symbol);
+  const watched = watch.includes(symbol);
+  const toggleWatch = () => {
+    const next = watched ? watch.filter(x => x !== symbol) : [...new Set([symbol, ...watch])].slice(0, 50);
+    setWatch(next);
+    saveWatch(next);
+  };
+  return (
+    <LiftCtx.Provider value={{ lift: bt?.alert?.trainLift || null, base: bt?.alert?.test.baseRate ?? latest.alertBase ?? null }}>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2 text-[15px]">
+          <span className="font-black text-[18px]">📉 個股下跌預警</span>
+          <span className="text-slate-500">資料日 <b className="font-mono">{latest.asOf}</b>（每天收盤後更新）</span>
+          <span className="ml-auto flex flex-wrap gap-2">
+            {r && (
+              <button type="button" onClick={toggleWatch} className={`min-h-[42px] px-3 rounded-xl border-2 font-black ${watched ? 'bg-amber-100 border-amber-400 text-amber-900' : 'bg-white border-slate-200 text-slate-700'}`}>
+                {watched ? '★ 已在追蹤清單' : '☆ 加入追蹤清單'}
+              </button>
+            )}
+            <button type="button" onClick={onOpenScan} className="min-h-[42px] px-3 rounded-xl border-2 border-slate-900 bg-slate-900 text-white font-black">🔎 看全市場下跌預警</button>
+          </span>
+        </div>
+        {r ? (
+          <RiskCard r={r} open single onToggle={() => {}} onOpenSymbol={() => {}} />
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 text-[16px] text-slate-700 leading-relaxed">
+            今天沒有 <b className="font-mono">{symbol}</b> 的風險分數。下跌預警目前只涵蓋上市櫃<b>普通股</b>，不含 ETF、特別股、權證；上市未滿約半年、或今天停牌的股票也不會計分。
+          </div>
+        )}
+        <p className="text-[14px] text-slate-500 leading-relaxed">免費教學用途的量化研究展示，不構成投資建議。分數與機率的計算方式、30 年回測驗證，請到「全市場海搜 → 下跌預警排行」查看。</p>
+      </div>
+    </LiftCtx.Provider>
+  );
+};

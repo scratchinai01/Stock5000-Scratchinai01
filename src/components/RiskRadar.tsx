@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, AlertTriangle, ChevronDown, ChevronUp, BookOpen, BarChart3, ListChecks, Star, Briefcase, Plus, X, Search } from 'lucide-react';
+import { StudyCardModal, CardSection, CardStat, CardFooter } from './StudyCardModal';
 import { FACTOR_KEYS, FACTOR_NAMES, FACTOR_WEIGHTS, NOT_INCLUDED, SIGNALS } from '../../server-lib/risk';
 
 /**
@@ -309,7 +310,8 @@ const LevelBadge = ({ level, score, small }: { level: number; score: number; sma
 );
 
 function RiskCard({ r, open, onToggle, onOpenSymbol, extra }: { r: Row; open: boolean; onToggle: () => void; onOpenSymbol: (s: string) => void; extra?: React.ReactNode }) {
-  const { base } = React.useContext(LiftCtx);
+  const { base, lift } = React.useContext(LiftCtx);
+  const [card, setCard] = useState(false);
   return (
     <div className={`bg-white border-2 rounded-2xl ${open ? 'border-slate-400' : 'border-slate-200'}`}>
       <div role="button" tabIndex={0} onClick={onToggle} onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onToggle()} className="w-full flex flex-wrap items-center gap-x-4 gap-y-1 p-3 text-left cursor-pointer">
@@ -365,11 +367,105 @@ function RiskCard({ r, open, onToggle, onOpenSymbol, extra }: { r: Row; open: bo
             </div>
             <div className="text-[15px] text-slate-600">近 20 日 {pct(r.ret20)}｜20 日平均成交值 {money(r.avgVal20)}</div>
             <div className={`rounded-xl border p-3 text-[16px] ${LEVEL[r.level].soft}`}>{LEVEL[r.level].emoji} {LEVEL[r.level].label}：{LEVEL[r.level].note}</div>
-            <button type="button" onClick={() => onOpenSymbol(r.id)} className="min-h-[44px] px-4 rounded-xl bg-slate-900 text-white text-[16px] font-black">看長期走勢與回測 →</button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setCard(true)} className="min-h-[44px] px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-[16px] font-black">📖 教學卡片（可下載）</button>
+              <button type="button" onClick={() => onOpenSymbol(r.id)} className="min-h-[44px] px-4 rounded-xl bg-slate-900 text-white text-[16px] font-black">看長期走勢與回測 →</button>
+            </div>
           </div>
         </div>
       )}
+      {card && <RiskStudyCard r={r} base={base} lift={lift} onClose={() => setCard(false)} />}
     </div>
+  );
+}
+
+const LEVEL_HEAD = ['linear-gradient(135deg,#047857,#059669)', 'linear-gradient(135deg,#a16207,#ca8a04)', 'linear-gradient(135deg,#c2410c,#ea580c)', 'linear-gradient(135deg,#b91c1c,#dc2626)', 'linear-gradient(135deg,#4c0519,#881337)'];
+const LEVEL_LESSON = [
+  '目前沒有明顯的弱化訊號，持續觀察即可。低風險不代表不會跌，只是現在的技術面還算健康。',
+  '出現部分弱化訊號，像是跌破短期均線或動能轉弱。可以開始留意，但單一訊號常常是雜訊。',
+  '多項風險因子同時轉弱，值得回頭檢查：當初買進的理由還在嗎？停損設好了嗎？部位會不會太大？',
+  '多數因子都亮燈，是重新評估部位與風險曝險的時機，例如減碼、提高停損，或暫停加碼。',
+  '幾乎所有風險因子都在高檔，優先檢查是否已經趨勢反轉，並確認自己能承受最壞情況的虧損。',
+];
+
+function RiskStudyCard({ r, base, lift, onClose }: { r: Row; base: number | null; lift: Record<string, Lift> | null; onClose: () => void }) {
+  const hits = SIGNALS.filter(s => r.sig[s.key] != null);
+  const strong = hits.filter(s => (lift?.[s.key]?.lift ?? 0) >= 1.15);
+  return (
+    <StudyCardModal title={`風險教學卡：${r.name}`} filename={`risk_${r.id}_${r.date.replace(/-/g, '')}.png`} onClose={onClose}>
+      <div style={{ background: LEVEL_HEAD[r.level] }} className="text-white px-6 pt-5 pb-6">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-[16px] font-black px-3 py-1 rounded-full" style={{ background: 'rgba(0,0,0,0.22)' }}>📖 風險教學卡 · 台股下跌預警</span>
+          <span className="text-[15px] font-mono font-bold">資料日 {r.date}</span>
+        </div>
+        <div className="mt-3 text-[34px] font-black leading-tight">{r.name} <span className="font-mono text-[26px] opacity-90">{r.id}</span></div>
+        <div className="mt-2 flex flex-wrap gap-2 text-[16px] font-black">
+          <span className="px-3 py-1 rounded-full bg-white text-slate-900">{LEVEL[r.level].emoji} {LEVEL[r.level].label} · {Math.round(r.score)} 分</span>
+          {r.alert != null && <span className="px-3 py-1 rounded-full bg-white/20">⚠️ 利空警戒 {Math.round(r.alert)}</span>}
+          <span className="px-3 py-1 rounded-full bg-white/20">利空訊號 {hits.length} / {SIGNALS.length}</span>
+          {r.industry && <span className="px-3 py-1 rounded-full bg-white/20">{r.industry}</span>}
+        </div>
+      </div>
+      <div className="px-6 py-5 space-y-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <CardStat label="收盤" value={r.close.toLocaleString()} />
+          <CardStat label="當日漲跌" value={pct(r.chg1, 2)} color={r.chg1 < 0 ? '#11803d' : '#c81e2c'} />
+          <CardStat label="近 20 日" value={pct(r.ret20)} color={r.ret20 < 0 ? '#11803d' : '#c81e2c'} />
+          {r.alertProb != null ? <CardStat label="歷史相似下跌比例" value={p1(r.alertProb)} /> : <CardStat label="20 日平均成交值" value={money(r.avgVal20)} />}
+        </div>
+        <CardSection title="這張卡在說什麼？">
+          <p className="text-[17px] leading-relaxed">{LEVEL[r.level].emoji} <b>{LEVEL[r.level].label}</b>：{LEVEL_LESSON[r.level]}</p>
+          {r.alertProb != null && (
+            <p className="text-[16px] leading-relaxed text-slate-700">
+              過去 30 年出現同樣訊號組合時，之後 20 個交易日內回落超過 10% 的比例約 <b>{p1(r.alertProb)}</b>{base != null && <>，所有股票平均是 {p1(base, 0)}</>}。這是統計比例，不是預測一定會發生。
+            </p>
+          )}
+        </CardSection>
+        <CardSection title="六大風險因子">
+          <div className="space-y-1.5">
+            {FACTOR_KEYS.map((k, i) => (
+              <div key={k} className="flex items-center gap-2 text-[16px]">
+                <span className="w-44 font-bold">{k} {FACTOR_NAMES[k]}</span>
+                <div className="flex-1 h-4 rounded-full overflow-hidden" style={{ background: '#ece6da' }}>
+                  <div className="h-full rounded-full" style={{ width: `${r.F[i] * 100}%`, background: r.F[i] >= 0.6 ? '#dc2626' : r.F[i] >= 0.3 ? '#f97316' : '#94a3b8' }} />
+                </div>
+                <span className="w-24 text-right font-mono">{(r.F[i] * FACTOR_WEIGHTS[k]).toFixed(1)} / {FACTOR_WEIGHTS[k]}</span>
+              </div>
+            ))}
+          </div>
+        </CardSection>
+        <CardSection title={`今天觸發的利空訊號（${hits.length} 項）`}>
+          {hits.length === 0 ? (
+            <p className="text-[16px] text-slate-600">今天沒有觸發任何利空訊號。</p>
+          ) : (
+            <ul className="space-y-1">
+              {hits.map(s => {
+                const lf = lift?.[s.key]?.lift ?? null;
+                return (
+                  <li key={s.key} className="flex gap-2 text-[16px] leading-snug">
+                    <span className="font-black w-5 shrink-0" style={{ color: '#dc2626' }}>✔</span>
+                    <span className="flex-1">{s.label}</span>
+                    {lf != null && <span className="font-mono text-[14px] whitespace-nowrap" style={{ color: lf >= 1.5 ? '#b91c1c' : lf >= 1.15 ? '#c2410c' : '#9ca3af' }}>×{lf.toFixed(2)}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {lift && <p className="text-[14px] text-slate-500">×倍數：歷史上觸發後「20 日內回落超過 10%」的機率是沒觸發時的幾倍。倍數 1.15 以上才算有預警力{strong.length ? `，今天有 ${strong.length} 項` : ''}。</p>}
+        </CardSection>
+        <CardSection title={`近 ${r.hist.length} 個交易日風險分數`}>
+          <Spark hist={r.hist} big />
+        </CardSection>
+        <CardSection title="三個學習重點">
+          <ol className="list-decimal pl-6 space-y-1 text-[16.5px] leading-relaxed">
+            <li>風險分數高<b>不等於一定會跌</b>；30 年回測顯示，高分股票也常是波動大、漲跌都劇烈的股票。</li>
+            <li>預警的用途是<b>提醒檢查風險</b>：停損設好了嗎？部位會不會太大？買進理由還在嗎？</li>
+            <li>單一訊號常是雜訊，<b>多個有預警力的訊號同時出現</b>才值得特別注意。</li>
+          </ol>
+        </CardSection>
+      </div>
+      <CardFooter note="風險分數由固定規則計算，門檻仍在以歷史回測校準中。本卡為免費教學用途的量化研究展示，不構成投資建議。" />
+    </StudyCardModal>
   );
 }
 

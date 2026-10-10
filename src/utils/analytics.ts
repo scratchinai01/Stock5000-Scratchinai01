@@ -357,6 +357,8 @@ export interface BacktestParams {
   marketFilter?: number;    // 大盤濾網：0050 收盤在 N 日均線之上才買進（0 = 不使用）
   // 多策略組合：同時看多個擇時策略，依規則合成一個持有訊號
   combo?: { ids: StrategyId[]; mode: ComboMode };
+  // 外部提供的持有訊號（例如個股學習模型的輸出），長度需與序列相同
+  customSignal?: (boolean | null)[];
 }
 
 /** and：全部策略都看多才持有；or：任一策略看多就持有；vote：過半數看多才持有 */
@@ -400,7 +402,13 @@ export function holdState(want: (boolean | null)[]): boolean[] {
   return want.map(w => (w === null ? cur : (cur = w)));
 }
 
+/** 單一策略每天的持有狀態（只用到當天以前的資料） */
+export function strategyState(s: DailySeries, p: BacktestParams, id: StrategyId): boolean[] {
+  return holdState(singleSignal(s, { ...p, strategy: id, combo: undefined, customSignal: undefined }));
+}
+
 function signalSeries(s: DailySeries, p: BacktestParams): (boolean | null)[] {
+  if (p.customSignal) return p.customSignal;
   if (p.combo && p.combo.ids.length > 1) {
     const states = p.combo.ids.map(id => holdState(singleSignal(s, { ...p, strategy: id, combo: undefined })));
     const k = states.length;

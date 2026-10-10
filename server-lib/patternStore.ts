@@ -33,23 +33,29 @@ async function cached(key: string, load: () => Promise<any>) {
   return pending;
 }
 
-export function getPatternLatest() {
-  return cached('latest', async () => {
+/** 讀「最新清單」：一份摘要文件 + 多份分段文件（latest_0、latest_1 …） */
+function readLatest(collection: string) {
+  return cached(`${collection}:latest`, async () => {
     const db = await getDb();
-    const meta = await db.collection('pattern_scan').doc('latest').get();
+    const meta = await db.collection(collection).doc('latest').get();
     if (!meta.exists) return null;
     const m = meta.data();
-    const refs = Array.from({ length: m.chunks || 0 }, (_, i) => db.collection('pattern_scan').doc(`latest_${i}`));
+    const refs = Array.from({ length: m.chunks || 0 }, (_, i) => db.collection(collection).doc(`latest_${i}`));
     const docs = refs.length ? await db.getAll(...refs) : [];
     const rows = docs.flatMap((d: any) => (d.exists ? d.data().rows || [] : []));
     return { ...m, rows };
   });
 }
-
-export function getPatternBacktest() {
-  return cached('backtest', async () => {
+function readDoc(collection: string, id: string) {
+  return cached(`${collection}:${id}`, async () => {
     const db = await getDb();
-    const doc = await db.collection('pattern_scan').doc('backtest').get();
+    const doc = await db.collection(collection).doc(id).get();
     return doc.exists ? doc.data() : null;
   });
 }
+
+export const getPatternLatest = () => readLatest('pattern_scan');
+export const getPatternBacktest = () => readDoc('pattern_scan', 'backtest');
+/** 台股下跌預警（教學版） */
+export const getRiskLatest = () => readLatest('risk_scan');
+export const getRiskBacktest = () => readDoc('risk_scan', 'backtest');

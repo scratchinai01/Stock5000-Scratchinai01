@@ -313,14 +313,14 @@ function PatternStudyCard({ r, bt, onClose }: { r: Row; bt: Backtest | null; onC
     <StudyCardModal title={`型態教學卡：${r.name}`} filename={`pattern_${r.id}_${r.date.replace(/-/g, '')}.png`} onClose={onClose}>
       <div style={{ background: head }} className="text-white px-6 pt-5 pb-6">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-[16px] font-black px-3 py-1 rounded-full" style={{ background: 'rgba(0,0,0,0.22)' }}>📖 型態教學卡 · 三角收斂{up ? '突破' : '跌破'}</span>
-          <span className="text-[15px] font-mono font-bold">資料日 {r.date}</span>
+          <span className="text-[16px] font-black px-3 py-1 rounded-full whitespace-nowrap" style={{ background: 'rgba(0,0,0,0.22)' }}>📖 型態教學卡 · 三角收斂{up ? '突破' : '跌破'}</span>
+          <span className="text-[15px] font-mono font-bold whitespace-nowrap">資料日 {r.date}</span>
         </div>
         <div className="mt-3 text-[34px] font-black leading-tight">{r.name} <span className="font-mono text-[26px] opacity-90">{r.id}</span></div>
         <div className="mt-2 flex flex-wrap gap-2 text-[16px] font-black">
-          <span className="px-3 py-1 rounded-full bg-white/20">{STATUS[r.status].label}</span>
-          <span className="px-3 py-1 rounded-full bg-white/20">{SHAPE[r.shape]}</span>
-          <span className="px-3 py-1 rounded-full bg-white text-slate-900">{g} 級 · 符合 {passed}/9 項</span>
+          <span className="px-3 py-1 rounded-full bg-white/20 whitespace-nowrap">{STATUS[r.status].label}</span>
+          <span className="px-3 py-1 rounded-full bg-white/20 whitespace-nowrap">{SHAPE[r.shape]}</span>
+          <span className="px-3 py-1 rounded-full bg-white text-slate-900 whitespace-nowrap">{g} 級 · 符合 {passed}/9 項</span>
         </div>
       </div>
       <div className="px-6 py-5 space-y-5">

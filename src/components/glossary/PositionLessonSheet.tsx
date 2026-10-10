@@ -5,6 +5,7 @@ import { useGlossary } from '../../context/GlossaryContext';
 import { POSITION_LESSONS, GENERIC_LESSON } from '../../data/positionLessons';
 import { TERMS_BY_ID } from '../../data/financialTerms';
 import { pnlDirection, positionPnL } from '../../utils/orderRules';
+import { COPYRIGHT, DESIGNER } from '../StudyCardModal';
 
 /**
  * 持倉小學堂：對帳單每一筆部位的教學卡，用學生自己的真實數字講解，並可下載成圖片。
@@ -134,7 +135,10 @@ export function PositionLessonSheet({ instruments, profile }: { instruments: Ins
     setMsg(null);
     const node = cardRef.current;
     const prevWidth = node.style.width;
+    const root = document.documentElement;
+    const prevRoot = root.style.fontSize;
     try {
+      root.style.fontSize = '16px';
       // 固定 720px 寬輸出，手機和電腦下載的卡片長得一樣
       node.style.width = '720px';
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -146,6 +150,7 @@ export function PositionLessonSheet({ instruments, profile }: { instruments: Ins
       });
       const filename = `lesson_${serial ? `No${serial}_` : ''}${pos.symbol}_${now.replace(/\D/g, '').slice(0, 8)}.png`;
       node.style.width = prevWidth;
+      root.style.fontSize = prevRoot;
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], filename, { type: 'image/png' });
       const nav: any = navigator;
@@ -167,6 +172,7 @@ export function PositionLessonSheet({ instruments, profile }: { instruments: Ins
       if (e?.name !== 'AbortError') setMsg(`下載失敗：${e?.message || e}`);
     } finally {
       node.style.width = prevWidth;
+      root.style.fontSize = prevRoot;
       setBusy(false);
     }
   };
@@ -296,6 +302,10 @@ export function PositionLessonSheet({ instruments, profile }: { instruments: Ins
                 <span>{instruments.some(i => i.symbol === pos.symbol && !i.isMock) ? '報價來源：市場資料' : '價格為系統最後記錄'} · {now}</span>
               </div>
               <div style={{ fontSize: 14, color: SUB }}>模擬交易教學用途，不是投資建議。</div>
+              <div style={{ background: '#f4efe4', borderRadius: 14, padding: '8px 12px', fontSize: 14, color: SUB, textAlign: 'center', lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 900, color: INK }}>{COPYRIGHT}</div>
+                <div>{DESIGNER}</div>
+              </div>
             </div>
           </div>
         </div>

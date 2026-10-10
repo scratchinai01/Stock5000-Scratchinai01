@@ -7,6 +7,8 @@ import { Download, X } from 'lucide-react';
  * 下載固定用 720px 寬，手機和電腦存下來的卡片長得一樣；手機會開啟分享選單，可存到相簿。
  */
 export const PAPER = '#fbf8f2';
+export const COPYRIGHT = '© 版權所有 智慧未來領袖學苑';
+export const DESIGNER = '系統設計暨執行長 程瑋翔｜LINE ID：snake0203cheng';
 export const INK = '#1f2630';
 
 export function StudyCardModal({ title, filename, onClose, children }: { title: string; filename: string; onClose: () => void; children: React.ReactNode }) {
@@ -26,11 +28,16 @@ export function StudyCardModal({ title, filename, onClose, children }: { title: 
     setBusy(true);
     setMsg(null);
     const prev = node.style.width;
+    // 「尊長超大」等字體設定會放大整頁的間距（rem），下載時暫時還原成標準大小，卡片排版才不會被擠壞
+    const root = document.documentElement;
+    const prevRoot = root.style.fontSize;
     try {
+      root.style.fontSize = '16px';
       node.style.width = '720px';
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       const dataUrl = await toPng(node, { pixelRatio: 2, backgroundColor: PAPER, skipFonts: true, filter: n => !(n instanceof HTMLElement && n.dataset.noexport === '1') });
       node.style.width = prev;
+      root.style.fontSize = prevRoot;
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], filename, { type: 'image/png' });
       const nav: any = navigator;
@@ -52,6 +59,7 @@ export function StudyCardModal({ title, filename, onClose, children }: { title: 
       if (e?.name !== 'AbortError') setMsg(`下載失敗：${e?.message || e}`);
     } finally {
       node.style.width = prev;
+      root.style.fontSize = prevRoot;
       setBusy(false);
     }
   };
@@ -84,8 +92,8 @@ export function CardSection({ title, children }: { title: string; children: Reac
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2.5">
-        <span className="text-[21px] font-black" style={{ color: INK }}>{title}</span>
-        <span className="flex-1 h-px" style={{ background: '#e6dfd1' }} />
+        <span className="text-[21px] font-black" style={{ color: INK, whiteSpace: 'nowrap', flexShrink: 0 }}>{title}</span>
+        <span className="flex-1 h-px" style={{ background: '#e6dfd1', minWidth: 24 }} />
       </div>
       {children}
     </div>
@@ -105,9 +113,13 @@ export const cardNow = () =>
 export const CardFooter = ({ note }: { note: string }) => (
   <div className="px-6 pb-6 pt-2 space-y-2">
     <div className="text-[14px] leading-relaxed text-slate-500">{note}</div>
-    <div className="flex items-center justify-between text-[14px] text-slate-500 border-t pt-2" style={{ borderColor: '#e6dfd1' }}>
-      <span>📈 5000萬股市大富翁 · 教學用途</span>
-      <span className="font-mono">製卡 {cardNow()}</span>
+    <div className="flex items-center justify-between gap-3 text-[14px] text-slate-500 border-t pt-2" style={{ borderColor: '#e6dfd1' }}>
+      <span style={{ whiteSpace: 'nowrap' }}>📈 5000萬股市大富翁 · 教學用途</span>
+      <span className="font-mono" style={{ whiteSpace: 'nowrap' }}>製卡 {cardNow()}</span>
+    </div>
+    <div className="rounded-xl px-3 py-2 text-[14px] leading-relaxed text-center" style={{ background: '#f4efe4', color: '#4b5563' }}>
+      <div className="font-black" style={{ color: INK }}>{COPYRIGHT}</div>
+      <div>{DESIGNER}</div>
     </div>
   </div>
 );

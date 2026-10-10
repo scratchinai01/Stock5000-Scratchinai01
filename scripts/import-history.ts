@@ -192,6 +192,13 @@ interface Sink {
   /** 每日模式：先刪掉當天資料再寫入，重跑不會重複 */
   replaceBqDay(date: string, rows: any[]): Promise<void>;
   dedupeBq(): Promise<void>;
+  /** 前一個交易日（BigQuery 已有資料的最近一天）與當天已存的還原收盤價 */
+  storedAdjBefore(date: string): Promise<{ prevDate: string | null; adj: Map<string, number> }>;
+  /** 還沒重抓完的除權息股票（跨天接續） */
+  getRefreshQueue(): Promise<string[]>;
+  setRefreshQueue(ids: string[]): Promise<void>;
+  /** 整檔換掉 BigQuery 裡這些股票的全部歷史 */
+  replaceBqStocks(ids: string[], rows: any[]): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -323,6 +330,40 @@ async function cloudSink(): Promise<Sink> {
       });
       log('✔ BigQuery 已去除重複列');
     },
+    async storedAdjBefore(date) {
+      const [rows] = await bq.query({
+        query: `WITH p AS (SELECT MAX(date) d FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\` WHERE date < @d AND date >= DATE_SUB(@d, INTERVAL 30 DAY))
+                SELECT CAST(t.date AS STRING) AS d, t.stock_id, t.adj_close FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\` t, p
+                WHERE t.date = p.d AND t.date >= DATE_SUB(@d, INTERVAL 30 DAY)`,
+        params: { d: date },
+        types: { d: 'DATE' },
+        location: BQ_LOCATION,
+      });
+      const adj = new Map<string, number>();
+      let prevDate: string | null = null;
+      for (const r of rows as any[]) {
+        prevDate = r.d;
+        if (r.adj_close != null) adj.set(String(r.stock_id), Number(r.adj_close));
+      }
+      return { prevDate, adj };
+    },
+    async getRefreshQueue() {
+      const snap = await db.collection('import_state').doc('adj_refresh').get();
+      return (snap.exists && snap.data()?.queue) || [];
+    },
+    async setRefreshQueue(ids) {
+      await db.collection('import_state').doc('adj_refresh').set({ queue: ids, updatedAt: new Date().toISOString() });
+    },
+    async replaceBqStocks(ids, rows) {
+      if (ids.length === 0) return;
+      await bq.query({
+        query: `DELETE FROM \`${PROJECT}.${BQ_DATASET}.${BQ_TABLE}\` WHERE stock_id IN UNNEST(@ids)`,
+        params: { ids },
+        types: { ids: ['STRING'] },
+        location: BQ_LOCATION,
+      });
+      await loadNdjson(rows, 'WRITE_APPEND');
+    },
     async close() {
       await writer.close();
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -374,6 +415,20 @@ function localSink(): Sink {
       fs.writeFileSync(bqFile, [...kept, ...rows.map(r => JSON.stringify(r))].join('\n') + '\n');
     },
     async dedupeBq() {},
+    async storedAdjBefore() {
+      return { prevDate: null, adj: new Map() };
+    },
+    async getRefreshQueue() {
+      return readDoc(path.join(out, 'adj_refresh.json'))?.queue || [];
+    },
+    async setRefreshQueue(ids) {
+      fs.writeFileSync(path.join(out, 'adj_refresh.json'), JSON.stringify({ queue: ids }));
+    },
+    async replaceBqStocks(ids, rows) {
+      const drop = new Set(ids);
+      const kept = fs.existsSync(bqFile) ? fs.readFileSync(bqFile, 'utf8').split('\n').filter(l => l && !drop.has(JSON.parse(l).stock_id)) : [];
+      fs.writeFileSync(bqFile, [...kept, ...rows.map(r => JSON.stringify(r))].join('\n') + '\n');
+    },
     async close() {},
   };
 }
@@ -469,6 +524,77 @@ async function runDaily(sink: Sink) {
   }
   await sink.replaceBqDay(date, bqRows);
   log(`✅ ${date} 已更新 ${n} 檔`);
+  await refreshAdjusted(sink, date, infoById);
+}
+
+/**
+ * 除權息、減資、分割後，行情來源會「往回重算」之前每一天的還原股價。
+ * 偵測方式：再抓一次「前一個交易日」的還原收盤價，和資料庫裡存的比對；不一樣就代表這檔被往回調整過，
+ * 整檔重抓歷史並覆寫 Firestore 與 BigQuery。當天做不完的排進佇列，下次接著做。
+ */
+async function refreshAdjusted(sink: Sink, date: string, infoById: Map<string, StockInfo>) {
+  const flagged: string[] = [];
+  const { prevDate, adj: stored } = await sink.storedAdjBefore(date);
+  if (prevDate) {
+    const apiPrev = await finmind('TaiwanStockPriceAdj', { start_date: prevDate, end_date: prevDate });
+    for (const r of apiPrev) {
+      const id = String(r.stock_id);
+      if (!infoById.has(id)) continue;
+      const old = stored.get(id);
+      const now = Number(r.close);
+      if (old != null && old > 0 && now > 0 && Math.abs(now / old - 1) > 1e-6) flagged.push(id);
+    }
+    log(`🔎 還原股價比對（${prevDate}）：${flagged.length} 檔被往回調整（除權息／減資／分割）`);
+  }
+  const queue = [...new Set([...(await sink.getRefreshQueue()), ...flagged])].filter(id => infoById.has(id));
+  if (queue.length === 0) {
+    await sink.setRefreshQueue([]);
+    return;
+  }
+  const cap = Number(opt('refresh-cap', '300'));
+  const todo = queue.slice(0, cap);
+  const later = queue.slice(cap);
+  const loadedAt = new Date().toISOString();
+  let batchIds: string[] = [];
+  let batchRows: any[] = [];
+  let doneCount = 0;
+  const flushBq = async () => {
+    await sink.replaceBqStocks(batchIds, batchRows);
+    batchIds = [];
+    batchRows = [];
+  };
+  for (const id of todo) {
+    const info = infoById.get(id)!;
+    try {
+      const params = { data_id: id, start_date: START_DATE, end_date: date };
+      const raw = await finmind('TaiwanStockPrice', params);
+      const adj = await finmind('TaiwanStockPriceAdj', params);
+      const bars = mergeBars(raw, adj);
+      if (bars.length === 0) continue;
+      await sink.writeStock(info, toYearDocs(info, bars), {
+        stock_id: id,
+        name: info.stock_name,
+        market: info.market,
+        industry: info.industry,
+        firstDate: bars[0].date,
+        lastDate: bars[bars.length - 1].date,
+        years: [...new Set(bars.map(b => Number(b.date.slice(0, 4))))],
+        bars: bars.length,
+        adjRefreshedAt: loadedAt,
+        updatedAt: loadedAt,
+      });
+      batchIds.push(id);
+      batchRows.push(...toBqRows(info, bars, loadedAt));
+      doneCount++;
+      if (batchIds.length >= 25) await flushBq();
+    } catch (e: any) {
+      later.push(id);
+      log(`✖ 重抓 ${id} 失敗，下次再試：${e.message}`);
+    }
+  }
+  await flushBq();
+  await sink.setRefreshQueue(later);
+  log(`✅ 還原股價重抓完成 ${doneCount} 檔${later.length ? `，剩 ${later.length} 檔排到下次` : ''}`);
 }
 
 async function main() {

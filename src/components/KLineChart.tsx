@@ -85,30 +85,39 @@ export const KLineChart: React.FC<KLineChartProps> = ({
   // ─────────────────────────────────────────────────────────────
   // 1. Fetch Real Data from 市場資料 Engine (/api/finmind/kline)
   // ─────────────────────────────────────────────────────────────
+  const fetchSeq = useRef(0);
   const fetchKLineData = useCallback(async () => {
+    // 伺服器剛喚醒（冷啟動）時第一次查詢可能失敗，自動重試，最多 3 次
+    const seq = ++fetchSeq.current;
     setIsLoading(true);
     setFetchError(null);
-    try {
-      const url = `/api/finmind/kline?data_id=${encodeURIComponent(instrument.symbol)}&period=${period}`;
-      const res = await fetch(url);
-      const json = await res.json();
-
-      if (res.ok && json.success && Array.isArray(json.bars) && json.bars.length > 0) {
-        setBars(json.bars);
-        setLastDataTime(json.last_data_time || '');
-        setDataReceivedTime(json.fetch_time || new Date().toLocaleTimeString('zh-TW', { hour12: false }));
-        setDatasetName(json.dataset || 'TaiwanStockPrice');
-        setPanOffset(0); // reset to latest
-      } else {
-        setFetchError(json.error || `市場資料 API 查無此標的行情數據 (${res.status})`);
-        setBars([]);
+    const url = `/api/finmind/kline?data_id=${encodeURIComponent(instrument.symbol)}&period=${period}`;
+    let lastErr = '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 3000));
+      if (seq !== fetchSeq.current) return; // 已換商品或週期
+      try {
+        const res = await fetch(url);
+        const json = await res.json();
+        if (seq !== fetchSeq.current) return;
+        if (res.ok && json.success && Array.isArray(json.bars) && json.bars.length > 0) {
+          setBars(json.bars);
+          setLastDataTime(json.last_data_time || '');
+          setDataReceivedTime(json.fetch_time || new Date().toLocaleTimeString('zh-TW', { hour12: false }));
+          setDatasetName(json.dataset || 'TaiwanStockPrice');
+          setPanOffset(0); // reset to latest
+          setIsLoading(false);
+          return;
+        }
+        lastErr = json.error || `查無此標的行情數據 (${res.status})`;
+      } catch (err: any) {
+        lastErr = `連線失敗：${err.message}`;
       }
-    } catch (err: any) {
-      setFetchError(`連線至 失敗: ${err.message}`);
-      setBars([]);
-    } finally {
-      setIsLoading(false);
     }
+    if (seq !== fetchSeq.current) return;
+    setFetchError(lastErr);
+    setBars([]);
+    setIsLoading(false);
   }, [instrument.symbol, period]);
 
   useEffect(() => {

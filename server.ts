@@ -18,6 +18,7 @@ import {
 } from './src/utils/twHolidays';
 import { getHistory } from './server-lib/history';
 import { registerOrderRoutes } from './server-lib/orders';
+import { getPatternLatest, getPatternBacktest } from './server-lib/patternStore';
 
 dotenv.config();
 
@@ -1057,6 +1058,30 @@ registerOrderRoutes(app, {
   getToken: () => currentFinmindToken,
   getCachedQuote: (symbol: string) => authenticQuotesCache[symbol.toUpperCase()] || authenticQuotesCache[symbol],
   futuresCode: (symbol: string) => FUTURES_CODE_MAP[symbol.toUpperCase()] || symbol.toUpperCase(),
+});
+
+// 型態選股（三角收斂突破）：每日收盤後由排程工作計算，這裡只讀結果
+app.get('/api/pattern/latest', async (_req, res) => {
+  try {
+    const data = await getPatternLatest();
+    if (!data) return res.status(404).json({ error: '今天的型態掃描還沒產生，收盤後排程完成就會出現' });
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json(data);
+  } catch (e: any) {
+    console.warn('[Pattern] latest', e.message);
+    res.status(503).json({ error: '型態掃描資料暫時讀取不到，請稍後再試' });
+  }
+});
+app.get('/api/pattern/backtest', async (_req, res) => {
+  try {
+    const data = await getPatternBacktest();
+    if (!data) return res.status(404).json({ error: '歷史回測尚未執行' });
+    res.set('Cache-Control', 'public, max-age=600');
+    res.json(data);
+  } catch (e: any) {
+    console.warn('[Pattern] backtest', e.message);
+    res.status(503).json({ error: '型態掃描資料暫時讀取不到，請稍後再試' });
+  }
 });
 
 app.get('/api/history/daily', async (req, res) => {

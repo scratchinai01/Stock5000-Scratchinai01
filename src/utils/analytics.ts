@@ -92,6 +92,102 @@ export function bollinger(close: number[], n = 20, mult = 2) {
   return { mid, upper, lower };
 }
 
+export function ema(values: number[], n: number): (number | null)[] {
+  const out: (number | null)[] = new Array(values.length).fill(null);
+  if (values.length < n) return out;
+  let e = values.slice(0, n).reduce((a, b) => a + b, 0) / n;
+  out[n - 1] = e;
+  const k = 2 / (n + 1);
+  for (let i = n; i < values.length; i++) { e = values[i] * k + e * (1 - k); out[i] = e; }
+  return out;
+}
+
+/** MACD：DIF = EMA(快) − EMA(慢)，MACD 線（訊號線）= DIF 的 EMA */
+export function macd(close: number[], fast = 12, slow = 26, signal = 9) {
+  const f = ema(close, fast), sl = ema(close, slow);
+  const dif: (number | null)[] = close.map((_, i) => (f[i] !== null && sl[i] !== null ? f[i]! - sl[i]! : null));
+  const start = dif.findIndex(v => v !== null);
+  const sig: (number | null)[] = new Array(close.length).fill(null);
+  if (start >= 0) {
+    const e = ema(dif.slice(start) as number[], signal);
+    e.forEach((v, j) => (sig[start + j] = v));
+  }
+  return { dif, signal: sig };
+}
+
+/** 前 n 天（不含當天）的最高價／最低價 */
+export function priorHighest(v: number[], n: number): (number | null)[] {
+  return v.map((_, i) => (i < n ? null : Math.max(...v.slice(i - n, i))));
+}
+export function priorLowest(v: number[], n: number): (number | null)[] {
+  return v.map((_, i) => (i < n ? null : Math.min(...v.slice(i - n, i))));
+}
+
+/** DMI 趨向指標（Wilder 平滑）：+DI、−DI、ADX */
+export function dmi(s: DailySeries, n = 14) {
+  const len = s.close.length;
+  const pdi: (number | null)[] = new Array(len).fill(null), mdi: (number | null)[] = new Array(len).fill(null), adx: (number | null)[] = new Array(len).fill(null);
+  let tr = 0, pdm = 0, mdm = 0, adxv = 0, dxSum = 0, dxCount = 0;
+  for (let i = 1; i < len; i++) {
+    const up = s.high[i] - s.high[i - 1], dn = s.low[i - 1] - s.low[i];
+    const t = Math.max(s.high[i] - s.low[i], Math.abs(s.high[i] - s.close[i - 1]), Math.abs(s.low[i] - s.close[i - 1]));
+    const p = up > dn && up > 0 ? up : 0, m = dn > up && dn > 0 ? dn : 0;
+    if (i <= n) { tr += t; pdm += p; mdm += m; } else { tr = tr - tr / n + t; pdm = pdm - pdm / n + p; mdm = mdm - mdm / n + m; }
+    if (i < n || tr <= 0) continue;
+    const P = (100 * pdm) / tr, M = (100 * mdm) / tr;
+    pdi[i] = P; mdi[i] = M;
+    const dx = P + M > 0 ? (100 * Math.abs(P - M)) / (P + M) : 0;
+    if (dxCount < n) { dxSum += dx; dxCount++; if (dxCount === n) { adxv = dxSum / n; adx[i] = adxv; } }
+    else { adxv = (adxv * (n - 1) + dx) / n; adx[i] = adxv; }
+  }
+  return { pdi, mdi, adx };
+}
+
+/** 拋物線 SAR：回傳每天是否為多頭（true）／空頭（false） */
+export function sarTrend(s: DailySeries, step = 0.02, max = 0.2): (boolean | null)[] {
+  const len = s.close.length;
+  const out: (boolean | null)[] = new Array(len).fill(null);
+  if (len < 3) return out;
+  let up = s.close[1] >= s.close[0];
+  let sar = up ? Math.min(s.low[0], s.low[1]) : Math.max(s.high[0], s.high[1]);
+  let ep = up ? Math.max(s.high[0], s.high[1]) : Math.min(s.low[0], s.low[1]);
+  let af = step;
+  out[1] = up;
+  for (let i = 2; i < len; i++) {
+    sar = sar + af * (ep - sar);
+    if (up) {
+      sar = Math.min(sar, s.low[i - 1], s.low[i - 2]);
+      if (s.low[i] < sar) { up = false; sar = ep; ep = s.low[i]; af = step; }
+      else if (s.high[i] > ep) { ep = s.high[i]; af = Math.min(af + step, max); }
+    } else {
+      sar = Math.max(sar, s.high[i - 1], s.high[i - 2]);
+      if (s.high[i] > sar) { up = true; sar = ep; ep = s.high[i]; af = step; }
+      else if (s.low[i] < ep) { ep = s.low[i]; af = Math.min(af + step, max); }
+    }
+    out[i] = up;
+  }
+  return out;
+}
+
+/** 威廉指標 %R（−100～0，越接近 −100 越超賣） */
+export function williamsR(s: DailySeries, n = 14): (number | null)[] {
+  return s.close.map((c, i) => {
+    if (i < n - 1) return null;
+    const hh = Math.max(...s.high.slice(i - n + 1, i + 1)), ll = Math.min(...s.low.slice(i - n + 1, i + 1));
+    return hh === ll ? -50 : ((hh - c) / (hh - ll)) * -100;
+  });
+}
+
+/** OBV 能量潮 */
+export function obv(s: DailySeries): number[] {
+  const out: number[] = [0];
+  for (let i = 1; i < s.close.length; i++) {
+    const v = s.volume[i] || 0;
+    out.push(out[i - 1] + (s.close[i] > s.close[i - 1] ? v : s.close[i] < s.close[i - 1] ? -v : 0));
+  }
+  return out;
+}
+
 // ───────────────────────── 績效統計 ─────────────────────────
 export interface PerformanceStats {
   startDate: string;
@@ -227,7 +323,11 @@ export function betaCorrelation(
 }
 
 // ───────────────────────── 策略回測 ─────────────────────────
-export type StrategyId = 'buy_hold' | 'ma_cross' | 'rsi' | 'kd' | 'boll' | 'dca';
+export type StrategyId =
+  | 'buy_hold' | 'dca'
+  | 'ma_cross' | 'price_ma' | 'macd' | 'donchian' | 'dmi' | 'sar' | 'momentum'
+  | 'rsi' | 'kd' | 'boll' | 'bias' | 'williams' | 'down_streak'
+  | 'vol_breakout' | 'obv';
 
 export interface BacktestParams {
   strategy: StrategyId;
@@ -239,7 +339,26 @@ export interface BacktestParams {
   short?: number; long?: number;          // 均線
   rsiPeriod?: number; rsiLow?: number; rsiHigh?: number;
   bollPeriod?: number; bollMult?: number;
+  maPeriod?: number;                                        // 站上均線
+  macdFast?: number; macdSlow?: number; macdSignal?: number;
+  donchianIn?: number; donchianOut?: number;                // 唐奇安通道
+  dmiPeriod?: number; adxMin?: number;
+  sarStep?: number; sarMax?: number;
+  momPeriod?: number;                                       // 動能（N 日報酬）
+  biasPeriod?: number; biasPct?: number;                    // 乖離率（負乖離 %）
+  wrPeriod?: number; wrBuy?: number; wrSell?: number;       // 威廉 %R（輸入正數，代表 −數值）
+  downDays?: number; holdDays?: number;                     // 連續下跌反彈
+  vbPeriod?: number; vbMult?: number;                       // 帶量突破
+  obvPeriod?: number;
+  // 風險控管（所有擇時策略共用；0 代表不啟用）
+  stopLoss?: number;        // 停損 %（收盤跌破成本 X% → 隔天開盤賣出）
+  takeProfit?: number;      // 停利 %
+  maxHold?: number;         // 最長持有交易日
+  marketFilter?: number;    // 大盤濾網：0050 收盤在 N 日均線之上才買進（0 = 不使用）
 }
+
+/** 大盤濾網用的市場序列（日期 → 收盤價） */
+export interface MarketSeries { date: string[]; close: number[] }
 
 export interface Trade {
   date: string;
@@ -249,6 +368,7 @@ export interface Trade {
   fee: number;
   tax: number;
   pnl?: number; // 賣出時的已實現損益（含成本）
+  reason?: '停損' | '停利' | '持有到期';
 }
 
 export interface BacktestResult {
@@ -296,13 +416,84 @@ function signalSeries(s: DailySeries, p: BacktestParams): (boolean | null)[] {
       if (lower[i] === null) continue;
       if (s.close[i] < lower[i]!) want[i] = true;        // 跌破下軌買進
       else if (s.close[i] > mid[i]!) want[i] = false;    // 站回中軌賣出
+    }  } else if (p.strategy === 'price_ma') {
+    const m = sma(s.close, p.maPeriod ?? 60);
+    for (let i = 0; i < n; i++) if (m[i] !== null) want[i] = s.close[i] > m[i]!;
+  } else if (p.strategy === 'macd') {
+    const { dif, signal } = macd(s.close, p.macdFast ?? 12, p.macdSlow ?? 26, p.macdSignal ?? 9);
+    for (let i = 0; i < n; i++) if (dif[i] !== null && signal[i] !== null) want[i] = dif[i]! > signal[i]!;
+  } else if (p.strategy === 'donchian') {
+    const hi = priorHighest(s.high, p.donchianIn ?? 20), lo = priorLowest(s.low, p.donchianOut ?? 10);
+    for (let i = 0; i < n; i++) {
+      if (hi[i] !== null && s.close[i] > hi[i]!) want[i] = true;          // 突破前 N 日最高
+      else if (lo[i] !== null && s.close[i] < lo[i]!) want[i] = false;    // 跌破前 M 日最低
     }
+  } else if (p.strategy === 'dmi') {
+    const { pdi, mdi, adx } = dmi(s, p.dmiPeriod ?? 14);
+    for (let i = 0; i < n; i++) {
+      if (pdi[i] === null || mdi[i] === null) continue;
+      if (pdi[i]! > mdi[i]! && adx[i] !== null && adx[i]! >= (p.adxMin ?? 20)) want[i] = true;
+      else if (pdi[i]! < mdi[i]!) want[i] = false;
+    }
+  } else if (p.strategy === 'sar') {
+    const t = sarTrend(s, p.sarStep ?? 0.02, p.sarMax ?? 0.2);
+    for (let i = 0; i < n; i++) want[i] = t[i];
+  } else if (p.strategy === 'momentum') {
+    const k = p.momPeriod ?? 120;
+    for (let i = k; i < n; i++) want[i] = s.close[i] > s.close[i - k];
+  } else if (p.strategy === 'bias') {
+    const m = sma(s.close, p.biasPeriod ?? 20);
+    for (let i = 0; i < n; i++) {
+      if (m[i] === null) continue;
+      const b = (s.close[i] / m[i]! - 1) * 100;
+      if (b < -(p.biasPct ?? 7)) want[i] = true;   // 負乖離過大買進
+      else if (b >= 0) want[i] = false;            // 回到均線賣出
+    }
+  } else if (p.strategy === 'williams') {
+    const r = williamsR(s, p.wrPeriod ?? 14);
+    for (let i = 0; i < n; i++) {
+      if (r[i] === null) continue;
+      if (r[i]! < -(p.wrBuy ?? 80)) want[i] = true;
+      else if (r[i]! > -(p.wrSell ?? 20)) want[i] = false;
+    }
+  } else if (p.strategy === 'down_streak') {
+    const dn = p.downDays ?? 3, hold = p.holdDays ?? 5;
+    let streak = 0, entry = -1;
+    for (let i = 1; i < n; i++) {
+      streak = s.close[i] < s.close[i - 1] ? streak + 1 : 0;
+      if (entry >= 0) {
+        if (i - entry >= hold) { want[i] = false; entry = -1; }
+      } else if (streak >= dn) { want[i] = true; entry = i; }
+    }
+  } else if (p.strategy === 'vol_breakout') {
+    const k = p.vbPeriod ?? 20;
+    const hi = priorHighest(s.high, k), m = sma(s.close, k);
+    const avgVol = sma(s.volume.map(v => v || 0), k);
+    for (let i = 1; i < n; i++) {
+      if (hi[i] === null || m[i] === null || avgVol[i - 1] === null) continue;
+      if (s.close[i] > hi[i]! && s.volume[i] > (p.vbMult ?? 2) * avgVol[i - 1]!) want[i] = true;  // 帶量突破
+      else if (s.close[i] < m[i]!) want[i] = false;                                               // 跌破均線出場
+    }
+  } else if (p.strategy === 'obv') {
+    const o = obv(s), m = sma(o, p.obvPeriod ?? 20);
+    for (let i = 0; i < n; i++) if (m[i] !== null) want[i] = o[i] > m[i]!;
   }
   return want;
 }
 
-export function backtest(s: DailySeries, p: BacktestParams): BacktestResult {
+export function backtest(s: DailySeries, p: BacktestParams, market?: MarketSeries | null): BacktestResult {
   const n = s.close.length;
+  // 大盤濾網：0050 收盤在 N 日均線之上才允許買進（沒有大盤資料的日期不設限）
+  let marketOk: (boolean | null)[] | null = null;
+  if (market && (p.marketFilter ?? 0) > 0) {
+    const m = sma(market.close, p.marketFilter!);
+    const ok = new Map<string, boolean>();
+    market.date.forEach((d, i) => { if (m[i] !== null) ok.set(d, market.close[i] > m[i]!); });
+    marketOk = s.date.map(d => (ok.has(d) ? ok.get(d)! : null));
+  }
+  const sl = (p.stopLoss ?? 0) / 100, tp = (p.takeProfit ?? 0) / 100, maxHold = p.maxHold ?? 0;
+  let entryPrice = 0, entryIdx = -1, forcedExit = false, waitReset = false;
+  let exitReason: Trade['reason'];
   const fee = (amount: number) => Math.max(Math.round(amount * p.feeRate * p.feeDiscount), amount > 0 ? p.minFee : 0);
   const want = signalSeries(s, p);
   const isDca = p.strategy === 'dca';
@@ -336,7 +527,8 @@ export function backtest(s: DailySeries, p: BacktestParams): BacktestResult {
     cash += gross - f - t;
     const pnl = gross - f - t - costBasis;
     totalFees += f; totalTax += t; closed++; if (pnl > 0) wins++;
-    trades.push({ date: s.date[i], side: '賣出', price, shares, fee: f, tax: t, pnl });
+    trades.push({ date: s.date[i], side: '賣出', price, shares, fee: f, tax: t, pnl, ...(exitReason ? { reason: exitReason } : {}) });
+    exitReason = undefined;
     shares = 0; costBasis = 0;
   };
 
@@ -351,9 +543,20 @@ export function backtest(s: DailySeries, p: BacktestParams): BacktestResult {
         }
       } else {
         const w = want[i - 1];
-        if (w === true && !holding) { buyAll(i, cash); holding = shares > 0; }
+        // 強制出場後，要等訊號先解除、再重新出現，才會再買進（避免同一個訊號反覆進出）
+        if (waitReset && w !== true) waitReset = false;
+        const mOk = marketOk ? marketOk[i - 1] !== false : true;
+        if (forcedExit && holding) { sellAll(i); holding = false; forcedExit = false; waitReset = true; }
+        else if (w === true && !holding && !waitReset && mOk) { buyAll(i, cash); holding = shares > 0; if (holding) { entryPrice = s.open[i]; entryIdx = i; } }
         else if (w === false && holding) { sellAll(i); holding = false; }
       }
+    }
+    // 收盤檢查停損／停利／持有天數（隔天開盤執行）
+    if (!isDca && holding && entryIdx >= 0) {
+      const r = s.close[i] / entryPrice - 1;
+      if (sl > 0 && r <= -sl) { forcedExit = true; exitReason = '停損'; }
+      else if (tp > 0 && r >= tp) { forcedExit = true; exitReason = '停利'; }
+      else if (maxHold > 0 && i - entryIdx + 1 >= maxHold) { forcedExit = true; exitReason = '持有到期'; }
     }
     if (shares > 0) holdDays++;
     equity.push(cash + shares * s.close[i]);

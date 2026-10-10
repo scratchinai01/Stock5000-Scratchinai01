@@ -212,14 +212,45 @@ type Tab = 'trend' | 'stats' | 'backtest' | 'stockRisk' | 'pattern' | 'risk';
 export type ProMode = 'stock' | 'scan';
 const STOCK_TABS = ['trend', 'stats', 'backtest', 'stockRisk'] as const;
 
-const STRATEGIES: { id: StrategyId; label: string; desc: string }[] = [
-  { id: 'buy_hold', label: '買進持有', desc: '第一天買進後一路持有，作為比較基準。' },
-  { id: 'dca', label: '定期定額', desc: '每月第一個交易日以固定金額買進。' },
-  { id: 'ma_cross', label: '均線交叉', desc: '短均線在長均線之上就持有，跌破就出場。' },
-  { id: 'rsi', label: 'RSI 超買超賣', desc: 'RSI 低於下限買進，高於上限賣出。' },
-  { id: 'kd', label: 'KD 交叉', desc: 'K 值在 20 以下黃金交叉買進，80 以上死亡交叉賣出。' },
-  { id: 'boll', label: '布林通道', desc: '收盤跌破下軌買進，站回中軌賣出。' },
+type StrategyGroup = '基準' | '趨勢追蹤' | '逆勢反轉' | '量價';
+type ParamKey = keyof BacktestParams;
+const STRATEGIES: { id: StrategyId; group: StrategyGroup; label: string; desc: string; fields?: { key: ParamKey; label: string; step?: number }[] }[] = [
+  { id: 'buy_hold', group: '基準', label: '買進持有', desc: '第一天買進後一路持有，作為比較基準。' },
+  { id: 'dca', group: '基準', label: '定期定額', desc: '每月第一個交易日以固定金額買進。' },
+
+  { id: 'ma_cross', group: '趨勢追蹤', label: '均線交叉', desc: '短均線在長均線之上就持有，跌破就出場。',
+    fields: [{ key: 'short', label: '短均線（日）' }, { key: 'long', label: '長均線（日）' }] },
+  { id: 'price_ma', group: '趨勢追蹤', label: '站上均線', desc: '收盤站上 N 日均線就持有，跌破就出場（最單純的趨勢濾網）。',
+    fields: [{ key: 'maPeriod', label: '均線天數' }] },
+  { id: 'macd', group: '趨勢追蹤', label: 'MACD 交叉', desc: 'DIF 在訊號線之上就持有（黃金交叉買進），跌破就出場（死亡交叉賣出）。',
+    fields: [{ key: 'macdFast', label: '快線 EMA' }, { key: 'macdSlow', label: '慢線 EMA' }, { key: 'macdSignal', label: '訊號線天數' }] },
+  { id: 'donchian', group: '趨勢追蹤', label: '通道突破（海龜）', desc: '收盤突破前 N 日最高價買進，跌破前 M 日最低價賣出（唐奇安通道，海龜交易法的核心規則）。',
+    fields: [{ key: 'donchianIn', label: '突破天數 N' }, { key: 'donchianOut', label: '出場天數 M' }] },
+  { id: 'dmi', group: '趨勢追蹤', label: 'DMI 趨向', desc: '+DI 大於 −DI 且 ADX 達門檻（趨勢夠明確）買進，+DI 跌破 −DI 賣出。',
+    fields: [{ key: 'dmiPeriod', label: 'DMI 天數' }, { key: 'adxMin', label: 'ADX 門檻' }] },
+  { id: 'sar', group: '趨勢追蹤', label: '拋物線 SAR', desc: 'SAR 翻多（股價突破停損點）買進，翻空賣出；趨勢越久，停損點收得越緊。',
+    fields: [{ key: 'sarStep', label: '加速因子', step: 0.01 }, { key: 'sarMax', label: '加速上限', step: 0.05 }] },
+  { id: 'momentum', group: '趨勢追蹤', label: '動能（N 日報酬）', desc: '過去 N 日報酬為正就持有，轉負就出場（絕對動能，約 120 日 ≈ 半年）。',
+    fields: [{ key: 'momPeriod', label: '回看天數' }] },
+
+  { id: 'rsi', group: '逆勢反轉', label: 'RSI 超買超賣', desc: 'RSI 低於下限買進，高於上限賣出。',
+    fields: [{ key: 'rsiPeriod', label: 'RSI 天數' }, { key: 'rsiLow', label: '買進門檻（低於）' }, { key: 'rsiHigh', label: '賣出門檻（高於）' }] },
+  { id: 'kd', group: '逆勢反轉', label: 'KD 交叉', desc: 'K 值在 20 以下黃金交叉買進，80 以上死亡交叉賣出。' },
+  { id: 'boll', group: '逆勢反轉', label: '布林通道', desc: '收盤跌破下軌買進，站回中軌賣出。',
+    fields: [{ key: 'bollPeriod', label: '布林天數' }, { key: 'bollMult', label: '標準差倍數', step: 0.5 }] },
+  { id: 'bias', group: '逆勢反轉', label: '乖離率', desc: '收盤低於 N 日均線超過 X%（負乖離過大）買進，回到均線賣出。',
+    fields: [{ key: 'biasPeriod', label: '均線天數' }, { key: 'biasPct', label: '負乖離門檻 %', step: 0.5 }] },
+  { id: 'williams', group: '逆勢反轉', label: '威廉指標', desc: '威廉 %R 低於 −買進門檻（超賣）買進，高於 −賣出門檻（超買）賣出。',
+    fields: [{ key: 'wrPeriod', label: '%R 天數' }, { key: 'wrBuy', label: '買進門檻（低於 −）' }, { key: 'wrSell', label: '賣出門檻（高於 −）' }] },
+  { id: 'down_streak', group: '逆勢反轉', label: '連跌反彈', desc: '連續下跌 N 天後買進，持有 M 個交易日後賣出（短線反彈）。',
+    fields: [{ key: 'downDays', label: '連跌天數 N' }, { key: 'holdDays', label: '持有天數 M' }] },
+
+  { id: 'vol_breakout', group: '量價', label: '帶量突破', desc: '收盤突破前 N 日最高價，且成交量達 N 日均量的 K 倍才買進；跌破 N 日均線賣出。',
+    fields: [{ key: 'vbPeriod', label: '天數 N' }, { key: 'vbMult', label: '量能倍數 K', step: 0.5 }] },
+  { id: 'obv', group: '量價', label: 'OBV 能量潮', desc: 'OBV 在自己的 N 日均線之上（資金持續流入）就持有，跌破就出場。',
+    fields: [{ key: 'obvPeriod', label: 'OBV 均線天數' }] },
 ];
+const STRATEGY_GROUPS: StrategyGroup[] = ['基準', '趨勢追蹤', '逆勢反轉', '量價'];
 
 export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; initialSymbol?: string; holdings?: { symbol: string; name: string }[]; mode?: ProMode }> = ({ isOpen, onClose, initialSymbol, holdings, mode: initialMode = 'stock' }) => {
   const [input, setInput] = useState(initialSymbol && /^\d/.test(initialSymbol) ? initialSymbol : '2330');
@@ -246,6 +277,10 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
   const [params, setParams] = useState<BacktestParams>({
     strategy: 'ma_cross', capital: 1_000_000, feeRate: 0.001425, feeDiscount: 1, minFee: 20, taxRate: 0.003,
     short: 20, long: 60, rsiPeriod: 14, rsiLow: 30, rsiHigh: 70, bollPeriod: 20, bollMult: 2,
+    maPeriod: 60, macdFast: 12, macdSlow: 26, macdSignal: 9, donchianIn: 20, donchianOut: 10,
+    dmiPeriod: 14, adxMin: 20, sarStep: 0.02, sarMax: 0.2, momPeriod: 120, biasPeriod: 20, biasPct: 7,
+    wrPeriod: 14, wrBuy: 80, wrSell: 20, downDays: 3, holdDays: 5, vbPeriod: 20, vbMult: 2, obvPeriod: 20,
+    stopLoss: 0, takeProfit: 0, maxHold: 0, marketFilter: 0,
   });
 
   useEffect(() => {
@@ -301,7 +336,10 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
     }
   }, [tab]);
 
-  const bt = useMemo(() => (adjSeries && adjSeries.close.length > 2 ? backtest(adjSeries, params) : null), [adjSeries, params]);
+  // 大盤濾網用完整的 0050 序列（均線需要暖機期，不能只取回測區間）
+  const marketFull = useMemo(() => (bench ? toSeries(bench, true, undefined) : null), [bench]);
+  const bt = useMemo(() => (adjSeries && adjSeries.close.length > 2 ? backtest(adjSeries, params, marketFull) : null), [adjSeries, params, marketFull]);
+  const curStrategy = STRATEGIES.find(s => s.id === params.strategy)!;
 
   const ma = useMemo(() => {
     if (!display) return { a: [], b: [] };
@@ -488,33 +526,28 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
               {tab === 'backtest' && (
                 <>
                   <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-3">
-                    <div className="flex flex-wrap gap-1.5">
-                      {STRATEGIES.map(s => (
-                        <button key={s.id} type="button" onClick={() => setParams(p => ({
-                          ...p,
-                          strategy: s.id,
-                          // 定期定額是「每月投入金額」，切換時給合理預設值
-                          capital: s.id === 'dca' && p.strategy !== 'dca' ? 10000 : s.id !== 'dca' && p.strategy === 'dca' ? 1_000_000 : p.capital,
-                        }))}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${params.strategy === s.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`}>{s.label}</button>
+                    <div className="space-y-1.5">
+                      {STRATEGY_GROUPS.map(g => (
+                        <div key={g} className="flex flex-wrap items-center gap-1.5">
+                          <span className="w-16 shrink-0 text-[11px] font-black text-slate-500">{g}</span>
+                          {STRATEGIES.filter(s => s.group === g).map(s => (
+                            <button key={s.id} type="button" onClick={() => setParams(p => ({
+                              ...p,
+                              strategy: s.id,
+                              // 定期定額是「每月投入金額」，切換時給合理預設值
+                              capital: s.id === 'dca' && p.strategy !== 'dca' ? 10000 : s.id !== 'dca' && p.strategy === 'dca' ? 1_000_000 : p.capital,
+                            }))}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${params.strategy === s.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`}>{s.label}</button>
+                          ))}
+                        </div>
                       ))}
                     </div>
-                    <div className="text-xs text-slate-600">{STRATEGIES.find(s => s.id === params.strategy)!.desc}訊號在收盤確認、隔天開盤成交；以還原股價計算（已含配息再投入）。</div>
+                    <div className="text-xs text-slate-600">{curStrategy.desc}訊號在收盤確認、隔天開盤成交；以還原股價計算（已含配息再投入）。</div>
                     <div className="flex flex-wrap gap-3 text-xs items-end">
                       <NumField label={params.strategy === 'dca' ? '每月投入金額' : '初始資金'} value={params.capital} step={10000} onChange={v => setParams(p => ({ ...p, capital: v }))} />
-                      {params.strategy === 'ma_cross' && (<>
-                        <NumField label="短均線（日）" value={params.short!} onChange={v => setParams(p => ({ ...p, short: v }))} />
-                        <NumField label="長均線（日）" value={params.long!} onChange={v => setParams(p => ({ ...p, long: v }))} />
-                      </>)}
-                      {params.strategy === 'rsi' && (<>
-                        <NumField label="RSI 天數" value={params.rsiPeriod!} onChange={v => setParams(p => ({ ...p, rsiPeriod: v }))} />
-                        <NumField label="買進門檻（低於）" value={params.rsiLow!} onChange={v => setParams(p => ({ ...p, rsiLow: v }))} />
-                        <NumField label="賣出門檻（高於）" value={params.rsiHigh!} onChange={v => setParams(p => ({ ...p, rsiHigh: v }))} />
-                      </>)}
-                      {params.strategy === 'boll' && (<>
-                        <NumField label="布林天數" value={params.bollPeriod!} onChange={v => setParams(p => ({ ...p, bollPeriod: v }))} />
-                        <NumField label="標準差倍數" value={params.bollMult!} step={0.5} onChange={v => setParams(p => ({ ...p, bollMult: v }))} />
-                      </>)}
+                      {curStrategy.fields?.map(f => (
+                        <NumField key={f.key} label={f.label} value={params[f.key] as number} step={f.step} onChange={v => setParams(p => ({ ...p, [f.key]: v }))} />
+                      ))}
                       <label className="flex flex-col gap-1 font-bold text-slate-600">手續費折數
                         <select value={params.feeDiscount} onChange={e => setParams(p => ({ ...p, feeDiscount: Number(e.target.value) }))} className="border border-slate-200 rounded-lg px-2 py-1 bg-white font-mono">
                           {[1, 0.6, 0.5, 0.38, 0.28].map(v => <option key={v} value={v}>{v === 1 ? '無折扣' : `${v * 10} 折`}</option>)}
@@ -522,6 +555,18 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
                       </label>
                       <div className="text-[11px] text-slate-500">手續費 0.1425%（最低 20 元）· 證交稅 {isEtf ? '0.1%（ETF）' : '0.3%'}</div>
                     </div>
+                    {params.strategy !== 'dca' && params.strategy !== 'buy_hold' && (
+                      <div className="border-t border-slate-100 pt-2.5 space-y-1.5">
+                        <div className="text-[11px] font-black text-slate-500">風險控管（可搭配任何擇時策略；填 0 代表不使用）</div>
+                        <div className="flex flex-wrap gap-3 text-xs items-end">
+                          <NumField label="停損 %" value={params.stopLoss ?? 0} step={1} allowZero onChange={v => setParams(p => ({ ...p, stopLoss: v }))} />
+                          <NumField label="停利 %" value={params.takeProfit ?? 0} step={1} allowZero onChange={v => setParams(p => ({ ...p, takeProfit: v }))} />
+                          <NumField label="最長持有（交易日）" value={params.maxHold ?? 0} step={5} allowZero onChange={v => setParams(p => ({ ...p, maxHold: v }))} />
+                          <NumField label="大盤濾網：0050 站上 N 日均線" value={params.marketFilter ?? 0} step={10} allowZero onChange={v => setParams(p => ({ ...p, marketFilter: v }))} />
+                        </div>
+                        <div className="text-[11px] text-slate-500">停損／停利以收盤價對比買進成交價判斷，隔天開盤賣出；強制出場後要等原策略訊號解除、重新出現才會再買進。大盤濾網只限制買進，不會強制賣出；0050 上市（2003 年）以前不設限。</div>
+                      </div>
+                    )}
                   </div>
 
                   {bt?.stats && (
@@ -545,7 +590,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
                           format={v => (v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v.toFixed(0))}
                           series={params.strategy === 'dca'
                             ? [{ name: '市值', values: bt.equity, color: '#4f46e5' }, { name: '累計投入本金', values: bt.invested, color: '#94a3b8', dash: '4 3' }]
-                            : [{ name: STRATEGIES.find(s => s.id === params.strategy)!.label, values: bt.equity, color: '#4f46e5' }, { name: '買進持有', values: bt.benchmark, color: '#94a3b8', dash: '4 3' }]}
+                            : [{ name: curStrategy.label, values: bt.equity, color: '#4f46e5' }, { name: '買進持有', values: bt.benchmark, color: '#94a3b8', dash: '4 3' }]}
                         />
                       </div>
                       <div className="bg-white border border-slate-200 rounded-2xl p-3 overflow-x-auto">
@@ -556,7 +601,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
                             {bt.trades.slice(-50).reverse().map((t, i) => (
                               <tr key={i} className="border-t border-slate-100 font-mono">
                                 <td className="py-1 pr-3">{t.date}</td>
-                                <td className={`pr-3 font-bold ${t.side === '買進' ? 'text-rose-600' : 'text-emerald-600'}`}>{t.side}</td>
+                                <td className={`pr-3 font-bold ${t.side === '買進' ? 'text-rose-600' : 'text-emerald-600'}`}>{t.side}{t.reason ? `（${t.reason}）` : ''}</td>
                                 <td className="pr-3">{t.price.toFixed(2)}</td>
                                 <td className="pr-3">{t.shares.toLocaleString()}</td>
                                 <td className="pr-3">{t.fee.toLocaleString()}</td>
@@ -587,11 +632,11 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
   );
 };
 
-const NumField: React.FC<{ label: string; value: number; step?: number; onChange: (v: number) => void }> = ({ label, value, step = 1, onChange }) => (
+const NumField: React.FC<{ label: string; value: number; step?: number; allowZero?: boolean; onChange: (v: number) => void }> = ({ label, value, step = 1, allowZero, onChange }) => (
   <label className="flex flex-col gap-1 font-bold text-slate-600">
     {label}
     <input type="number" value={value} step={step} min={0}
-      onChange={e => { const v = Number(e.target.value); if (isFinite(v) && v > 0) onChange(v); }}
+      onChange={e => { const v = Number(e.target.value); if (isFinite(v) && (v > 0 || (allowZero && v === 0))) onChange(v); }}
       className="border border-slate-200 rounded-lg px-2 py-1 w-28 font-mono bg-white" />
   </label>
 );

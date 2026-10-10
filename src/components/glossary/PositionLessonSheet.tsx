@@ -5,7 +5,7 @@ import { useGlossary } from '../../context/GlossaryContext';
 import { POSITION_LESSONS, GENERIC_LESSON } from '../../data/positionLessons';
 import { TERMS_BY_ID } from '../../data/financialTerms';
 import { pnlDirection, positionPnL } from '../../utils/orderRules';
-import { COPYRIGHT, DESIGNER } from '../StudyCardModal';
+import { COPYRIGHT, LEGAL, DATA_NOTE } from '../StudyCardModal';
 
 /**
  * 持倉小學堂：對帳單每一筆部位的教學卡，用學生自己的真實數字講解，並可下載成圖片。
@@ -304,7 +304,8 @@ export function PositionLessonSheet({ instruments, profile }: { instruments: Ins
               <div style={{ fontSize: 14, color: SUB }}>模擬交易教學用途，不是投資建議。</div>
               <div style={{ background: '#f4efe4', borderRadius: 14, padding: '8px 12px', fontSize: 14, color: SUB, textAlign: 'center', lineHeight: 1.6 }}>
                 <div style={{ fontWeight: 900, color: INK }}>{COPYRIGHT}</div>
-                <div>{DESIGNER}</div>
+                <div style={{ fontWeight: 700, color: INK }}>{LEGAL}</div>
+                <div>{DATA_NOTE}</div>
               </div>
             </div>
           </div>

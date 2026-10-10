@@ -2519,7 +2519,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                       className="bg-amber-50 hover:bg-amber-100 border-2 border-amber-400 rounded-xl p-2 text-center transition cursor-pointer shadow-xs"
                       title="點擊帶入當前撮合價"
                     >
-                      <span className="text-[10px] text-amber-900 font-black block">當下成交價 (推薦)</span>
+                      <span className="text-[10px] text-amber-900 font-black block">當下成交價（帶入）</span>
                       <span className="font-mono font-black text-amber-950 text-xs sm:text-sm">
                         {selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks' ? 'US$ ' : 'NT$ '}
                         {selectedInstrument.price >= 1000 ? selectedInstrument.price.toLocaleString() : selectedInstrument.price}

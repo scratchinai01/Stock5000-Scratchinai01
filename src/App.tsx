@@ -44,6 +44,7 @@ import { ContextualTermBanner } from './components/ContextualTermBanner';
 import { useGlossary } from './context/GlossaryContext';
 import { FontSizeControl } from './components/FontSizeControl';
 import { NavMenu, MenuItem, MenuDivider, MenuLabel } from './components/NavMenu';
+import { AboutModal } from './components/AboutModal';
 import {
   savePlayerProfileToFirebase,
   getPlayerProfileFromFirebase,
@@ -191,6 +192,7 @@ export default function App() {
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
   const [isProAnalysisOpen, setIsProAnalysisOpen] = useState(false);
   const [proMode, setProMode] = useState<'stock' | 'scan'>('stock');
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   const openPro = (m: 'stock' | 'scan') => { setProMode(m); setIsProAnalysisOpen(true); };
   // 手機版介面：寬度 < 768px 自動啟用；使用者可手動切換（記在 localStorage）
   const [uiOverride, setUiOverride] = useState<'mobile' | 'desktop' | null>(() => {
@@ -1594,6 +1596,7 @@ export default function App() {
                         <MenuItem icon="🏆" label="全班排行" active={activeView === 'leaderboard'} onClick={() => { close(); needLogin(() => setActiveView('leaderboard'))(); }} />
                         <MenuItem icon="🎯" label="標的衍生商品矩陣" desc="同一標的的期貨、選擇權、權證" onClick={() => { close(); handleOpenDerivatives('2317'); }} />
                         <MenuItem icon="📑" label="PPT 報告工作室" desc="簡報大綱、講稿與列印" active={activeView === 'ppt_studio'} onClick={() => { close(); setActiveView('ppt_studio'); }} />
+                        <MenuItem icon="ℹ️" label="關於本系統" desc="版權、聯絡方式、用途聲明與研究限制" onClick={() => { close(); setIsAboutOpen(true); }} />
                         {isSuperUser && (
                           <>
                             <MenuDivider />
@@ -2056,6 +2059,7 @@ export default function App() {
       <ContextualTermBanner />
 
       {/* 🌐 全球 7 大市場 × 24/7 交易時鐘雷達 Modal */}
+      <AboutModal open={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
       <ProAnalysisModal
         isOpen={isProAnalysisOpen}
         onClose={() => setIsProAnalysisOpen(false)}

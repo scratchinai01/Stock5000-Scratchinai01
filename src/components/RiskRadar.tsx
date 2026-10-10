@@ -100,7 +100,7 @@ export const RiskRadar: React.FC<{ onOpenSymbol: (symbol: string) => void; holdi
           <span className="text-[34px] leading-none">📉</span>
           <div>
             <div className="text-[22px] font-black">台股下跌預警 2.0 <span className="ml-1 text-[13px] px-2 py-0.5 rounded-full bg-emerald-400 text-slate-950 align-middle">免費教學版</span></div>
-            <div className="text-[15px] text-rose-100">六大風險因子 × 100 分評分｜33 項利空訊號清單｜每天收盤後計算全市場一次｜30 年回測驗證</div>
+            <div className="text-[15px] text-rose-100">六大風險因子 × 100 分評分｜33 項利空訊號清單｜每天收盤後計算全市場一次｜1995 年以來回測驗證</div>
           </div>
         </div>
         {latest && (
@@ -129,7 +129,7 @@ export const RiskRadar: React.FC<{ onOpenSymbol: (symbol: string) => void; holdi
       )}
 
       <div ref={listTop} className="flex flex-wrap gap-2 scroll-mt-4" role="tablist">
-        {([['mine', '我的持股與追蹤', Star], ['market', '全市場風險排行', ListChecks], ['backtest', '30 年回測驗證', BarChart3], ['rules', '因子說明與限制', BookOpen]] as const).map(([id, label, Icon]) => (
+        {([['mine', '我的持股與追蹤', Star], ['market', '全市場風險排行', ListChecks], ['backtest', '歷史回測驗證', BarChart3], ['rules', '因子說明與限制', BookOpen]] as const).map(([id, label, Icon]) => (
           <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
             className={`min-h-[44px] px-4 rounded-xl text-[16px] font-black flex items-center gap-1.5 border-2 ${view === id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`}>
             <Icon className="w-5 h-5" />{label}
@@ -140,7 +140,7 @@ export const RiskRadar: React.FC<{ onOpenSymbol: (symbol: string) => void; holdi
       {(view === 'mine' || view === 'market') && (loading ? <Loading text="讀取今日風險分數…" /> : err ? <ErrorBox text={err} /> : latest && (
         view === 'mine' ? <MineView latest={latest} holdings={holdings} onOpenSymbol={onOpenSymbol} /> : <MarketView key={preset?.nonce ?? 0} latest={latest} onOpenSymbol={onOpenSymbol} presetLevel={preset?.level} />
       ))}
-      {view === 'backtest' && (bt ? <BacktestView bt={bt} /> : btErr ? <ErrorBox text={btErr} /> : <Loading text="讀取 30 年回測結果…" />)}
+      {view === 'backtest' && (bt ? <BacktestView bt={bt} /> : btErr ? <ErrorBox text={btErr} /> : <Loading text="讀取歷史回測結果…" />)}
       {view === 'rules' && <RulesView />}
 
       <p className="text-[14px] text-slate-500 leading-relaxed">
@@ -357,7 +357,7 @@ function RiskCard({ r, open, onToggle, onOpenSymbol, extra, single }: { r: Row; 
                   <div className="text-[16px] mt-1">歷史上同樣訊號組合，20 日內回落超過 10% 的比例 <b className="font-mono">{p1(r.alertProb)}</b>
                     {base != null && <span className="text-slate-500">（2015 年後所有股票平均 {p1(base, 0)}）</span>}</div>
                 )}
-                <div className="text-[13px] text-slate-500 mt-1">分數依每個訊號在 30 年回測中的實際預警力加權；預警力弱或反向的訊號只列出、不計分。</div>
+                <div className="text-[13px] text-slate-500 mt-1">分數依每個訊號在 1995 年以來回測中的預警力加權；預警力弱或反向的訊號只列出、不計分。</div>
               </div>
             )}
             <SignalChecklist r={r} />
@@ -417,7 +417,7 @@ function RiskStudyCard({ r, base, lift, onClose }: { r: Row; base: number | null
           <p className="text-[17px] leading-relaxed">{LEVEL[r.level].emoji} <b>{LEVEL[r.level].label}</b>：{LEVEL_LESSON[r.level]}</p>
           {r.alertProb != null && (
             <p className="text-[16px] leading-relaxed text-slate-700">
-              過去 30 年出現同樣訊號組合時，之後 20 個交易日內回落超過 10% 的比例約 <b>{p1(r.alertProb)}</b>{base != null && <>，所有股票平均是 {p1(base, 0)}</>}。這是統計比例，不是預測一定會發生。
+              1995 年以來出現同樣訊號組合時，之後 20 個交易日內回落超過 10% 的比例約 <b>{p1(r.alertProb)}</b>{base != null && <>，所有股票平均是 {p1(base, 0)}</>}。這是統計比例，不是預測一定會發生。
             </p>
           )}
         </CardSection>
@@ -458,7 +458,7 @@ function RiskStudyCard({ r, base, lift, onClose }: { r: Row; base: number | null
         </CardSection>
         <CardSection title="三個學習重點">
           <ol className="list-decimal pl-6 space-y-1 text-[16.5px] leading-relaxed">
-            <li>風險分數高<b>不等於一定會跌</b>；30 年回測顯示，高分股票也常是波動大、漲跌都劇烈的股票。</li>
+            <li>風險分數高<b>不等於一定會跌</b>；歷史回測顯示，高分股票也常是波動大、漲跌都劇烈的股票。</li>
             <li>預警的用途是<b>提醒檢查風險</b>：停損設好了嗎？部位會不會太大？買進理由還在嗎？</li>
             <li>單一訊號常是雜訊，<b>多個有預警力的訊號同時出現</b>才值得特別注意。</li>
           </ol>
@@ -752,7 +752,12 @@ function RulesView() {
           <li>只涵蓋上市櫃普通股，不含 ETF、特別股、權證；上市未滿約半年的股票不計分。</li>
           <li>回測樣本只取 20 日均量 100 張以上；報酬未扣交易成本（第四項策略比較除外）。</li>
           <li>預測「會不會跌」不等於預測「跌多少」，更不代表一定會崩跌。</li>
+          <li>六大因子權重與五級門檻是本系統的初始設計，回測顯示原始權重的辨識力有限，<b>2020 年代幾乎接近隨機</b>，仍在校準中。</li>
+          <li>利空警戒分數的權重只用 2015 年以前資料決定、2015 年以後驗證；機率由羅吉斯迴歸估計，是歷史統計比例，不是對個股的預測。</li>
+          <li>資料涵蓋 1995 年以來上市櫃普通股（含已下市公司）；行情來自公開市場資料，可能有更正或缺漏。</li>
         </ul>
+        <div className="text-[18px] font-black pt-2">用途聲明</div>
+        <div>本系統為免費教學工具，不提供收費個股分析、代客操作或投資諮詢服務；所有分數、機率與清單均不構成任何證券之買賣建議。</div>
       </div>
     </div>
   );
@@ -803,7 +808,7 @@ export const RiskStock: React.FC<{ symbol: string; onOpenScan: () => void }> = (
             今天沒有 <b className="font-mono">{symbol}</b> 的風險分數。下跌預警目前只涵蓋上市櫃<b>普通股</b>，不含 ETF、特別股、權證；上市未滿約半年、或今天停牌的股票也不會計分。
           </div>
         )}
-        <p className="text-[14px] text-slate-500 leading-relaxed">免費教學用途的量化研究展示，不構成投資建議。分數與機率的計算方式、30 年回測驗證，請到「全市場海搜 → 下跌預警排行」查看。</p>
+        <p className="text-[14px] text-slate-500 leading-relaxed">免費教學用途的量化研究展示，不構成投資建議。分數與機率的計算方式、歷史回測驗證，請到「全市場海搜 → 下跌預警排行」查看。</p>
       </div>
     </LiftCtx.Provider>
   );

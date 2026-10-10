@@ -38,13 +38,11 @@ import { usesOrderBook, roundToTick, positionPnL } from './utils/orderRules';
 import { reservedAmount, pendingCloseQty, describeOrder } from './utils/orderClient';
 import { computeOrderCost } from './utils/orderMath';
 import { ResetPortfolioModal } from './components/ResetPortfolioModal';
-import { GeminiAuditSheetsModal } from './components/GeminiAuditSheetsModal';
 import { Term } from './components/Term';
 import { FinancialGlossaryDrawer } from './components/FinancialGlossaryDrawer';
 import { ContextualTermBanner } from './components/ContextualTermBanner';
 import { useGlossary } from './context/GlossaryContext';
 import { FontSizeControl } from './components/FontSizeControl';
-import { GroqKeyManagerModal } from './components/GroqKeyManagerModal';
 import {
   savePlayerProfileToFirebase,
   getPlayerProfileFromFirebase,
@@ -298,24 +296,7 @@ export default function App() {
   // User requirement: "每次進入 都先選擇 姓名" - Always display the player setup / name selection modal upon entry/refresh
   const [isPlayerSetupOpen, setIsPlayerSetupOpen] = useState<boolean>(true);
 
-  // Groq 10-Slot Free Token Pool Manager State
-  const [isGroqKeyManagerOpen, setIsGroqKeyManagerOpen] = useState<boolean>(false);
-  const [groqKeyCount, setGroqKeyCount] = useState<number>(0);
 
-  const refreshGroqStatus = () => {
-    fetch('/api/groq/status')
-      .then(res => (res.ok ? res.json() : null))
-      .then(d => {
-        if (d && typeof d.configuredCount === 'number') {
-          setGroqKeyCount(d.configuredCount);
-        }
-      })
-      .catch(() => {});
-  };
-
-  useEffect(() => {
-    refreshGroqStatus();
-  }, []);
 
   // Persistent blacklist for deleted student accounts to guarantee they are NEVER resurrected
   const [deletedStudentNames, setDeletedStudentNames] = useState<Set<string>>(() => {
@@ -394,7 +375,6 @@ export default function App() {
     setIsSecurityCenterOpen(false);
     setIsChangePasswordOpen(false);
     setIsResetModalOpen(false);
-    setIsGroqKeyManagerOpen(false);
     setViewingKLineInst(null);
     setIsMoreMenuOpen(false);
     // 4. Return to overview (which renders LockedTradingHallGate)
@@ -1735,24 +1715,6 @@ export default function App() {
               </button>
             )}
 
-            {/* Groq 10-Slot Free Token Pool Manager Button - ONLY for Superuser */}
-            {isSuperUser && (
-              <button
-                type="button"
-                onClick={() => setIsGroqKeyManagerOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-yellow-500/15 hover:from-amber-500/25 hover:to-orange-500/25 text-amber-950 font-black border border-amber-400/50 transition flex items-center gap-1.5 cursor-pointer text-xs shadow-2xs active:scale-95"
-                title="管理 10 組 Groq Token 輪詢池 (Secrets) · 0 費用享極速推論 (僅 Superuser)"
-              >
-                <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
-                <span>⚡ Groq 免費金鑰</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                  groqKeyCount > 0 ? 'bg-amber-300 text-amber-950' : 'bg-slate-200 text-slate-700'
-                }`}>
-                  {groqKeyCount}/10
-                </span>
-              </button>
-            )}
-
             <div className="relative">
               <button
                 type="button"
@@ -1768,26 +1730,6 @@ export default function App() {
                   className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50 text-xs font-bold text-slate-800 animate-in fade-in zoom-in-95 duration-100"
                   onClick={() => setIsMoreMenuOpen(false)}
                 >
-                  {/* Groq Key Pool Quick Entrance in More Menu - ONLY for Superuser */}
-                  {isSuperUser && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMoreMenuOpen(false);
-                        setIsGroqKeyManagerOpen(true);
-                      }}
-                      className="w-full text-left px-4 py-2 hover:bg-amber-50 flex items-center justify-between text-amber-950 font-black cursor-pointer border-b border-slate-100"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-amber-600 fill-amber-500" />
-                        <span>⚡ Groq 10組金鑰輪詢池</span>
-                      </div>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 font-mono font-bold">
-                        {groqKeyCount}/10 組
-                      </span>
-                    </button>
-                  )}
-
                   <button
                     type="button"
                     onClick={() => {
@@ -2255,8 +2197,6 @@ export default function App() {
         onAdminLogout={() => {
           setIsAdminLoggedIn(false);
         }}
-        onOpenGroqManager={() => setIsGroqKeyManagerOpen(true)}
-        groqKeyCount={groqKeyCount}
       />
 
       {/* Trade Statement & Position Query Modal */}
@@ -2351,19 +2291,6 @@ export default function App() {
         isOpen={isGlobalRadarOpen}
         onClose={() => setIsGlobalRadarOpen(false)}
       />
-
-      {/* Groq 10-Slot Free Token Secrets Manager Modal - ONLY for Superuser */}
-      {isSuperUser && (
-        <GroqKeyManagerModal
-          isOpen={isGroqKeyManagerOpen}
-          onClose={() => {
-            setIsGroqKeyManagerOpen(false);
-            refreshGroqStatus();
-          }}
-          onKeysUpdated={refreshGroqStatus}
-          isSuperUser={isSuperUser}
-        />
-      )}
 
       {!isMobileUI && (<>
       {/* 委託查詢（電腦版） */}

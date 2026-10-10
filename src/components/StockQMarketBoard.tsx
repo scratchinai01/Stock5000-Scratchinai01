@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { AI_ENABLED } from '../utils/aiFeatures';
 import {
   ExternalLink,
   Search,
@@ -255,8 +256,8 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
             <span>{colorMode === 'tw' ? '🔴 亞洲紅漲' : '🟢 國際綠漲'}</span>
           </button>
 
-          {/* Groq StockQ Assistant Button - ONLY for Superuser */}
-          {isSuperUser && (
+          {/* Groq StockQ Assistant Button - ONLY for Superuser（AI 已全站關閉） */}
+          {AI_ENABLED && isSuperUser && (
             <button
               type="button"
               onClick={() => {
@@ -724,7 +725,7 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
         </div>
       )}
       {/* Groq AI StockQ Alignment & Macro Inter-Market Modal - ONLY for Superuser */}
-      {isSuperUser && isGroqAnalyzeOpen && (
+      {AI_ENABLED && isSuperUser && isGroqAnalyzeOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150">
           <div className="bg-slate-900 border border-amber-500/40 rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl text-white">
             {/* Modal Header */}

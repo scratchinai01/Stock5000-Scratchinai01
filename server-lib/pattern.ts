@@ -137,6 +137,26 @@ export function adx(h: number[], l: number[], c: number[], n = 14): number[] {
   const dxFilled = dx.map(x => (isFinite(x) ? x : 0));
   return wilder(dxFilled, n, firstDx).map((x, i) => (i < firstDx ? NaN : x));
 }
+/** DMI：+DI、-DI、ADX（Wilder 平滑） */
+export function dmi(h: number[], l: number[], c: number[], n = 14): { pdi: number[]; mdi: number[]; adx: number[] } {
+  const len = c.length;
+  const pdm = new Array(len).fill(0);
+  const mdm = new Array(len).fill(0);
+  const tr = new Array(len).fill(0);
+  for (let i = 1; i < len; i++) {
+    const upMove = h[i] - h[i - 1];
+    const downMove = l[i - 1] - l[i];
+    pdm[i] = upMove > downMove && upMove > 0 ? upMove : 0;
+    mdm[i] = downMove > upMove && downMove > 0 ? downMove : 0;
+    tr[i] = Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1]));
+  }
+  const sTr = wilder(tr, n);
+  const sP = wilder(pdm, n);
+  const sM = wilder(mdm, n);
+  const pdi = sTr.map((x, i) => (isFinite(x) && x > 0 ? (100 * sP[i]) / x : NaN));
+  const mdi = sTr.map((x, i) => (isFinite(x) && x > 0 ? (100 * sM[i]) / x : NaN));
+  return { pdi, mdi, adx: adx(h, l, c, n) };
+}
 export function obv(c: number[], v: number[]): number[] {
   const out = new Array(c.length).fill(0);
   for (let i = 1; i < c.length; i++) out[i] = out[i - 1] + (c[i] > c[i - 1] ? v[i] : c[i] < c[i - 1] ? -v[i] : 0);

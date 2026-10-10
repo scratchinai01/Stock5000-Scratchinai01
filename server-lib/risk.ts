@@ -7,7 +7,7 @@
  * 目前資料庫沒有的子訊號（法人買賣超、期貨部位、買賣價差、成交深度、財報與法說會行事曆）
  * 不計分，並在網頁上明確標示「尚未納入」；該因子內其餘子訊號的權重會自動放大補滿。
  */
-import { ema, rsi, sma, atr, obv, type Series } from './pattern';
+import { ema, rsi, sma, atr, obv, dmi, type Series } from './pattern';
 
 export const FACTOR_KEYS = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6'] as const;
 export type FactorKey = (typeof FACTOR_KEYS)[number];
@@ -43,7 +43,23 @@ export const SIGNALS = [
   { key: 'gapDown', f: 'F6', w: 0.4, label: '跳空下跌 3% 以上（5 日內）' },
   { key: 'wildRange', f: 'F6', w: 0.3, label: '單日振幅異常放大（5 日內）' },
   { key: 'thinTrade', f: 'F6', w: 0.3, label: '成交值偏低（20 日平均低於 5 千萬元，1 千萬元以下滿分）' },
+  // ── 以下 13 項只列入「利空訊號清單」與警戒分數，不改變六大因子 100 分（權重 0） ──
+  { key: 'maBearStack', f: 'F1', w: 0, label: '均線空頭排列：5 日 < 10 日 < 20 日 < 60 日均線' },
+  { key: 'belowMa240', f: 'F1', w: 0, label: '收盤跌破年線（240 日均線）' },
+  { key: 'newLow52w', f: 'F1', w: 0, label: '創 52 週新低（5 日內）' },
+  { key: 'downStreak', f: 'F2', w: 0, label: '連續 4 天以上收跌' },
+  { key: 'macdHistShrink', f: 'F2', w: 0, label: 'MACD 紅柱連續 3 天縮短（多方力道減弱）' },
+  { key: 'dmiBear', f: 'F2', w: 0, label: 'DMI 空方主導：-DI 大於 +DI 且 ADX 超過 25' },
+  { key: 'bearEngulf', f: 'F3', w: 0, label: '空頭吞噬：長黑 K 完全包住前一根紅 K（5 日內）' },
+  { key: 'threeCrows', f: 'F3', w: 0, label: '三隻烏鴉：連續 3 根收黑且收盤一天比一天低' },
+  { key: 'upperShadow', f: 'F3', w: 0, label: '高檔長上影線：近 20 日高點附近、上影線達實體 2 倍（5 日內）' },
+  { key: 'bollLower', f: 'F4', w: 0, label: '收盤跌破布林通道下軌（20 日、2 倍標準差）' },
+  { key: 'rsWeak', f: 'F5', w: 0, label: '相對大盤弱勢：近 20 日報酬落後加權指數 5% 以上' },
+  { key: 'gapOpen', f: 'F6', w: 0, label: '向下跳空缺口尚未回補（10 日內）' },
+  { key: 'limitDown', f: 'F6', w: 0, label: '跌停或單日重挫 9% 以上（10 日內）' },
 ] as const;
+/** 計入六大因子 100 分的原始 20 項 */
+export const FACTOR_SIGNALS = SIGNALS.filter(s => s.w > 0);
 export type SignalKey = (typeof SIGNALS)[number]['key'];
 
 /** 尚未納入（資料庫目前沒有這些資料） */
@@ -74,6 +90,8 @@ export interface MarketContext {
   breadth(date: string): number | undefined;
   /** 產業近 20 日平均報酬 */
   industryRet20(industry: string, date: string): number | undefined;
+  /** 加權指數近 20 日報酬（相對強弱用，可省略） */
+  taiexRet20?(date: string): number | undefined;
 }
 
 export interface RiskSeries {
@@ -164,6 +182,21 @@ export function computeRisk(s: Series, industry: string | null, ctx: MarketConte
   const hv120 = hv(120);
   const val = v.map((x, i) => x * c[i]); // 成交值（以還原價近似）
   const val20 = sma(val, 20);
+  const ma5 = sma(c, 5);
+  const ma10 = sma(c, 10);
+  const ma240 = sma(c, 240);
+  const dm = dmi(h, l, c, 14);
+  const hist = dif.map((x, i) => x - dea[i]);
+  // 布林下軌
+  const bbLow = NaNArr(n);
+  for (let i = 19; i < n; i++) {
+    let m = 0;
+    for (let k = i - 19; k <= i; k++) m += c[k];
+    m /= 20;
+    let vsum = 0;
+    for (let k = i - 19; k <= i; k++) vsum += (c[k] - m) ** 2;
+    bbLow[i] = m - 2 * Math.sqrt(vsum / 20);
+  }
 
   const sig = Object.fromEntries(SIGNALS.map(x => [x.key, NaNArr(n)])) as Record<SignalKey, number[]>;
   const F = Object.fromEntries(FACTOR_KEYS.map(k => [k, NaNArr(n)])) as Record<FactorKey, number[]>;
@@ -241,12 +274,49 @@ export function computeRisk(s: Series, industry: string | null, ctx: MarketConte
     sig.wildRange[t] = wild;
     sig.thinTrade[t] = lin(-val20[t], -50e6, -10e6);
 
+    // ── 額外 13 項利空型態（清單用） ──
+    sig.maBearStack[t] = ma5[t] < ma10[t] && ma10[t] < ma20[t] && ma20[t] < ma60[t] ? 1 : 0;
+    sig.belowMa240[t] = isFinite(ma240[t]) ? (c[t] < ma240[t] ? 1 : 0) : NaN;
+    let lo52 = 0;
+    if (t >= 250) for (let k = t - 4; k <= t; k++) if (l[k] <= rollMin(l, k - 249, k - 1)) lo52 = 1;
+    sig.newLow52w[t] = t >= 250 ? lo52 : NaN;
+    sig.downStreak[t] = c[t] < c[t - 1] && c[t - 1] < c[t - 2] && c[t - 2] < c[t - 3] && c[t - 3] < c[t - 4] ? 1 : 0;
+    sig.macdHistShrink[t] = hist[t] > 0 && hist[t] < hist[t - 1] && hist[t - 1] < hist[t - 2] && hist[t - 2] < hist[t - 3] ? 1 : 0;
+    sig.dmiBear[t] = dm.mdi[t] > dm.pdi[t] && dm.adx[t] > 25 ? 1 : 0;
+    let engulf = 0;
+    let shadow = 0;
+    for (let k = t - 4; k <= t; k++) {
+      if (c[k - 1] > o[k - 1] && c[k] < o[k] && o[k] >= c[k - 1] && c[k] <= o[k - 1] && o[k] - c[k] > c[k - 1] - o[k - 1]) engulf = 1;
+      const body = Math.abs(c[k] - o[k]);
+      const upper = h[k] - Math.max(c[k], o[k]);
+      if (h[k] >= 0.97 * rollMax(h, k - 19, k) && upper >= 2 * Math.max(body, c[k] * 0.002) && upper / c[k] >= 0.02) shadow = 1;
+    }
+    sig.bearEngulf[t] = engulf;
+    sig.upperShadow[t] = shadow;
+    sig.threeCrows[t] = [0, 1, 2].every(j => c[t - j] < o[t - j] && c[t - j] < c[t - j - 1] && (o[t - j] - c[t - j]) / o[t - j] >= 0.01) ? 1 : 0;
+    sig.bollLower[t] = c[t] < bbLow[t] ? 1 : 0;
+    const tr20 = ctx?.taiexRet20?.(d);
+    sig.rsWeak[t] = tr20 == null ? NaN : c[t] / c[t - 20] - 1 - tr20 <= -0.05 ? 1 : 0;
+    let gapOpen = 0;
+    for (let k = t - 9; k <= t; k++) {
+      if (h[k] < l[k - 1]) {
+        // 缺口上緣 = 前一天最低；之後最高價都沒碰到 → 尚未回補
+        let filled = false;
+        for (let m = k + 1; m <= t; m++) if (h[m] >= l[k - 1]) filled = true;
+        if (!filled) gapOpen = 1;
+      }
+    }
+    sig.gapOpen[t] = gapOpen;
+    let ld = 0;
+    for (let k = t - 9; k <= t; k++) if (c[k] / c[k - 1] - 1 <= -0.09) ld = 1;
+    sig.limitDown[t] = ld;
+
     // 因子分數：可用子訊號的加權平均（缺資料的權重自動補給其他子訊號）
     let total = 0;
     for (const fk of FACTOR_KEYS) {
       let sw = 0;
       let sv = 0;
-      for (const sg of SIGNALS) {
+      for (const sg of FACTOR_SIGNALS) {
         if (sg.f !== fk) continue;
         const x = sig[sg.key][t];
         if (!isFinite(x)) continue;
@@ -293,9 +363,37 @@ export interface RiskRow {
   sig: Record<string, number>; // 有觸發的子訊號（> 0）
   hist: number[]; // 近 60 個交易日分數（整數）
   avgVal20: number; // 20 日平均成交值（元）
+  nSig?: number; // 觸發的利空訊號數
+  alert?: number; // 利空警戒分數 0–100（依回測預警力加權）
+  alertProb?: number; // 歷史上同樣訊號組合的重大下跌機率
 }
 
-export function riskRowLatest(s: Series, industry: string | null, ctx: MarketContext | null): RiskRow | null {
+/** 33 項訊號的數值向量（缺資料當 0），給警戒分數與機器學習使用 */
+export function signalVector(r: RiskSeries, t: number) {
+  return SIGNALS.map(s => {
+    const x = r.sig[s.key][t];
+    return isFinite(x) ? x : 0;
+  });
+}
+
+/**
+ * 利空警戒分數：每個訊號的權重 = 回測預警倍數 − 1（倍數 ≤ 1 的訊號不計分），
+ * 分數 = 觸發訊號的權重合計 ÷ 前 8 強訊號權重合計 × 100（上限 100）。
+ * 「前 8 強同時出現」約等於歷史上最危險的情況，所以拿來當滿分基準。
+ */
+export function alertWeights(lift: Record<string, { lift: number | null }>) {
+  const w = SIGNALS.map(s => Math.max(0, Math.min(1.5, (lift[s.key]?.lift ?? 1) - 1)));
+  const top = [...w].sort((a, b) => b - a).slice(0, 8).reduce((a, x) => a + x, 0) || 1;
+  return { w, top };
+}
+export function alertScore(vec: number[], aw: { w: number[]; top: number }) {
+  let s = 0;
+  for (let i = 0; i < vec.length; i++) s += aw.w[i] * vec[i];
+  return Math.min(100, (s / aw.top) * 100);
+
+}
+
+export function riskRowLatest(s: Series, industry: string | null, ctx: MarketContext | null, aw?: { w: number[]; top: number }, sigModel?: LogitModel): RiskRow | null {
   const n = s.c.length;
   if (n < MIN_BARS + 1) return null;
   const r = computeRisk(s, industry, ctx);
@@ -324,6 +422,9 @@ export function riskRowLatest(s: Series, industry: string | null, ctx: MarketCon
     sig,
     hist,
     avgVal20: Math.round(v20),
+    nSig: Object.keys(sig).length,
+    ...(aw ? { alert: Math.round(alertScore(signalVector(r, t), aw) * 10) / 10 } : {}),
+    ...(sigModel ? { alertProb: Math.round(predictLogit(sigModel, signalVector(r, t)) * 1000) / 1000 } : {}),
   };
 }
 

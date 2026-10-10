@@ -1095,6 +1095,14 @@ app.get('/api/pattern/backtest', async (_req, res) => {
     const data = await getPatternBacktest();
     if (!data) return res.status(404).json({ error: '歷史回測尚未執行' });
 
+    res.set('Cache-Control', 'public, max-age=600');
+    res.json(data);
+  } catch (e: any) {
+    console.warn('[Pattern] backtest', e.message);
+    res.status(503).json({ error: '型態掃描資料暫時讀取不到，請稍後再試' });
+  }
+});
+
 // 台股下跌預警 2.0（教學版）：每天收盤後由排程算好，這裡只讀結果
 app.get('/api/risk/latest', async (_req, res) => {
   try {
@@ -1117,13 +1125,6 @@ app.get('/api/risk/backtest', async (_req, res) => {
   } catch (e: any) {
     console.warn('[Risk] backtest', e.message);
     res.status(503).json({ error: '回測資料暫時讀取不到，請稍後再試' });
-  }
-});
-    res.set('Cache-Control', 'public, max-age=600');
-    res.json(data);
-  } catch (e: any) {
-    console.warn('[Pattern] backtest', e.message);
-    res.status(503).json({ error: '型態掃描資料暫時讀取不到，請稍後再試' });
   }
 });
 

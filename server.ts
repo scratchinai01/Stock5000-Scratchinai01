@@ -18,7 +18,7 @@ import {
 } from './src/utils/twHolidays';
 import { getHistory, historyCacheStats } from './server-lib/history';
 import { registerOrderRoutes } from './server-lib/orders';
-import { getPatternLatest, getPatternBacktest, getRiskLatest, getRiskBacktest } from './server-lib/patternStore';
+import { getPatternLatest, getPatternBacktest, getRiskLatest, getRiskBacktest, getLearnDoc } from './server-lib/patternStore';
 
 dotenv.config();
 
@@ -1125,6 +1125,19 @@ app.get('/api/risk/backtest', async (_req, res) => {
   } catch (e: any) {
     console.warn('[Risk] backtest', e.message);
     res.status(503).json({ error: '回測資料暫時讀取不到，請稍後再試' });
+  }
+});
+
+// 循環股學習研究（教學實驗）：由排程工作算好，這裡只讀結果
+app.get('/api/learn/:doc(study|cyclicality)', async (req, res) => {
+  try {
+    const data = await getLearnDoc(req.params.doc as 'study' | 'cyclicality');
+    if (!data) return res.status(404).json({ error: '研究結果尚未產生，排程完成後就會出現' });
+    res.set('Cache-Control', 'public, max-age=600');
+    res.json(data);
+  } catch (e: any) {
+    console.warn('[Learn]', e.message);
+    res.status(503).json({ error: '研究結果暫時讀取不到，請稍後再試' });
   }
 });
 

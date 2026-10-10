@@ -1,20 +1,26 @@
 /**
- * 個股學習（強化學習實驗）：在「訓練期」用真實漲跌當獎勵，學出一個「持有／空手」決策規則，
- * 再拿到「沒看過的測試期」推測，檢驗是否真的學到東西。
+ * 個股／產業學習（強化學習實驗）
  *
- * 方法（單步強化學習／情境式決策，policy gradient）：
- *   - 狀態 x_t：當天收盤後看得到的 27 個特徵（15 個策略訊號 + 12 個連續指標），只用當天以前的資料。
- *   - 動作：持有（1）或空手（0）；策略 π(x) = sigmoid(w·x + b) 是持有的機率。
- *   - 獎勵：持有時拿到之後的報酬，換手時扣交易成本：
- *       J = 平均[ π_t · R_t ] − 成本 · 平均| π_t − π_{t−1} | − λ‖w‖²
- *     R_t = 之後 H 天的平均日報酬（H = 1 為原始，H > 1 為平滑後的目標）。
- *   - 以梯度上升求 w（Adam，固定初始值，結果可重現）。
- *   - 特徵標準化只用訓練期的平均數與標準差，訓練樣本的 R_t 也不會用到訓練期以後的資料。
+ * 研究流程（前進式驗證）：
+ *   第一階段：訓練到 split1 前一年 → 推測 split1～split2 前一年（模型凍結）
+ *   第二階段：訓練到 split2 前一年 → 推測 split2 至今
  *
- * 分數（100 分制）：100 分 = 每天都事先知道明天漲跌、只在上漲日持有（只做多）的完美結果；
- *   分數 = Σ 持有日報酬 ／ Σ 上漲日報酬 × 100。0 分 = 等於完全不持有；負分 = 比空手還差。
+ * 兩個模型一起學：
+ *   1. 循環辨識：用「事後」的波段高低點（漲跌 ≥ θ 才算轉折，zigzag）標出每天位於上升段或下降段，
+ *      以羅吉斯迴歸學「只看當時資料，現在像上升段的機率 P(上升段)」。
+ *   2. 交易決策（單步強化學習／policy gradient）：狀態 = 27 個複合指標 + P(上升段)；動作 = 持有／空手；
+ *      獎勵 = 持有時之後的報酬（下跌時乘上 1+κ 加重懲罰），換手扣交易成本。
+ *
+ * 每段都比較「原始」與「平滑」：
+ *   原始：獎勵用隔天漲跌、機率 > 0.5 就持有。
+ *   平滑：獎勵用之後 H 天平均漲跌；輸出機率做 H 日指數平均，0.55 以上才買、0.45 以下才賣。
+ *
+ * 防止偷看未來：指標只用當天以前的資料；循環標籤、標準化、獎勵都只用訓練期內的價格；
+ * 推測期的事後高低點只用來「評分」，不參與訓練。
+ *
+ * 分數（100 分制）：Σ 持有日報酬 ／ Σ 上漲日報酬 × 100（100 = 每天事先知道漲跌、只做多）。
  */
-import { BacktestParams, DailySeries, StrategyId, backtest, BacktestResult, strategyState, rsi, kd, macd, dmi, williamsR, sma } from './analytics';
+import { BacktestParams, BacktestResult, DailySeries, StrategyId, backtest, strategyState, rsi, kd, macd, dmi, sma } from './analytics';
 
 export const LEARN_STRATEGIES: { id: StrategyId; name: string }[] = [
   { id: 'ma_cross', name: '均線交叉多頭' },
@@ -38,15 +44,19 @@ export const LEARN_CONTINUOUS = [
   '20 日波動度', '量能放大倍數', '一年區間位置',
 ];
 export const FEATURE_NAMES = [...LEARN_STRATEGIES.map(x => x.name), ...LEARN_CONTINUOUS];
+export const POLICY_FEATURE_NAMES = [...FEATURE_NAMES, '循環：上升段機率'];
+export const WARMUP = 250;
 
-/** 每天的特徵（null 代表還在暖機期） */
-export function buildFeatures(s: DailySeries, p: BacktestParams): (number | null)[][] {
+type Row = (number | null)[];
+
+/** 每天的特徵（null 代表還在暖機期），只用當天以前的資料 */
+export function buildFeatures(s: DailySeries, p: BacktestParams): Row[] {
   const n = s.close.length;
   const states = LEARN_STRATEGIES.map(x => strategyState(s, p, x.id));
   const r = rsi(s.close, 14), k = kd(s).k, m = macd(s.close), d = dmi(s, 14), ma20 = sma(s.close, 20);
   const vol = s.volume.map(v => v || 0), avgVol = sma(vol, 20);
   const ret = (i: number, h: number) => (i >= h ? s.close[i] / s.close[i - h] - 1 : null);
-  const rows: (number | null)[][] = [];
+  const rows: Row[] = [];
   for (let i = 0; i < n; i++) {
     let vol20: number | null = null;
     if (i >= 20) {
@@ -71,14 +81,166 @@ export function buildFeatures(s: DailySeries, p: BacktestParams): (number | null
       d.pdi[i] === null || d.mdi[i] === null ? null : (d.pdi[i]! - d.mdi[i]!) / 100,
       ret(i, 5), ret(i, 20), ret(i, 60),
       vol20,
-      avgVol[i - 1] && avgVol[i - 1]! > 0 && i > 0 ? Math.log((vol[i] + 1) / (avgVol[i - 1]! + 1)) : null,
+      i > 0 && avgVol[i - 1] && avgVol[i - 1]! > 0 ? Math.log((vol[i] + 1) / (avgVol[i - 1]! + 1)) : null,
       pos52,
     ]);
   }
   return rows;
 }
 
-/** 之後 H 天的平均日報酬（持有決策在收盤做出、從下一天開始承擔漲跌） */
+// ───────────────────────── 循環（波段高低點） ─────────────────────────
+export interface Pivot { idx: number; type: 'peak' | 'trough' }
+
+/** zigzag：只用 [from, to] 內的價格；反向走勢達 θ（例如 0.25 = 25%）才確認前一個高點／低點 */
+export function zigzag(close: number[], from: number, to: number, theta: number): Pivot[] {
+  const piv: Pivot[] = [];
+  if (to - from < 2) return piv;
+  let dir = 0, ext = from, hiI = from, loI = from;
+  for (let i = from + 1; i <= to; i++) {
+    const c = close[i];
+    if (dir === 0) {
+      if (c > close[hiI]) hiI = i;
+      if (c < close[loI]) loI = i;
+      if (c >= close[loI] * (1 + theta) && loI < i) { piv.push({ idx: loI, type: 'trough' }); dir = 1; ext = i; }
+      else if (c <= close[hiI] * (1 - theta) && hiI < i) { piv.push({ idx: hiI, type: 'peak' }); dir = -1; ext = i; }
+    } else if (dir === 1) {
+      if (c > close[ext]) ext = i;
+      else if (c <= close[ext] * (1 - theta)) { piv.push({ idx: ext, type: 'peak' }); dir = -1; ext = i; }
+    } else {
+      if (c < close[ext]) ext = i;
+      else if (c >= close[ext] * (1 + theta)) { piv.push({ idx: ext, type: 'trough' }); dir = 1; ext = i; }
+    }
+  }
+  return piv;
+}
+
+/** 「當時就知道」的波段方向：最近一次被確認的轉折之後是上升（1）還是下降（0）——作為循環辨識的樸素基準 */
+export function zigzagState(close: number[], from: number, to: number, theta: number): (0 | 1 | null)[] {
+  const out: (0 | 1 | null)[] = new Array(close.length).fill(null);
+  let dir = 0, ext = from, hiI = from, loI = from;
+  for (let i = from + 1; i <= to; i++) {
+    const c = close[i];
+    if (dir === 0) {
+      if (c > close[hiI]) hiI = i;
+      if (c < close[loI]) loI = i;
+      if (c >= close[loI] * (1 + theta) && loI < i) { dir = 1; ext = i; }
+      else if (c <= close[hiI] * (1 - theta) && hiI < i) { dir = -1; ext = i; }
+    } else if (dir === 1) {
+      if (c > close[ext]) ext = i;
+      else if (c <= close[ext] * (1 - theta)) { dir = -1; ext = i; }
+    } else {
+      if (c < close[ext]) ext = i;
+      else if (c >= close[ext] * (1 + theta)) { dir = 1; ext = i; }
+    }
+    out[i] = dir === 0 ? null : dir === 1 ? 1 : 0;
+  }
+  return out;
+}
+
+/** 依高低點標記：低點→高點之間 = 1（上升段），高點→低點之間 = 0（下降段）；第一個與最後一個轉折點之外 = null */
+export function cycleLabels(n: number, piv: Pivot[]): (0 | 1 | null)[] {
+  const y: (0 | 1 | null)[] = new Array(n).fill(null);
+  for (let k = 0; k + 1 < piv.length; k++) {
+    const v = piv[k].type === 'trough' ? 1 : 0;
+    for (let t = piv[k].idx; t < piv[k + 1].idx; t++) y[t] = v;
+  }
+  return y;
+}
+
+export interface CycleStats { cycles: number; avgYears: number | null; avgRise: number | null; avgFall: number | null; pivots: number }
+/** 描述性統計：完整循環（低點→低點）次數、平均週期、平均漲幅／跌幅 */
+export function cycleStats(close: number[], piv: Pivot[]): CycleStats {
+  const troughs = piv.filter(x => x.type === 'trough');
+  const lens: number[] = [], rises: number[] = [], falls: number[] = [];
+  for (let k = 1; k < troughs.length; k++) lens.push((troughs[k].idx - troughs[k - 1].idx) / 250);
+  for (let k = 0; k + 1 < piv.length; k++) {
+    const ch = close[piv[k + 1].idx] / close[piv[k].idx] - 1;
+    (piv[k].type === 'trough' ? rises : falls).push(ch);
+  }
+  const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  return { cycles: lens.length, avgYears: avg(lens), avgRise: avg(rises), avgFall: avg(falls), pivots: piv.length };
+}
+
+// ───────────────────────── 模型 ─────────────────────────
+export interface Model { w: number[]; b: number; mean: number[]; std: number[] }
+const sigmoid = (z: number) => 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, z))));
+
+interface Block { rows: number[][]; target: number[]; contiguous: boolean[] }
+
+function standardize(blocks: Block[], d: number) {
+  const mean = new Array(d).fill(0), std = new Array(d).fill(1);
+  for (let j = 0; j < d; j++) {
+    let a = 0, b = 0, c = 0;
+    for (const bl of blocks) for (const r of bl.rows) { const v = r[j]; if (isFinite(v)) { a += v; b += v * v; c++; } }
+    if (c > 1) { mean[j] = a / c; std[j] = Math.sqrt(Math.max(b / c - mean[j] ** 2, 0)) || 1; }
+  }
+  return { mean, std };
+}
+
+/** Adam 梯度上升的共用迴圈；grad 回傳每個樣本的 ∂J/∂z */
+function optimize(blocks: Block[], d: number, l2: number, epochs: number, lr: number,
+  grad: (bl: Block, k: number, pi: number[], N: number) => number): Model {
+  const { mean, std } = standardize(blocks, d);
+  const Z = blocks.map(bl => bl.rows.map(r => r.map((v, j) => (isFinite(v) ? (v - mean[j]) / std[j] : 0))));
+  const N = blocks.reduce((s, b) => s + b.rows.length, 0);
+  const w = new Array(d).fill(0);
+  let b = 0;
+  if (N < 50) return { w, b, mean, std };
+  const m1 = new Array(d + 1).fill(0), m2 = new Array(d + 1).fill(0);
+  const PI = blocks.map(bl => new Array(bl.rows.length).fill(0.5));
+  for (let ep = 1; ep <= epochs; ep++) {
+    for (let q = 0; q < blocks.length; q++) {
+      const z = Z[q], pi = PI[q];
+      for (let k = 0; k < z.length; k++) { let s = b; const r = z[k]; for (let j = 0; j < d; j++) s += w[j] * r[j]; pi[k] = sigmoid(s); }
+    }
+    const g = new Array(d + 1).fill(0);
+    for (let q = 0; q < blocks.length; q++) {
+      const z = Z[q];
+      for (let k = 0; k < z.length; k++) {
+        const s = grad(blocks[q], k, PI[q], N);
+        const r = z[k];
+        for (let j = 0; j < d; j++) g[j] += s * r[j];
+        g[d] += s;
+      }
+    }
+    for (let j = 0; j < d; j++) g[j] -= 2 * l2 * w[j];
+    for (let j = 0; j <= d; j++) {
+      m1[j] = 0.9 * m1[j] + 0.1 * g[j];
+      m2[j] = 0.999 * m2[j] + 0.001 * g[j] * g[j];
+      const step = (lr * (m1[j] / (1 - 0.9 ** ep))) / (Math.sqrt(m2[j] / (1 - 0.999 ** ep)) + 1e-8);
+      if (j < d) w[j] += step; else b += step;
+    }
+  }
+  return { w, b, mean, std };
+}
+
+/** 羅吉斯迴歸（循環辨識）：最大化對數概似 */
+function fitLogistic(blocks: Block[], d: number): Model {
+  return optimize(blocks, d, 0.002, 250, 0.05, (bl, k, pi, N) => (bl.target[k] - pi[k]) / N);
+}
+
+/** 交易策略（policy gradient）：J = 平均[π·R] − 成本·平均|Δπ| */
+function fitPolicy(blocks: Block[], d: number, cost: number): Model {
+  const c = cost * 100;
+  return optimize(blocks, d, 0.002, 300, 0.05, (bl, k, pi, N) => {
+    let dJ = bl.target[k];
+    if (k > 0 && bl.contiguous[k]) dJ -= c * Math.sign(pi[k] - pi[k - 1]);
+    if (k + 1 < pi.length && bl.contiguous[k + 1]) dJ += c * Math.sign(pi[k + 1] - pi[k]);
+    return (dJ * pi[k] * (1 - pi[k])) / N;
+  });
+}
+
+export function predict(m: Model, X: Row[]): number[] {
+  return X.map(r => {
+    let z = m.b;
+    for (let j = 0; j < m.w.length; j++) { const v = r[j]; z += m.w[j] * (v === null || !isFinite(v as number) ? 0 : ((v as number) - m.mean[j]) / m.std[j]); }
+    return sigmoid(z);
+  });
+}
+
+const num = (v: number | null) => (v === null || !isFinite(v) ? NaN : v);
+
+/** 之後 H 天的平均日報酬（收盤決定、隔天起承擔漲跌） */
 export function forwardReward(close: number[], h: number): (number | null)[] {
   const n = close.length;
   return close.map((_, t) => {
@@ -89,74 +251,6 @@ export function forwardReward(close: number[], h: number): (number | null)[] {
   });
 }
 
-export interface Policy { w: number[]; b: number; mean: number[]; std: number[] }
-
-const sigmoid = (z: number) => 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, z))));
-
-/**
- * 在 [from, to]（含）訓練；只用 t + H ≤ to 的樣本，獎勵不會用到訓練期以後的價格。
- */
-export function trainPolicy(
-  X: (number | null)[][], close: number[], from: number, to: number,
-  opts: { horizon: number; cost: number; l2?: number; epochs?: number; lr?: number },
-): Policy {
-  const d = X[0]?.length ?? 0;
-  const R = forwardReward(close, opts.horizon);
-  const idx: number[] = [];
-  for (let t = Math.max(from, 1); t + opts.horizon <= to; t++) if (R[t] !== null) idx.push(t);
-  // 標準化：只用訓練期
-  const mean = new Array(d).fill(0), std = new Array(d).fill(1);
-  for (let j = 0; j < d; j++) {
-    let a = 0, b = 0, c = 0;
-    for (const t of idx) { const v = X[t][j]; if (v !== null && isFinite(v)) { a += v; b += v * v; c++; } }
-    if (c > 1) { mean[j] = a / c; std[j] = Math.sqrt(Math.max(b / c - mean[j] ** 2, 0)) || 1; }
-  }
-  const Z = idx.map(t => X[t].map((v, j) => (v === null || !isFinite(v) ? 0 : (v - mean[j]) / std[j])));
-  // 獎勵換算成「%／天」，梯度尺度比較穩定
-  const Rs = idx.map(t => R[t]! * 100);
-  const cost = opts.cost * 100; // 每單位換手成本（%）
-  const l2 = opts.l2 ?? 0.002, epochs = opts.epochs ?? 300, lr = opts.lr ?? 0.05;
-  const w = new Array(d).fill(0);
-  let b = 0;
-  const mW = new Array(d + 1).fill(0), vW = new Array(d + 1).fill(0);
-  const N = idx.length;
-  if (N < 50) return { w, b, mean, std };
-  const pi = new Array(N).fill(0.5);
-  for (let ep = 1; ep <= epochs; ep++) {
-    for (let k = 0; k < N; k++) { let z = b; const zr = Z[k]; for (let j = 0; j < d; j++) z += w[j] * zr[j]; pi[k] = sigmoid(z); }
-    const g = new Array(d + 1).fill(0);
-    for (let k = 0; k < N; k++) {
-      // ∂J/∂π_k：報酬 − 換手成本（|π_k − π_{k−1}| 與 |π_{k+1} − π_k| 兩項）
-      let dJ = Rs[k];
-      if (k > 0 && idx[k - 1] === idx[k] - 1) dJ -= cost * Math.sign(pi[k] - pi[k - 1]);
-      if (k + 1 < N && idx[k + 1] === idx[k] + 1) dJ += cost * Math.sign(pi[k + 1] - pi[k]);
-      const s = dJ * pi[k] * (1 - pi[k]) / N;
-      const zr = Z[k];
-      for (let j = 0; j < d; j++) g[j] += s * zr[j];
-      g[d] += s;
-    }
-    for (let j = 0; j < d; j++) g[j] -= 2 * l2 * w[j];
-    // Adam（梯度上升）
-    for (let j = 0; j <= d; j++) {
-      mW[j] = 0.9 * mW[j] + 0.1 * g[j];
-      vW[j] = 0.999 * vW[j] + 0.001 * g[j] * g[j];
-      const mh = mW[j] / (1 - 0.9 ** ep), vh = vW[j] / (1 - 0.999 ** ep);
-      const step = (lr * mh) / (Math.sqrt(vh) + 1e-8);
-      if (j < d) w[j] += step; else b += step;
-    }
-  }
-  return { w, b, mean, std };
-}
-
-export function predictProb(pol: Policy, X: (number | null)[][]): number[] {
-  return X.map(row => {
-    let z = pol.b;
-    for (let j = 0; j < row.length; j++) { const v = row[j]; z += pol.w[j] * (v === null || !isFinite(v) ? 0 : (v - pol.mean[j]) / pol.std[j]); }
-    return sigmoid(z);
-  });
-}
-
-/** 原始：機率 > 0.5 持有。平滑：機率先做 k 日指數平均，再用 0.55／0.45 遲滯區間，減少來回進出 */
 export function toSignal(prob: number[], smooth: number): (boolean | null)[] {
   if (smooth <= 1) return prob.map(p => p > 0.5);
   const a = 2 / (smooth + 1);
@@ -167,7 +261,9 @@ export function toSignal(prob: number[], smooth: number): (boolean | null)[] {
   });
 }
 
-/** 100 分制：Σ 持有日報酬 ／ Σ 上漲日報酬（訊號收盤確認，隔天起承擔漲跌） */
+const ema = (x: number[], k: number) => { const a = 2 / (k + 1); let e = x[0] ?? 0.5; return x.map((v, i) => (e = i === 0 ? v : a * v + (1 - a) * e)); };
+
+/** 100 分制：Σ 持有日報酬 ／ Σ 上漲日報酬 */
 export function hindsightScore(close: number[], signal: (boolean | null)[], from: number, to: number): number {
   let cur = false, got = 0, best = 0;
   for (let t = Math.max(from, 1); t <= to; t++) {
@@ -180,87 +276,182 @@ export function hindsightScore(close: number[], signal: (boolean | null)[], from
   return best > 0 ? (got / best) * 100 : 0;
 }
 
-export interface LearnVariant {
-  label: '原始' | '平滑';
-  trainScore: number;
-  testScore: number;
-  bt: BacktestResult;
-  policy: Policy;
-}
-export interface LearnRound {
-  name: string;
-  trainFrom: string; trainTo: string; testFrom: string; testTo: string;
-  trainYears: number;
-  variants: LearnVariant[];
-  bench: { trainScore: number; testScore: number; bt: BacktestResult };
+/** 二元分類的 AUC（排序法） */
+function auc(p: number[], y: number[]) {
+  const idx = p.map((v, i) => i).sort((a, b) => p[a] - p[b]);
+  let rank = 0, pos = 0, sumR = 0;
+  for (const i of idx) { rank++; if (y[i] === 1) { pos++; sumR += rank; } }
+  const neg = y.length - pos;
+  return pos && neg ? (sumR - (pos * (pos + 1)) / 2) / (pos * neg) : NaN;
 }
 
+// ───────────────────────── 前進式驗證 ─────────────────────────
 export interface LearnOptions {
-  split1: number;          // 第一個測試期起始年（預設 2005）
-  split2: number;          // 第二個測試期起始年（預設 2015）
-  smooth: number;          // 平滑天數（目標與訊號共用）
-  expanding: boolean;      // true：訓練期從頭累積；false：只用前一段
+  split1: number; split2: number;  // 推測期起始年（預設 2005、2015）
+  smooth: number;                  // 平滑天數
+  expanding: boolean;              // 第二階段訓練資料：從頭累積 or 只用前一段
+  theta: number;                   // 波段轉折門檻（0.25 = 25%）
+  kappa: number;                   // 下跌懲罰（1 = 下跌日的損失算兩倍）
+}
+export const DEFAULT_LEARN: LearnOptions = { split1: 2005, split2: 2015, smooth: 10, expanding: true, theta: 0.25, kappa: 1 };
+
+export interface Member { id: string; name: string; s: DailySeries; X: Row[] }
+export function makeMember(id: string, name: string, s: DailySeries, p: BacktestParams): Member {
+  return { id, name, s, X: buildFeatures(s, p) };
 }
 
-function firstIndexOnOrAfter(dates: string[], d: string) {
-  const i = dates.findIndex(x => x >= d);
-  return i < 0 ? dates.length : i;
-}
+interface Win { trainFrom: number; trainTo: number; testFrom: number; testTo: number }
+const idxOf = (dates: string[], d: string) => { const i = dates.findIndex(x => x >= d); return i < 0 ? dates.length : i; };
 
-function slice(s: DailySeries, a: number, b: number): DailySeries {
-  return { date: s.date.slice(a, b + 1), open: s.open.slice(a, b + 1), high: s.high.slice(a, b + 1), low: s.low.slice(a, b + 1), close: s.close.slice(a, b + 1), volume: s.volume.slice(a, b + 1) };
-}
-
-/** 兩階段前進式驗證：訓練 → 推測下一段；每段都跑「原始」與「平滑」兩個版本 */
-export function runLearning(s: DailySeries, p: BacktestParams, o: LearnOptions): { rounds: LearnRound[]; warnings: string[] } {
-  const n = s.close.length;
-  const warnings: string[] = [];
-  const X = buildFeatures(s, p);
-  const warm = 250; // 一年區間位置等特徵需要一年暖機
-  const c1 = firstIndexOnOrAfter(s.date, `${o.split1}-01-01`);
-  const c2 = firstIndexOnOrAfter(s.date, `${o.split2}-01-01`);
-  const plan = [
-    { name: '第一階段', trainFrom: warm, trainTo: c1 - 1, testFrom: c1, testTo: c2 - 1 },
-    { name: '第二階段', trainFrom: o.expanding ? warm : c1, trainTo: c2 - 1, testFrom: c2, testTo: n - 1 },
+function windowsFor(m: Member, o: LearnOptions): ({ name: string; win: Win } | { name: string; skip: string })[] {
+  const n = m.s.close.length, d = m.s.date;
+  const c1 = idxOf(d, `${o.split1}-01-01`), c2 = idxOf(d, `${o.split2}-01-01`);
+  const plans = [
+    { name: '第一階段', win: { trainFrom: WARMUP, trainTo: c1 - 1, testFrom: Math.max(c1, WARMUP), testTo: c2 - 1 } },
+    { name: '第二階段', win: { trainFrom: o.expanding ? WARMUP : Math.max(c1, WARMUP), trainTo: c2 - 1, testFrom: Math.max(c2, WARMUP), testTo: n - 1 } },
   ];
-  const cost = p.feeRate * p.feeDiscount + p.taxRate / 2; // 單邊平均成本
-  const rounds: LearnRound[] = [];
-  for (const pl of plan) {
-    const trainDays = pl.trainTo - pl.trainFrom + 1, testDays = pl.testTo - pl.testFrom + 1;
-    if (trainDays < 500 || testDays < 120) {
-      warnings.push(`${pl.name}資料不足（訓練 ${Math.max(trainDays, 0)} 天、測試 ${Math.max(testDays, 0)} 天），已略過；這檔股票上市較晚或切點年份太早／太晚。`);
-      continue;
-    }
-    const variants: LearnVariant[] = (['原始', '平滑'] as const).map(label => {
-      const h = label === '原始' ? 1 : Math.max(2, o.smooth);
-      const pol = trainPolicy(X, s.close, pl.trainFrom, pl.trainTo, { horizon: h, cost });
-      const sig = toSignal(predictProb(pol, X), label === '原始' ? 1 : o.smooth);
-      const bt = backtest(slice(s, pl.testFrom, pl.testTo), { ...p, customSignal: sig.slice(pl.testFrom, pl.testTo + 1), stopLoss: 0, takeProfit: 0, maxHold: 0, marketFilter: 0, combo: undefined });
-      return {
-        label, policy: pol, bt,
-        trainScore: hindsightScore(s.close, sig, pl.trainFrom, pl.trainTo),
-        testScore: hindsightScore(s.close, sig, pl.testFrom, pl.testTo),
-      };
-    });
-    const all = s.close.map(() => true);
-    rounds.push({
-      name: pl.name,
-      trainFrom: s.date[pl.trainFrom], trainTo: s.date[pl.trainTo], testFrom: s.date[pl.testFrom], testTo: s.date[pl.testTo],
-      trainYears: trainDays / 250,
-      variants,
-      bench: {
-        trainScore: hindsightScore(s.close, all, pl.trainFrom, pl.trainTo),
-        testScore: hindsightScore(s.close, all, pl.testFrom, pl.testTo),
-        bt: backtest(slice(s, pl.testFrom, pl.testTo), { ...p, strategy: 'buy_hold', combo: undefined, customSignal: undefined }),
-      },
-    });
-  }
-  return { rounds, warnings };
+  return plans.map(pl => {
+    const te = pl.win.testTo - pl.win.testFrom + 1;
+    return te < 120 ? { name: pl.name, skip: `推測期資料不足（${Math.max(te, 0)} 天）` } : pl;
+  });
 }
 
-/** 依權重找出模型最看重的特徵（特徵已標準化，權重大小可互相比較） */
-export function topWeights(pol: Policy, k = 5) {
-  const items = pol.w.map((w, j) => ({ name: FEATURE_NAMES[j], w })).filter(x => Math.abs(x.w) > 1e-6);
+export interface RoundModels { cycle: Model; raw: Model; smooth: Model; members: number }
+
+/** 在每個成員的訓練期合併樣本，學出循環模型與兩個交易策略（單檔就是只有一個成員） */
+export function fitRound(members: { m: Member; win: Win }[], p: BacktestParams, o: LearnOptions): RoundModels | null {
+  const usable = members.filter(x => x.win.trainTo - x.win.trainFrom + 1 >= 500);
+  if (!usable.length) return null;
+  const d = FEATURE_NAMES.length;
+  // 1. 循環辨識：標籤只用訓練期內的價格
+  const cyc: Block[] = usable.map(({ m, win }) => {
+    const y = cycleLabels(m.s.close.length, zigzag(m.s.close, win.trainFrom, win.trainTo, o.theta));
+    const rows: number[][] = [], target: number[] = [];
+    for (let t = win.trainFrom; t <= win.trainTo; t++) if (y[t] !== null) { rows.push(m.X[t].map(num)); target.push(y[t]!); }
+    return { rows, target, contiguous: rows.map(() => false) };
+  });
+  const cycle = fitLogistic(cyc, d);
+  // 2. 交易策略：特徵加上 P(上升段)；獎勵只用訓練期內的價格，下跌加重懲罰
+  const cost = p.feeRate * p.feeDiscount + p.taxRate / 2;
+  const policy = (h: number) => {
+    const blocks: Block[] = usable.map(({ m, win }) => {
+      const P = predict(cycle, m.X), R = forwardReward(m.s.close, h);
+      const rows: number[][] = [], target: number[] = [], contiguous: boolean[] = [];
+      let last = -2;
+      for (let t = Math.max(win.trainFrom, 1); t + h <= win.trainTo; t++) {
+        const r = R[t];
+        if (r === null) continue;
+        rows.push([...m.X[t].map(num), P[t]]);
+        target.push((r < 0 ? r * (1 + o.kappa) : r) * 100);
+        contiguous.push(last === t - 1);
+        last = t;
+      }
+      return { rows, target, contiguous };
+    });
+    return fitPolicy(blocks, d + 1, cost);
+  };
+  return { cycle, raw: policy(1), smooth: policy(Math.max(2, o.smooth)), members: usable.length };
+}
+
+export interface VariantResult { label: '原始' | '平滑'; trainScore: number; testScore: number; bt: BacktestResult; exposure: number }
+export interface CycleEval { acc: number | null; baseAcc: number | null; auc: number | null; troughLag: number | null; peakLag: number | null; turns: number; detected: number }
+export interface MemberRound {
+  name: string; trainFrom: string; trainTo: string; testFrom: string; testTo: string; trainYears: number;
+  variants: VariantResult[];
+  bench: { trainScore: number; testScore: number; bt: BacktestResult };
+  cycle: CycleEval;
+}
+
+const slice = (s: DailySeries, a: number, b: number): DailySeries => ({
+  date: s.date.slice(a, b + 1), open: s.open.slice(a, b + 1), high: s.high.slice(a, b + 1), low: s.low.slice(a, b + 1), close: s.close.slice(a, b + 1), volume: s.volume.slice(a, b + 1),
+});
+
+/** 用已訓練好的模型推測這個成員的推測期，並計分 */
+export function evalMember(m: Member, win: Win, name: string, models: RoundModels, p: BacktestParams, o: LearnOptions): MemberRound {
+  const s = m.s;
+  const P = predict(models.cycle, m.X);
+  const XP = m.X.map((r, i) => [...r, P[i]]);
+  const run = (label: '原始' | '平滑', pol: Model, k: number): VariantResult => {
+    const sig = toSignal(predict(pol, XP), k);
+    const bt = backtest(slice(s, win.testFrom, win.testTo), { ...p, customSignal: sig.slice(win.testFrom, win.testTo + 1), stopLoss: 0, takeProfit: 0, maxHold: 0, marketFilter: 0, combo: undefined });
+    return { label, bt, exposure: bt.exposure, trainScore: hindsightScore(s.close, sig, win.trainFrom, win.trainTo), testScore: hindsightScore(s.close, sig, win.testFrom, win.testTo) };
+  };
+  // 循環評分：推測期的「事後」高低點只用來評分
+  const evalFrom = Math.max(0, Math.min(win.trainFrom, win.testFrom));
+  const truthAll = zigzag(s.close, evalFrom, win.testTo, o.theta);
+  const truthPiv = truthAll.filter(x => x.idx >= win.testFrom);
+  const y = cycleLabels(s.close.length, truthAll);
+  const ps: number[] = [], ys: number[] = [];
+  const naive = zigzagState(s.close, evalFrom, win.testTo, o.theta);
+  let hit = 0, baseHit = 0;
+  for (let t = win.testFrom; t <= win.testTo; t++) if (y[t] !== null) {
+    ps.push(P[t]); ys.push(y[t]!);
+    if ((P[t] > 0.5 ? 1 : 0) === y[t]) hit++;
+    if ((naive[t] ?? 1) === y[t]) baseHit++;
+  }
+  const state = ema(P, 5).map(v => v > 0.5);
+  const lags = { trough: [] as number[], peak: [] as number[] };
+  let detected = 0;
+  for (const pv of truthPiv) {
+    const want = pv.type === 'trough';
+    let lag: number | null = null;
+    for (let j = Math.max(pv.idx - 60, 1); j <= Math.min(pv.idx + 120, s.close.length - 1); j++) {
+      if (state[j] === want && state[j - 1] !== want) { lag = j - pv.idx; if (j >= pv.idx) break; }
+    }
+    if (lag !== null) { detected++; (want ? lags.trough : lags.peak).push(lag); }
+  }
+  const med = (a: number[]) => { if (!a.length) return null; const b = [...a].sort((x, z) => x - z); return b[Math.floor(b.length / 2)]; };
+  const all = s.close.map(() => true);
+  return {
+    name, trainFrom: win.trainTo >= win.trainFrom ? s.date[win.trainFrom] : '', trainTo: win.trainTo >= win.trainFrom ? s.date[win.trainTo] : '', testFrom: s.date[win.testFrom], testTo: s.date[win.testTo],
+    trainYears: Math.max(0, win.trainTo - win.trainFrom + 1) / 250,
+    variants: [run('原始', models.raw, 1), run('平滑', models.smooth, o.smooth)],
+    bench: {
+      trainScore: hindsightScore(s.close, all, win.trainFrom, win.trainTo),
+      testScore: hindsightScore(s.close, all, win.testFrom, win.testTo),
+      bt: backtest(slice(s, win.testFrom, win.testTo), { ...p, strategy: 'buy_hold', combo: undefined, customSignal: undefined }),
+    },
+    cycle: { acc: ys.length ? hit / ys.length : null, baseAcc: ys.length ? baseHit / ys.length : null, auc: ys.length ? auc(ps, ys) : null, troughLag: med(lags.trough), peakLag: med(lags.peak), turns: truthPiv.length, detected },
+  };
+}
+
+/** 單一股票：自己訓練、自己推測 */
+export function runLearning(s: DailySeries, p: BacktestParams, o: LearnOptions, id = '', name = '') {
+  const m = makeMember(id, name, s, p);
+  const warnings: string[] = [];
+  const rounds: (MemberRound & { models: RoundModels })[] = [];
+  for (const w of windowsFor(m, o)) {
+    if ('skip' in w) { warnings.push(`${w.name}${w.skip}，已略過。`); continue; }
+    const models = fitRound([{ m, win: w.win }], p, o);
+    if (!models) { warnings.push(`${w.name}訓練期不足 2 年（這檔股票的資料從 ${s.date[0]} 開始），已略過；跨產業研究可以用同產業合併模型推測它。`); continue; }
+    rounds.push({ ...evalMember(m, w.win, w.name, models, p, o), models });
+  }
+  const piv = zigzag(s.close, 0, s.close.length - 1, o.theta);
+  return { rounds, warnings, cycles: cycleStats(s.close, piv) };
+}
+
+/** 產業合併：同一組股票的訓練樣本合併訓練一個模型，再分別推測每一檔 */
+export function runPooled(members: Member[], p: BacktestParams, o: LearnOptions) {
+  const out = new Map<string, MemberRound[]>();
+  const models: { name: string; models: RoundModels }[] = [];
+  const names = ['第一階段', '第二階段'];
+  for (let r = 0; r < 2; r++) {
+    const items = members.map(m => ({ m, w: windowsFor(m, o)[r] })).filter(x => !('skip' in x.w)) as { m: Member; w: { name: string; win: Win } }[];
+    const fitted = fitRound(items.map(x => ({ m: x.m, win: x.w.win })), p, o);
+    if (!fitted) continue;
+    models.push({ name: names[r], models: fitted });
+    for (const x of items) {
+      const arr = out.get(x.m.id) ?? [];
+      arr.push(evalMember(x.m, x.w.win, names[r], fitted, p, o));
+      out.set(x.m.id, arr);
+    }
+  }
+  return Object.assign(out, { models });
+}
+
+/** 模型最看重的特徵（特徵已標準化，權重可互相比較） */
+export function topWeights(m: Model, names = POLICY_FEATURE_NAMES, k = 5) {
+  const items = m.w.map((w, j) => ({ name: names[j], w })).filter(x => Math.abs(x.w) > 1e-6);
   return {
     pos: items.filter(x => x.w > 0).sort((a, b) => b.w - a.w).slice(0, k),
     neg: items.filter(x => x.w < 0).sort((a, b) => a.w - b.w).slice(0, k),

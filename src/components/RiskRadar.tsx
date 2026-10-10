@@ -395,15 +395,15 @@ function RiskStudyCard({ r, base, lift, onClose }: { r: Row; base: number | null
     <StudyCardModal title={`風險教學卡：${r.name}`} filename={`risk_${r.id}_${r.date.replace(/-/g, '')}.png`} onClose={onClose}>
       <div style={{ background: LEVEL_HEAD[r.level] }} className="text-white px-6 pt-5 pb-6">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-[16px] font-black px-3 py-1 rounded-full" style={{ background: 'rgba(0,0,0,0.22)' }}>📖 風險教學卡 · 台股下跌預警</span>
-          <span className="text-[15px] font-mono font-bold">資料日 {r.date}</span>
+          <span className="text-[16px] font-black px-3 py-1 rounded-full whitespace-nowrap" style={{ background: 'rgba(0,0,0,0.22)' }}>📖 風險教學卡 · 台股下跌預警</span>
+          <span className="text-[15px] font-mono font-bold whitespace-nowrap">資料日 {r.date}</span>
         </div>
         <div className="mt-3 text-[34px] font-black leading-tight">{r.name} <span className="font-mono text-[26px] opacity-90">{r.id}</span></div>
         <div className="mt-2 flex flex-wrap gap-2 text-[16px] font-black">
-          <span className="px-3 py-1 rounded-full bg-white text-slate-900">{LEVEL[r.level].emoji} {LEVEL[r.level].label} · {Math.round(r.score)} 分</span>
-          {r.alert != null && <span className="px-3 py-1 rounded-full bg-white/20">⚠️ 利空警戒 {Math.round(r.alert)}</span>}
-          <span className="px-3 py-1 rounded-full bg-white/20">利空訊號 {hits.length} / {SIGNALS.length}</span>
-          {r.industry && <span className="px-3 py-1 rounded-full bg-white/20">{r.industry}</span>}
+          <span className="px-3 py-1 rounded-full bg-white text-slate-900 whitespace-nowrap">{LEVEL[r.level].emoji} {LEVEL[r.level].label} · {Math.round(r.score)} 分</span>
+          {r.alert != null && <span className="px-3 py-1 rounded-full bg-white/20 whitespace-nowrap">⚠️ 利空警戒 {Math.round(r.alert)}</span>}
+          <span className="px-3 py-1 rounded-full bg-white/20 whitespace-nowrap">利空訊號 {hits.length} / {SIGNALS.length}</span>
+          {r.industry && <span className="px-3 py-1 rounded-full bg-white/20 whitespace-nowrap">{r.industry}</span>}
         </div>
       </div>
       <div className="px-6 py-5 space-y-5">
@@ -425,7 +425,7 @@ function RiskStudyCard({ r, base, lift, onClose }: { r: Row; base: number | null
           <div className="space-y-1.5">
             {FACTOR_KEYS.map((k, i) => (
               <div key={k} className="flex items-center gap-2 text-[16px]">
-                <span className="w-44 font-bold">{k} {FACTOR_NAMES[k]}</span>
+                <span className="font-bold whitespace-nowrap shrink-0" style={{ width: 190 }}>{k} {FACTOR_NAMES[k]}</span>
                 <div className="flex-1 h-4 rounded-full overflow-hidden" style={{ background: '#ece6da' }}>
                   <div className="h-full rounded-full" style={{ width: `${r.F[i] * 100}%`, background: r.F[i] >= 0.6 ? '#dc2626' : r.F[i] >= 0.3 ? '#f97316' : '#94a3b8' }} />
                 </div>
@@ -454,7 +454,7 @@ function RiskStudyCard({ r, base, lift, onClose }: { r: Row; base: number | null
           {lift && <p className="text-[14px] text-slate-500">×倍數：歷史上觸發後「20 日內回落超過 10%」的機率是沒觸發時的幾倍。倍數 1.15 以上才算有預警力{strong.length ? `，今天有 ${strong.length} 項` : ''}。</p>}
         </CardSection>
         <CardSection title={`近 ${r.hist.length} 個交易日風險分數`}>
-          <Spark hist={r.hist} big />
+          <Spark hist={r.hist} big full />
         </CardSection>
         <CardSection title="三個學習重點">
           <ol className="list-decimal pl-6 space-y-1 text-[16.5px] leading-relaxed">
@@ -522,7 +522,7 @@ function SignalChecklist({ r }: { r: Row }) {
   );
 }
 
-function Spark({ hist, big }: { hist: number[]; big?: boolean }) {
+function Spark({ hist, big, full }: { hist: number[]; big?: boolean; full?: boolean }) {
   if (!hist?.length) return null;
   const W = big ? 520 : 120;
   const H = big ? 120 : 30;
@@ -532,7 +532,7 @@ function Spark({ hist, big }: { hist: number[]; big?: boolean }) {
   const last = hist[hist.length - 1];
   const color = LEVEL[last >= 80 ? 4 : last >= 60 ? 3 : last >= 40 ? 2 : last >= 20 ? 1 : 0].bar;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={big ? 'w-full max-w-[520px] h-[120px] bg-slate-50 rounded-lg' : 'w-[120px] h-[30px]'} role="img" aria-label={`近期風險分數走勢，最新 ${last} 分`}>
+    <svg viewBox={`0 0 ${W} ${H}`} className={big ? `w-full ${full ? '' : 'max-w-[520px]'} h-[120px] bg-slate-50 rounded-lg` : 'w-[120px] h-[30px]'} preserveAspectRatio={full ? 'none' : undefined} role="img" aria-label={`近期風險分數走勢，最新 ${last} 分`}>
       {big && [20, 40, 60, 80].map(v => (
         <g key={v}>
           <line x1={0} x2={W} y1={y(v)} y2={y(v)} stroke="#cbd5e1" strokeDasharray="4 4" />

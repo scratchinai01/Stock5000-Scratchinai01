@@ -65,6 +65,14 @@ export const RiskRadar: React.FC<{ onOpenSymbol: (symbol: string) => void; holdi
   const [err, setErr] = useState<string | null>(null);
   const [btErr, setBtErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // 點等級卡片：切到全市場排行，只看該等級、不限流動性（數量與卡片一致）
+  const [preset, setPreset] = useState<{ level: number; nonce: number } | null>(null);
+  const listTop = React.useRef<HTMLDivElement>(null);
+  const pickLevel = (i: number) => {
+    setPreset({ level: i, nonce: Date.now() });
+    setView('market');
+    setTimeout(() => listTop.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
 
   useEffect(() => {
     let off = false;
@@ -99,16 +107,17 @@ export const RiskRadar: React.FC<{ onOpenSymbol: (symbol: string) => void; holdi
       {latest && (
         <div className="grid grid-cols-5 gap-2">
           {LEVEL.map((lv, i) => (
-            <div key={i} className={`rounded-xl border p-2 text-center ${lv.soft}`}>
+            <button key={i} type="button" onClick={() => pickLevel(i)} title={`列出今天「${lv.label}」的 ${latest.counts[i] || 0} 檔`}
+              className={`rounded-xl border-2 p-2 text-center cursor-pointer transition hover:shadow-md active:scale-[0.98] ${lv.soft} ${view === 'market' && preset?.level === i ? 'ring-4 ring-slate-900/70' : ''}`}>
               <div className="text-[15px] font-black">{lv.emoji} {lv.label}</div>
               <div className="text-[22px] font-black font-mono">{(latest.counts[i] || 0).toLocaleString()}</div>
-              <div className="text-[13px]">檔</div>
-            </div>
+              <div className="text-[13px] underline decoration-dotted underline-offset-2">檔・點我列出</div>
+            </button>
           ))}
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2" role="tablist">
+      <div ref={listTop} className="flex flex-wrap gap-2 scroll-mt-4" role="tablist">
         {([['mine', '我的持股與追蹤', Star], ['market', '全市場風險排行', ListChecks], ['backtest', '30 年回測驗證', BarChart3], ['rules', '因子說明與限制', BookOpen]] as const).map(([id, label, Icon]) => (
           <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
             className={`min-h-[44px] px-4 rounded-xl text-[16px] font-black flex items-center gap-1.5 border-2 ${view === id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`}>
@@ -118,7 +127,7 @@ export const RiskRadar: React.FC<{ onOpenSymbol: (symbol: string) => void; holdi
       </div>
 
       {(view === 'mine' || view === 'market') && (loading ? <Loading text="讀取今日風險分數…" /> : err ? <ErrorBox text={err} /> : latest && (
-        view === 'mine' ? <MineView latest={latest} holdings={holdings} onOpenSymbol={onOpenSymbol} /> : <MarketView latest={latest} onOpenSymbol={onOpenSymbol} />
+        view === 'mine' ? <MineView latest={latest} holdings={holdings} onOpenSymbol={onOpenSymbol} /> : <MarketView key={preset?.nonce ?? 0} latest={latest} onOpenSymbol={onOpenSymbol} presetLevel={preset?.level} />
       ))}
       {view === 'backtest' && (bt ? <BacktestView bt={bt} /> : btErr ? <ErrorBox text={btErr} /> : <Loading text="讀取 30 年回測結果…" />)}
       {view === 'rules' && <RulesView />}
@@ -205,10 +214,10 @@ function MineView({ latest, holdings, onOpenSymbol }: { latest: Latest; holdings
 }
 
 // ───────────────────────── 全市場排行 ─────────────────────────
-function MarketView({ latest, onOpenSymbol }: { latest: Latest; onOpenSymbol: (s: string) => void }) {
-  const [levels, setLevels] = useState<number[]>([3, 4]);
+function MarketView({ latest, onOpenSymbol, presetLevel }: { latest: Latest; onOpenSymbol: (s: string) => void; presetLevel?: number }) {
+  const [levels, setLevels] = useState<number[]>(presetLevel != null ? [presetLevel] : [3, 4]);
   const [ind, setInd] = useState('');
-  const [minVal, setMinVal] = useState(50e6);
+  const [minVal, setMinVal] = useState(presetLevel != null ? 0 : 50e6);
   const [sort, setSort] = useState<'score' | 'chg1' | 'ret20'>('score');
   const [limit, setLimit] = useState(50);
   const [open, setOpen] = useState<string | null>(null);

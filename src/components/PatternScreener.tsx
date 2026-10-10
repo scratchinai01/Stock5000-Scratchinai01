@@ -3,7 +3,7 @@ import { Loader2, AlertTriangle, ChevronDown, ChevronUp, Filter, TrendingUp, Tre
 import { StudyCardModal, CardSection, CardStat, CardFooter } from './StudyCardModal';
 
 /**
- * 型態選股（超級專業版）：三角收斂突破
+ * 型態選股（進階教學版）：三角收斂突破
  * 每日收盤後由排程計算全市場，這裡只讀結果；篩選在瀏覽器完成，不增加伺服器費用。
  */
 
@@ -77,7 +77,7 @@ export const PatternScreener: React.FC<{ onOpenSymbol: (symbol: string) => void 
         <div className="flex items-center gap-3">
           <span className="text-[34px] leading-none">🔺</span>
           <div>
-            <div className="text-[22px] font-black">型態選股 · 三角收斂突破 <span className="ml-1 text-[13px] px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 align-middle">超級專業版</span></div>
+            <div className="text-[22px] font-black">型態選股 · 三角收斂突破 <span className="ml-1 text-[13px] px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 align-middle">進階教學版</span></div>
             <div className="text-[15px] text-indigo-100">價格 × 量能 × 時間三要素同時確認｜每天收盤後掃描全市場一次</div>
           </div>
         </div>
@@ -93,7 +93,7 @@ export const PatternScreener: React.FC<{ onOpenSymbol: (symbol: string) => void 
       </div>
 
       <div className="flex flex-wrap gap-2" role="tablist">
-        {([['list', '今日清單', ListChecks], ['backtest', '30 年回測統計', BarChart3], ['rules', '規則與參數', BookOpen]] as const).map(([id, label, Icon]) => (
+        {([['list', '今日清單', ListChecks], ['backtest', '歷史回測統計', BarChart3], ['rules', '規則與參數', BookOpen]] as const).map(([id, label, Icon]) => (
           <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)}
             className={`min-h-[44px] px-4 rounded-xl text-[16px] font-black flex items-center gap-1.5 border-2 ${view === id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`}>
             <Icon className="w-5 h-5" />{label}
@@ -258,9 +258,9 @@ function Card({ r, bt, open, onToggle, onOpenSymbol }: { r: Row; bt: Backtest | 
               <KV k={`今日${up ? '上軌' : '下軌'}`} v={num(r.lineNow)} />
               <KV k="ATR(14)" v={num(r.atr)} />
               <KV k="ADX(14)" v={num(r.adx, 1)} />
-              <KV k="停損（擺動點）" v={num(r.stop)} cls="text-emerald-700" />
-              <KV k={`停損（1.5 倍 ATR）`} v={num(r.stopAtr)} cls="text-emerald-700" />
-              <KV k="量測目標價" v={num(r.target)} cls="text-rose-700" />
+              <KV k="型態失效價（擺動點）" v={num(r.stop)} cls="text-emerald-700" />
+              <KV k={`型態失效價（1.5 倍 ATR）`} v={num(r.stopAtr)} cls="text-emerald-700" />
+              <KV k="型態量測價位" v={num(r.target)} cls="text-rose-700" />
               {!isForming && <KV k="報酬風險比" v={`1 : ${num(r.rr, 2)}`} />}
               <KV k="20 日均量" v={`${Math.round(r.avgVol20 / 1000).toLocaleString()} 張`} />
               <div className="flex flex-wrap gap-2 mt-2">
@@ -349,21 +349,21 @@ function PatternStudyCard({ r, bt, onClose }: { r: Row; bt: Backtest | null; onC
           </ul>
           {isForming && <p className="text-[15px] text-slate-500">尚未突破，所以量能、收盤確認等條件要等突破當天才會成立。</p>}
         </CardSection>
-        <CardSection title="風險控制（教學示範）">
+        <CardSection title="型態價位（教學示範，非買賣建議）">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <CardStat label="停損（擺動點）" value={num(r.stop)} color="#11803d" />
-            <CardStat label="停損（1.5 倍 ATR）" value={num(r.stopAtr)} color="#11803d" />
-            <CardStat label="量測目標價" value={num(r.target)} color="#c81e2c" />
+            <CardStat label="型態失效價（擺動點）" value={num(r.stop)} color="#11803d" />
+            <CardStat label="型態失效價（1.5 倍 ATR）" value={num(r.stopAtr)} color="#11803d" />
+            <CardStat label="型態量測價位" value={num(r.target)} color="#c81e2c" />
             <CardStat label="報酬風險比" value={isForming ? '—' : `1 : ${num(r.rr, 2)}`} />
           </div>
-          <p className="text-[15.5px] text-slate-600 leading-relaxed">量測目標 = 突破點 ± 三角形最寬處的高度；停損放在三角形內最後一個擺動點外側。先想好停損再進場，報酬風險比最好在 1 : 2 以上。</p>
+          <p className="text-[15.5px] text-slate-600 leading-relaxed">型態量測價位 = 突破點 ± 三角形最寬處的高度；型態失效價 = 三角形內最後一個擺動點的外側。兩者都是依公式計算的<b>教學示範數字</b>，用來練習「先想好判斷錯了怎麼辦」，<b>不是買賣建議或目標價</b>。</p>
         </CardSection>
         {gs && gs.n > 0 && (
-          <CardSection title={`30 年回測：${g} 級${up ? '向上突破' : '向下跌破'}的歷史表現`}>
+          <CardSection title={`1995 年以來回測：${g} 級${up ? '向上突破' : '向下跌破'}的歷史表現`}>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <CardStat label="歷史次數" value={gs.n.toLocaleString()} />
-              <CardStat label="先達到目標" value={`${(gs.winRate * 100).toFixed(1)}%`} color="#c81e2c" />
-              <CardStat label="先碰到停損" value={`${(gs.stopRate * 100).toFixed(1)}%`} color="#11803d" />
+              <CardStat label="先到量測價位" value={`${(gs.winRate * 100).toFixed(1)}%`} color="#c81e2c" />
+              <CardStat label="先觸及失效價" value={`${(gs.stopRate * 100).toFixed(1)}%`} color="#11803d" />
               <CardStat label="20 天平均報酬" value={pct(gs.avgR20, 2)} />
             </div>
             <p className="text-[15px] text-slate-500">歷史統計只代表過去同類型態的平均結果，不代表這一檔一定會照這樣走。</p>
@@ -373,7 +373,7 @@ function PatternStudyCard({ r, bt, onClose }: { r: Row; bt: Backtest | null; onC
           <ol className="list-decimal pl-6 space-y-1 text-[16.5px] leading-relaxed">
             <li>只看<b>收盤</b>是否突破，盤中穿過又縮回來的常是假突破。</li>
             <li><b>沒有量</b>的突破容易失敗；量能、OBV、RSI 同時確認，成功率較高。</li>
-            <li>突破後跌回三角形內，代表訊號失效，要依計畫<b>停損</b>，不要凹單。</li>
+            <li>突破後跌回三角形內，代表<b>型態失效</b>；練習時要依自己事先寫好的計畫處理，而不是一再拖延。</li>
           </ol>
         </CardSection>
       </div>
@@ -438,9 +438,9 @@ function MiniChart({ r }: { r: Row }) {
         {r.chart.highs.map(([dt, v]) => { const i = dates.indexOf(dt); return i >= 0 ? <circle key={`h${dt}`} cx={X(i)} cy={Y(v)} r={4} fill="none" stroke="#fbbf24" strokeWidth={2} /> : null; })}
         {r.chart.lows.map(([dt, v]) => { const i = dates.indexOf(dt); return i >= 0 ? <circle key={`l${dt}`} cx={X(i)} cy={Y(v)} r={4} fill="none" stroke="#60a5fa" strokeWidth={2} /> : null; })}
         <line x1={X(sIdx)} x2={W - 50} y1={Y(r.target)} y2={Y(r.target)} stroke="#f43f5e" strokeDasharray="6 4" />
-        <text x={W - 48} y={Y(r.target) + 4} fill="#fda4af" fontSize={13}>目標</text>
+        <text x={W - 48} y={Y(r.target) + 4} fill="#fda4af" fontSize={13}>量測</text>
         <line x1={X(sIdx)} x2={W - 50} y1={Y(r.stop)} y2={Y(r.stop)} stroke="#22c55e" strokeDasharray="6 4" />
-        <text x={W - 48} y={Y(r.stop) + 4} fill="#86efac" fontSize={13}>停損</text>
+        <text x={W - 48} y={Y(r.stop) + 4} fill="#86efac" fontSize={13}>失效</text>
       </svg>
       <div className="flex flex-wrap gap-4 px-2 pb-1 text-[14px] text-slate-300">
         <span><b className="text-amber-400">━</b> 上軌（壓力）</span><span><b className="text-sky-400">━</b> 下軌（支撐）</span><span>○ 觸碰點</span><span>還原股價</span>
@@ -496,7 +496,8 @@ function BacktestView({ bt }: { bt: Backtest }) {
         <b>回測方法：</b>突破當天收盤確認，隔天開盤進場；停損設在三角形內最後一個擺動點，目標為三角形最寬處高度從突破點投影；
         同一天同時碰到停損與目標，保守視為停損；最多持有 60 個交易日。使用還原股價，未計手續費與稅。
         只計入 20 日均量 ≥ 100 張的個股，不含 ETF。<br />
-        <b>限制：</b>資料庫只有目前仍在交易的股票，已下市的公司不在其中（倖存者偏差），結果會略為樂觀。
+        <b>限制：</b>資料涵蓋 1995 年以來的上市櫃股票（含已下市公司，可降低倖存者偏差）；報酬未扣手續費與稅；
+        型態由程式依固定規則辨識，參數為本系統自訂、未經最佳化以外的獨立驗證；過去的統計結果不代表未來表現。
       </div>
     </div>
   );

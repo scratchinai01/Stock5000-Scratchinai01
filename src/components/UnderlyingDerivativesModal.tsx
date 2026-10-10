@@ -689,7 +689,7 @@ export const UnderlyingDerivativesModal: React.FC<UnderlyingDerivativesModalProp
                       <td className="py-4 px-3.5">
                         <span className="font-black text-slate-950 text-sm block flex items-center gap-1">
                           <span>2. 股票期貨 ({currentMeta.futuresSymbol})</span>
-                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-rose-100 text-rose-800 font-bold">高效率推薦</span>
+                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-rose-100 text-rose-800 font-bold">資金效率高</span>
                         </span>
                         <span className="text-[10px] text-slate-500 font-semibold">1口=2,000股，留50%浮動保證金邊際</span>
                       </td>

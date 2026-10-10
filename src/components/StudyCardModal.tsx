@@ -8,7 +8,11 @@ import { Download, X } from 'lucide-react';
  */
 export const PAPER = '#fbf8f2';
 export const COPYRIGHT = '© 版權所有 智慧未來領袖學苑';
-export const DESIGNER = '系統設計暨執行長 程瑋翔｜LINE ID：snake0203cheng';
+export const DESIGNER = '系統設計暨執行長 程瑋翔';
+export const CONTACT = 'LINE ID：snake0203cheng';
+/** 每張卡片都附上的用途聲明（避免被誤認為投資顧問服務） */
+export const LEGAL = '本系統為免費教學工具，不提供收費個股分析、代客操作或投資諮詢服務；內容不構成任何證券之買賣建議。';
+export const DATA_NOTE = '行情資料來自公開市場資料；版權範圍為系統設計、程式與教學內容，不含行情資料。';
 export const INK = '#1f2630';
 
 export function StudyCardModal({ title, filename, onClose, children }: { title: string; filename: string; onClose: () => void; children: React.ReactNode }) {
@@ -119,7 +123,8 @@ export const CardFooter = ({ note }: { note: string }) => (
     </div>
     <div className="rounded-xl px-3 py-2 text-[14px] leading-relaxed text-center" style={{ background: '#f4efe4', color: '#4b5563' }}>
       <div className="font-black" style={{ color: INK }}>{COPYRIGHT}</div>
-      <div>{DESIGNER}</div>
+      <div className="font-bold" style={{ color: INK }}>{LEGAL}</div>
+      <div>{DATA_NOTE}</div>
     </div>
   </div>
 );

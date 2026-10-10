@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Search, LineChart as LineIcon, BarChart3, FlaskConical, Loader2, AlertTriangle, Info } from 'lucide-react';
+import { X, Search, LineChart as LineIcon, BarChart3, FlaskConical, Loader2, AlertTriangle, Info, Triangle } from 'lucide-react';
+import { PatternScreener } from './PatternScreener';
 import {
   DailySeries,
   performance,
@@ -206,7 +207,7 @@ const Stat: React.FC<{ label: string; value: string; sub?: string; tone?: string
 );
 
 // ───────────────────────── 主元件 ─────────────────────────
-type Tab = 'trend' | 'stats' | 'backtest';
+type Tab = 'trend' | 'stats' | 'backtest' | 'pattern';
 
 const STRATEGIES: { id: StrategyId; label: string; desc: string }[] = [
   { id: 'buy_hold', label: '買進持有', desc: '第一天買進後一路持有，作為比較基準。' },
@@ -313,7 +314,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
             <span className="text-xl">🔬</span>
             <div>
               <div className="font-black text-slate-950">專業分析</div>
-              <div className="text-[11px] text-slate-500">市場資料 1994 年起歷史日K · 績效統計 · 策略回測</div>
+              <div className="text-[11px] text-slate-500">市場資料 1994 年起歷史日K · 績效統計 · 策略回測 · 型態選股</div>
             </div>
           </div>
           <div className="relative ml-auto">
@@ -347,14 +348,14 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
           <div className="font-black text-slate-900 text-base mr-2">{title}</div>
           {data?.market && <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold">{data.market === 'tpex' ? '上櫃' : '上市'}</span>}
           <div className="flex gap-1 ml-auto">
-            {([['trend', '長期走勢', LineIcon], ['stats', '績效統計', BarChart3], ['backtest', '策略回測', FlaskConical]] as const).map(([id, label, Icon]) => (
+            {([['trend', '長期走勢', LineIcon], ['stats', '績效統計', BarChart3], ['backtest', '策略回測', FlaskConical], ['pattern', '型態選股', Triangle]] as const).map(([id, label, Icon]) => (
               <button key={id} type="button" onClick={() => setTab(id)}
                 className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 border ${tab === id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`}>
                 <Icon className="w-3.5 h-3.5" />{label}
               </button>
             ))}
           </div>
-          <div className="w-full flex flex-wrap gap-2 items-center">
+          {tab !== 'pattern' && <div className="w-full flex flex-wrap gap-2 items-center">
             <span className="text-slate-500 font-bold">期間</span>
             {RANGES.map(r => (
               <button key={r.id} type="button" onClick={() => setRange(r.id)}
@@ -377,14 +378,15 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
                 </label>
               </>
             )}
-          </div>
+          </div>}
         </div>
 
         <div className="p-4 space-y-4">
-          {loading && <div className="flex items-center gap-2 text-slate-600 text-sm"><Loader2 className="w-4 h-4 animate-spin" />讀取 {symbol} 歷史資料中…（第一次可能需要幾秒）</div>}
-          {error && <div className="flex items-center gap-2 text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm"><AlertTriangle className="w-4 h-4" />{error}</div>}
+          {tab === 'pattern' && <PatternScreener onOpenSymbol={sym => { pick(sym); setTab('trend'); }} />}
+          {tab !== 'pattern' && loading && <div className="flex items-center gap-2 text-slate-600 text-sm"><Loader2 className="w-4 h-4 animate-spin" />讀取 {symbol} 歷史資料中…（第一次可能需要幾秒）</div>}
+          {tab !== 'pattern' && error && <div className="flex items-center gap-2 text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm"><AlertTriangle className="w-4 h-4" />{error}</div>}
 
-          {!loading && data && display && adjSeries && (
+          {tab !== 'pattern' && !loading && data && display && adjSeries && (
             <>
               {tab === 'trend' && (
                 <div className="bg-white border border-slate-200 rounded-2xl p-3">

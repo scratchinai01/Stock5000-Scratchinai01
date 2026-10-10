@@ -2772,6 +2772,11 @@ function referenceQuotesForAI(symbols: string[]): string {
     .join('\n');
 }
 
+app.post('/api/gemini/financial-calculator', (_req, res, next) => {
+  // AI 財務計算機已下架（每次呼叫都會產生 AI 費用）
+  if (process.env.ENABLE_AI_CALCULATOR !== '1') return res.status(410).json({ success: false, message: '此功能已停用' });
+  next();
+});
 app.post('/api/gemini/financial-calculator', async (req, res) => {
   const {
     calcType, // 'position_sizing' | 'futures_leverage' | 'options_breakeven' | 'hedging_ratio' | 'custom_prompt'

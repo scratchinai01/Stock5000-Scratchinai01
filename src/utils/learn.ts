@@ -293,7 +293,7 @@ export interface LearnOptions {
   theta: number;                   // 波段轉折門檻（0.25 = 25%）
   kappa: number;                   // 下跌懲罰（1 = 下跌日的損失算兩倍）
 }
-export const DEFAULT_LEARN: LearnOptions = { split1: 2005, split2: 2015, smooth: 10, expanding: true, theta: 0.25, kappa: 1 };
+export const DEFAULT_LEARN: LearnOptions = { split1: 2005, split2: 2015, smooth: 10, expanding: true, theta: 0.25, kappa: 0.1 };
 
 export interface Member { id: string; name: string; s: DailySeries; X: Row[] }
 export function makeMember(id: string, name: string, s: DailySeries, p: BacktestParams): Member {

@@ -54,7 +54,7 @@ export const StockLearn: React.FC<{
           <Num label="第二段推測起始年" value={opt.split2} onChange={v => setOpt(o => ({ ...o, split2: v }))} />
           <Num label="平滑天數" value={opt.smooth} onChange={v => setOpt(o => ({ ...o, smooth: Math.max(2, v) }))} />
           <Num label="波段轉折門檻 %" value={Math.round(opt.theta * 100)} onChange={v => setOpt(o => ({ ...o, theta: Math.min(80, Math.max(5, v)) / 100 }))} />
-          <Num label="下跌懲罰倍數 κ" value={opt.kappa} step={0.5} allowZero onChange={v => setOpt(o => ({ ...o, kappa: v }))} />
+          <Num label="下跌懲罰倍數 κ" value={opt.kappa} step={0.1} allowZero onChange={v => setOpt(o => ({ ...o, kappa: v }))} />
           <label className="flex flex-col gap-1 font-bold text-slate-600">第二階段訓練資料
             <select value={opt.expanding ? '1' : '0'} onChange={e => setOpt(o => ({ ...o, expanding: e.target.value === '1' }))} className="border border-slate-200 rounded-lg px-2 py-1 bg-white">
               <option value="1">從頭累積（{first.slice(0, 4)}～{opt.split2 - 1}）</option>

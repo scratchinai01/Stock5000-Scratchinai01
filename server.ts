@@ -1129,9 +1129,9 @@ app.get('/api/risk/backtest', async (_req, res) => {
 });
 
 // 循環股學習研究（教學實驗）：由排程工作算好，這裡只讀結果
-app.get('/api/learn/:doc(study|cyclicality)', async (req, res) => {
+app.get('/api/learn/:doc(study|study_k0|study_k10|cyclicality)', async (req, res) => {
   try {
-    const data = await getLearnDoc(req.params.doc as 'study' | 'cyclicality');
+    const data = await getLearnDoc(req.params.doc);
     if (!data) return res.status(404).json({ error: '研究結果尚未產生，排程完成後就會出現' });
     res.set('Cache-Control', 'public, max-age=600');
     res.json(data);

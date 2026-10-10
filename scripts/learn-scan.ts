@@ -102,7 +102,8 @@ async function study() {
   const ids = STUDY_GROUPS.flatMap(g => [...g.ids]);
   const loaded = new Map<string, Loaded>();
   await load(ids, x => loaded.set(x.id, x));
-  const o = DEFAULT_LEARN;
+  // 可用環境變數做敏感度測試，例如 LEARN_KAPPA=0 LEARN_DOC=study_k0
+  const o = { ...DEFAULT_LEARN, ...(process.env.LEARN_KAPPA ? { kappa: Number(process.env.LEARN_KAPPA) } : {}) };
   const stocks: any[] = [];
   const groups: any[] = [];
   let asOf = '';
@@ -138,7 +139,7 @@ async function study() {
     });
   }
   const db = await getDb();
-  await db.collection('learn_scan').doc('study').set({
+  await db.collection('learn_scan').doc(process.env.LEARN_DOC || 'study').set({
     version: VERSION, asOf, generatedAt: new Date().toISOString(),
     options: o, cost: { feeRate: PARAMS.feeRate, taxRate: PARAMS.taxRate },
     groups, stocks,

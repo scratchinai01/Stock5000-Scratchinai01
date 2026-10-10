@@ -61,4 +61,4 @@ export const getRiskLatest = () => readLatest('risk_scan');
 export const getRiskBacktest = () => readDoc('risk_scan', 'backtest');
 
 /** 循環股學習研究 */
-export const getLearnDoc = (id: 'study' | 'cyclicality') => readDoc('learn_scan', id);
+export const getLearnDoc = (id: string) => readDoc('learn_scan', id);

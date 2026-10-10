@@ -49,14 +49,14 @@ async function getDb() {
   return getFirestore(app, FS_DB);
 }
 
-interface Loaded { id: string; name: string; industry: string; s: DailySeries }
+interface Loaded { id: string; name: string; industry: string; s: DailySeries; value: number[] }
 
 /** 逐檔讀出還原股價；ids 為 null 時讀全部普通股 */
 async function load(ids: string[] | null, cb: (x: Loaded) => void) {
   const where = ids ? `stock_id IN (${ids.map(i => `'${i.replace(/[^0-9A-Z]/g, '')}'`).join(',')})` : `REGEXP_CONTAINS(stock_id, r'^[1-9][0-9]{3}$')`;
   const sql = `
     SELECT stock_id, name, industry, CAST(date AS STRING) d,
-      adj_open o, adj_high h, adj_low l, adj_close c, IFNULL(volume, 0) v
+      adj_open o, adj_high h, adj_low l, adj_close c, IFNULL(volume, 0) v, IFNULL(close, 0) rc
     FROM ${TABLE} WHERE ${where} AND adj_close IS NOT NULL
     ORDER BY stock_id, date`;
   let cur: Loaded | null = null, rows = 0;
@@ -67,7 +67,7 @@ async function load(ids: string[] | null, cb: (x: Loaded) => void) {
         rows++;
         if (!cur || cur.id !== r.stock_id) {
           if (cur) cb(cur);
-          cur = { id: r.stock_id, name: r.name || '', industry: r.industry || '', s: { date: [], open: [], high: [], low: [], close: [], volume: [] } };
+          cur = { id: r.stock_id, name: r.name || '', industry: r.industry || '', s: { date: [], open: [], high: [], low: [], close: [], volume: [] }, value: [] };
         }
         if (r.name) cur.name = r.name;
         if (r.industry) cur.industry = r.industry;
@@ -75,7 +75,7 @@ async function load(ids: string[] | null, cb: (x: Loaded) => void) {
         if (!(c > 0)) return;
         const o = Number(r.o), h = Number(r.h), l = Number(r.l);
         cur.s.date.push(r.d); cur.s.open.push(o > 0 ? o : c); cur.s.high.push(h > 0 ? h : c); cur.s.low.push(l > 0 ? l : c);
-        cur.s.close.push(c); cur.s.volume.push(Number(r.v) || 0);
+        cur.s.close.push(c); cur.s.volume.push(Number(r.v) || 0); cur.value.push((Number(r.v) || 0) * (Number(r.rc) || 0));
       })
       .on('end', () => { if (cur) cb(cur); resolve(); });
   });
@@ -150,39 +150,53 @@ async function study() {
 async function discover() {
   const o = DEFAULT_LEARN;
   const rows: any[] = [];
-  let asOf = '';
+  let asOf = '', skippedBad = 0, skippedThin = 0;
+  const median = (a: number[]) => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
   await load(null, x => {
     const n = x.s.close.length;
     if (n < 2500) return; // 至少約 10 年資料
     const last = x.s.date[n - 1];
     if (last > asOf) asOf = last;
+    // 資料檢查：還原股價單日漲跌超過 ±60%（台股漲跌幅上限 10%），多半是減資或還原錯誤，排除
+    let bad = false;
+    for (let i = 1; i < n; i++) { const r = x.s.close[i] / x.s.close[i - 1] - 1; if (r > 0.6 || r < -0.6) { bad = true; break; } }
+    if (bad) { skippedBad++; return; }
+    // 流動性：近 3 年平均每日成交值至少 1 億元，避免冷門小型股的價格跳動被當成「循環」
+    const recent = x.value.slice(-750);
+    const avgValue = recent.reduce((a, b) => a + b, 0) / Math.max(recent.length, 1);
+    if (avgValue < 1e8) { skippedThin++; return; }
     const piv = zigzag(x.s.close, 0, n - 1, o.theta);
     const c = cycleStats(x.s.close, piv);
+    const troughs = piv.filter(p => p.type === 'trough');
+    const lens: number[] = [];
+    for (let k = 1; k < troughs.length; k++) lens.push((troughs[k].idx - troughs[k - 1].idx) / 250);
+    const rises: number[] = [], falls: number[] = [];
+    for (let k = 0; k + 1 < piv.length; k++) { const ch = x.s.close[piv[k + 1].idx] / x.s.close[piv[k].idx] - 1; (piv[k].type === 'trough' ? rises : falls).push(ch); }
+    const mLen = lens.length ? lens.reduce((a, b) => a + b, 0) / lens.length : null;
+    const sdLen = lens.length > 1 && mLen ? Math.sqrt(lens.reduce((a, b) => a + (b - mLen) ** 2, 0) / (lens.length - 1)) : null;
     const years = n / 250;
     rows.push({
       id: x.id, name: x.name, industry: x.industry, first: x.s.date[0], last, years: r1(years),
-      cycles: c.cycles, perDecade: r1((c.cycles / years) * 10, 2), avgYears: r1(c.avgYears, 2), avgRise: r4(c.avgRise), avgFall: r4(c.avgFall),
+      cycles: c.cycles, perDecade: r1((c.cycles / years) * 10, 2), avgYears: r1(median(lens), 2),
+      regularity: mLen && sdLen !== null ? r1(sdLen / mLen, 2) : null,
+      avgRise: r4(median(rises)), avgFall: r4(median(falls)), avgValue: Math.round(avgValue / 1e6),
     });
   });
-  // 只保留仍在交易的股票，依「每 10 年完整循環次數 × 平均漲幅」排序
-  const live = rows.filter(r => r.last >= asOf.slice(0, 4) + '-01-01');
-  live.sort((a, b) => (b.perDecade ?? 0) * (b.avgRise ?? 0) - (a.perDecade ?? 0) * (a.avgRise ?? 0));
-  const byIndustry = new Map<string, { n: number; perDecade: number; rise: number }>();
-  for (const r of live) {
-    const k = r.industry || '其他';
-    const v = byIndustry.get(k) ?? { n: 0, perDecade: 0, rise: 0 };
-    v.n++; v.perDecade += r.perDecade; v.rise += r.avgRise ?? 0;
-    byIndustry.set(k, v);
-  }
-  const industries = [...byIndustry.entries()].filter(([, v]) => v.n >= 5)
-    .map(([k, v]) => ({ industry: k, stocks: v.n, perDecade: r1(v.perDecade / v.n, 2), avgRise: r4(v.rise / v.n) }))
-    .sort((a, b) => (b.perDecade ?? 0) * (b.avgRise ?? 0) - (a.perDecade ?? 0) * (a.avgRise ?? 0));
+  // 只保留仍在交易的股票；排序 = 每 10 年完整循環次數 × 上升段漲幅中位數（都要有 3 次以上完整循環）
+  const live = rows.filter(r => r.last >= asOf.slice(0, 4) + '-01-01' && r.cycles >= 3);
+  const key = (r: any) => (r.perDecade ?? 0) * (r.avgRise ?? 0);
+  live.sort((a, b) => key(b) - key(a));
+  const byIndustry = new Map<string, any[]>();
+  for (const r of live) byIndustry.set(r.industry || '其他', [...(byIndustry.get(r.industry || '其他') ?? []), r]);
+  const industries = [...byIndustry.entries()].filter(([, v]) => v.length >= 3)
+    .map(([k, v]) => ({ industry: k, stocks: v.length, perDecade: r1(median(v.map(x => x.perDecade)), 2), avgRise: r4(median(v.map(x => x.avgRise))) }))
+    .sort((a, b) => key(b) - key(a));
   const db = await getDb();
   await db.collection('learn_scan').doc('cyclicality').set({
     version: VERSION, asOf, generatedAt: new Date().toISOString(), theta: o.theta,
-    total: live.length, top: live.slice(0, 60), industries,
+    total: live.length, skippedBad, skippedThin, minValue: 1e8, top: live.slice(0, 60), industries,
   });
-  log(`寫入 learn_scan/cyclicality：${live.length} 檔、${industries.length} 個產業`);
+  log(`寫入 learn_scan/cyclicality：${live.length} 檔（排除資料異常 ${skippedBad}、成交值不足 ${skippedThin}）、${industries.length} 個產業`);
 }
 
 (MODE === 'discover' ? discover() : study()).then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });

@@ -26,8 +26,8 @@ interface Group {
 }
 interface Study { asOf: string; generatedAt: string; options: { theta: number; kappa: number; smooth: number; split1: number; split2: number }; groups: Group[]; stocks: StudyStock[] }
 interface Cyc {
-  asOf: string; theta: number; total: number;
-  top: { id: string; name: string; industry: string; years: number; cycles: number; perDecade: number; avgYears: number | null; avgRise: number | null; avgFall: number | null }[];
+  asOf: string; theta: number; total: number; skippedBad?: number; skippedThin?: number;
+  top: { id: string; name: string; industry: string; years: number; cycles: number; perDecade: number; avgYears: number | null; regularity?: number | null; avgRise: number | null; avgFall: number | null; avgValue?: number }[];
   industries: { industry: string; stocks: number; perDecade: number; avgRise: number }[];
 }
 
@@ -192,12 +192,13 @@ export const LearnStudy: React.FC<{ onOpenSymbol: (sym: string) => void }> = ({ 
         <div className="bg-white border border-slate-200 rounded-2xl p-3 overflow-x-auto">
           <div className="font-black text-sm mb-1">由歷史資料辨識：全市場循環最明顯的股票</div>
           <div className="text-[11px] text-slate-500 mb-2">
-            {cyc.total.toLocaleString()} 檔有 10 年以上資料、仍在交易的普通股，以 {Math.round(cyc.theta * 100)}% 轉折門檻找出波段高低點，
-            依「每 10 年完整循環次數 × 上升段平均漲幅」排序（資料日 {cyc.asOf}）。這是事後描述，循環在過去明顯不代表未來會重複。
+            {cyc.total.toLocaleString()} 檔有 10 年以上資料、仍在交易、近 3 年平均每日成交值 1 億元以上的普通股
+            {cyc.skippedBad ? `（另排除 ${cyc.skippedBad} 檔還原股價有異常跳動者）` : ''}，以 {Math.round(cyc.theta * 100)}% 轉折門檻找出波段高低點，
+            依「每 10 年完整循環次數 × 上升段漲幅中位數」排序（資料日 {cyc.asOf}）。週期離散度越小代表循環越規律。這是事後描述，循環在過去明顯不代表未來會重複。
           </div>
           <div className="grid lg:grid-cols-[2fr_1fr] gap-4">
             <table className="w-full text-xs">
-              <thead><tr className="text-slate-500 text-left">{['#', '股票', '產業', '資料年數', '每 10 年循環', '平均週期', '上升段平均', '下降段平均'].map(h => <th key={h} className="py-1 pr-3 font-bold whitespace-nowrap">{h}</th>)}</tr></thead>
+              <thead><tr className="text-slate-500 text-left">{['#', '股票', '產業', '資料年數', '每 10 年循環', '週期中位數', '週期離散度', '上升段中位數', '下降段中位數'].map(h => <th key={h} className="py-1 pr-3 font-bold whitespace-nowrap">{h}</th>)}</tr></thead>
               <tbody>
                 {cyc.top.slice(0, 30).map((r, i) => (
                   <tr key={r.id} className="border-t border-slate-100 font-mono">
@@ -207,6 +208,7 @@ export const LearnStudy: React.FC<{ onOpenSymbol: (sym: string) => void }> = ({ 
                     <td className="pr-3">{f1(r.years)}</td>
                     <td className="pr-3">{r.perDecade.toFixed(1)} 次</td>
                     <td className="pr-3">{r.avgYears === null ? '—' : `${r.avgYears.toFixed(1)} 年`}</td>
+                    <td className="pr-3">{r.regularity === null || r.regularity === undefined ? '—' : r.regularity.toFixed(2)}</td>
                     <td className="pr-3 text-rose-600">{pct(r.avgRise, 0)}</td>
                     <td className="pr-3 text-emerald-700">{pct(r.avgFall, 0)}</td>
                   </tr>
@@ -214,7 +216,7 @@ export const LearnStudy: React.FC<{ onOpenSymbol: (sym: string) => void }> = ({ 
               </tbody>
             </table>
             <table className="w-full text-xs self-start">
-              <thead><tr className="text-slate-500 text-left">{['產業（至少 5 檔）', '檔數', '每 10 年循環', '上升段平均'].map(h => <th key={h} className="py-1 pr-3 font-bold whitespace-nowrap">{h}</th>)}</tr></thead>
+              <thead><tr className="text-slate-500 text-left">{['產業（至少 3 檔）', '檔數', '每 10 年循環（中位數）', '上升段中位數'].map(h => <th key={h} className="py-1 pr-3 font-bold whitespace-nowrap">{h}</th>)}</tr></thead>
               <tbody>
                 {cyc.industries.slice(0, 20).map(r => (
                   <tr key={r.industry} className="border-t border-slate-100 font-mono">

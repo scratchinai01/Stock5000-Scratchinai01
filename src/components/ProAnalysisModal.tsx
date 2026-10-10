@@ -14,6 +14,8 @@ import {
   sma,
   BacktestParams,
   StrategyId,
+  ComboMode,
+  COMBO_LABEL,
 } from '../utils/analytics';
 
 // ───────────────────────── 資料 ─────────────────────────
@@ -338,8 +340,38 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
 
   // 大盤濾網用完整的 0050 序列（均線需要暖機期，不能只取回測區間）
   const marketFull = useMemo(() => (bench ? toSeries(bench, true, undefined) : null), [bench]);
-  const bt = useMemo(() => (adjSeries && adjSeries.close.length > 2 ? backtest(adjSeries, params, marketFull) : null), [adjSeries, params, marketFull]);
+  // 可複選：擇時策略最多同時選 5 個，依「組合規則」合成一個持有訊號
+  const [picked, setPicked] = useState<StrategyId[]>(['ma_cross']);
+  const [comboMode, setComboMode] = useState<ComboMode>('and');
+  const isCombo = picked.length > 1;
+  const runParams = useMemo<BacktestParams>(() => ({ ...params, strategy: picked[0], combo: isCombo ? { ids: picked, mode: comboMode } : undefined }), [params, picked, isCombo, comboMode]);
+  const bt = useMemo(() => (adjSeries && adjSeries.close.length > 2 ? backtest(adjSeries, runParams, marketFull) : null), [adjSeries, runParams, marketFull]);
   const curStrategy = STRATEGIES.find(s => s.id === params.strategy)!;
+  const comboName = isCombo ? `組合（${COMBO_LABEL[comboMode]}）` : curStrategy.label;
+  // 複選時：每個策略單獨跑一次，和組合結果並排比較，看出這檔股票適合哪種「個性」
+  const compareRows = useMemo(() => {
+    if (!isCombo || !adjSeries || adjSeries.close.length < 3 || !bt) return [];
+    const one = (id: StrategyId) => backtest(adjSeries, { ...params, strategy: id, combo: undefined }, marketFull);
+    return [
+      ...picked.map(id => ({ name: STRATEGIES.find(x => x.id === id)!.label, r: one(id), kind: 'single' as const })),
+      { name: comboName, r: bt, kind: 'combo' as const },
+      { name: '買進持有', r: one('buy_hold'), kind: 'bench' as const },
+    ];
+  }, [isCombo, adjSeries, bt, params, picked, marketFull, comboName]);
+  const pickStrategy = (id: StrategyId) => {
+    const st = STRATEGIES.find(x => x.id === id)!;
+    let next: StrategyId[];
+    if (st.group === '基準' || picked.some(x => STRATEGIES.find(y => y.id === x)!.group === '基準')) next = [id];
+    else if (picked.includes(id)) next = picked.length > 1 ? picked.filter(x => x !== id) : picked;
+    else next = picked.length >= 5 ? picked : [...picked, id];
+    setPicked(next);
+    setParams(p => ({
+      ...p,
+      strategy: next[0],
+      // 定期定額是「每月投入金額」，切換時給合理預設值
+      capital: next[0] === 'dca' && p.strategy !== 'dca' ? 10000 : next[0] !== 'dca' && p.strategy === 'dca' ? 1_000_000 : p.capital,
+    }));
+  };
 
   const ma = useMemo(() => {
     if (!display) return { a: [], b: [] };
@@ -531,23 +563,41 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
                         <div key={g} className="flex flex-wrap items-center gap-1.5">
                           <span className="w-16 shrink-0 text-[11px] font-black text-slate-500">{g}</span>
                           {STRATEGIES.filter(s => s.group === g).map(s => (
-                            <button key={s.id} type="button" onClick={() => setParams(p => ({
-                              ...p,
-                              strategy: s.id,
-                              // 定期定額是「每月投入金額」，切換時給合理預設值
-                              capital: s.id === 'dca' && p.strategy !== 'dca' ? 10000 : s.id !== 'dca' && p.strategy === 'dca' ? 1_000_000 : p.capital,
-                            }))}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${params.strategy === s.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`}>{s.label}</button>
+                            <button key={s.id} type="button" onClick={() => pickStrategy(s.id)} aria-pressed={picked.includes(s.id)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${picked.includes(s.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`}>{isCombo && picked.includes(s.id) ? '✓ ' : ''}{s.label}</button>
                           ))}
                         </div>
                       ))}
                     </div>
-                    <div className="text-xs text-slate-600">{curStrategy.desc}訊號在收盤確認、隔天開盤成交；以還原股價計算（已含配息再投入）。</div>
+                    <div className="text-[11px] text-slate-500">趨勢追蹤、逆勢反轉、量價三類可以複選（最多 5 個）組合成一個策略；點選已選的按鈕可取消。基準類只能單選。</div>
+                    {isCombo && (
+                      <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-2.5 space-y-2">
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="font-black text-indigo-900">組合規則</span>
+                          {(['and', 'vote', 'or'] as ComboMode[]).map(m => (
+                            <button key={m} type="button" onClick={() => setComboMode(m)}
+                              className={`px-3 py-1 rounded-lg font-bold border ${comboMode === m ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-100'}`}>{COMBO_LABEL[m]}</button>
+                          ))}
+                        </div>
+                        <div className="text-[11px] text-indigo-900 leading-relaxed">
+                          {comboMode === 'and' && '所有選取的策略都處於「持有」狀態才買進，任何一個轉為出場就賣出。條件最嚴、進場最少，通常用來過濾假訊號。'}
+                          {comboMode === 'or' && '任何一個策略處於「持有」狀態就買進，全部都出場才賣出。進場最多、持股時間最長。'}
+                          {comboMode === 'vote' && `超過半數（${Math.floor(picked.length / 2) + 1}／${picked.length} 個）策略處於「持有」狀態就買進，低於半數就賣出。`}
+                        </div>
+                        <ul className="text-[11px] text-slate-600 space-y-0.5">
+                          {picked.map(id => { const st = STRATEGIES.find(x => x.id === id)!; return <li key={id}><b className="text-slate-800">{st.label}</b>：{st.desc}</li>; })}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="text-xs text-slate-600">{isCombo ? '' : curStrategy.desc}訊號在收盤確認、隔天開盤成交；以還原股價計算（已含配息再投入）。</div>
                     <div className="flex flex-wrap gap-3 text-xs items-end">
                       <NumField label={params.strategy === 'dca' ? '每月投入金額' : '初始資金'} value={params.capital} step={10000} onChange={v => setParams(p => ({ ...p, capital: v }))} />
-                      {curStrategy.fields?.map(f => (
-                        <NumField key={f.key} label={f.label} value={params[f.key] as number} step={f.step} onChange={v => setParams(p => ({ ...p, [f.key]: v }))} />
-                      ))}
+                      {picked.flatMap(id => {
+                        const st = STRATEGIES.find(x => x.id === id)!;
+                        return (st.fields ?? []).map(f => (
+                          <NumField key={f.key} label={isCombo ? `${st.label}｜${f.label}` : f.label} value={params[f.key] as number} step={f.step} onChange={v => setParams(p => ({ ...p, [f.key]: v }))} />
+                        ));
+                      })}
                       <label className="flex flex-col gap-1 font-bold text-slate-600">手續費折數
                         <select value={params.feeDiscount} onChange={e => setParams(p => ({ ...p, feeDiscount: Number(e.target.value) }))} className="border border-slate-200 rounded-lg px-2 py-1 bg-white font-mono">
                           {[1, 0.6, 0.5, 0.38, 0.28].map(v => <option key={v} value={v}>{v === 1 ? '無折扣' : `${v * 10} 折`}</option>)}
@@ -571,6 +621,28 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
 
                   {bt?.stats && (
                     <>
+                      {compareRows.length > 0 && (
+                        <div className="bg-white border border-slate-200 rounded-2xl p-3 overflow-x-auto">
+                          <div className="font-black text-sm mb-1">各策略單獨 vs 組合</div>
+                          <div className="text-[11px] text-slate-500 mb-2">同一段期間、同樣的資金、手續費與風險控管設定。每檔股票的「個性」不同，可以比較哪一類訊號在這檔股票上比較有效。</div>
+                          <table className="w-full text-xs">
+                            <thead><tr className="text-slate-500 text-left">{['策略', '年化報酬', '最大回撤', '夏普值', '完成交易', '勝率', '持股時間'].map(h => <th key={h} className="py-1 pr-3 font-bold whitespace-nowrap">{h}</th>)}</tr></thead>
+                            <tbody>
+                              {compareRows.map(row => (
+                                <tr key={row.name} className={`border-t border-slate-100 font-mono ${row.kind === 'combo' ? 'bg-indigo-50 font-bold' : row.kind === 'bench' ? 'text-slate-500' : ''}`}>
+                                  <td className="py-1 pr-3 font-sans font-bold whitespace-nowrap">{row.name}</td>
+                                  <td className={`pr-3 ${upDown(row.r.stats?.cagr ?? 0)}`}>{row.r.stats ? pct(row.r.stats.cagr) : '—'}</td>
+                                  <td className="pr-3 text-emerald-700">{row.r.stats ? pct(row.r.stats.maxDrawdown) : '—'}</td>
+                                  <td className="pr-3">{row.r.stats ? num(row.r.stats.sharpe) : '—'}</td>
+                                  <td className="pr-3">{row.kind === 'bench' ? '—' : `${row.r.closedTrades} 次`}</td>
+                                  <td className="pr-3">{row.kind === 'bench' || !row.r.closedTrades ? '—' : `${(row.r.winRate * 100).toFixed(0)}%`}</td>
+                                  <td className="pr-3">{(row.r.exposure * 100).toFixed(0)}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <Stat label="期末資產" value={money(bt.finalValue)} sub={`投入本金 ${money(bt.totalInvested)}`} tone={upDown(bt.finalValue - bt.totalInvested)} />
                         <Stat label="年化報酬" value={pct(bt.stats.cagr)} tone={upDown(bt.stats.cagr)} sub={bt.benchStats ? `買進持有 ${pct(bt.benchStats.cagr)}` : '時間加權報酬'} />
@@ -590,7 +662,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
                           format={v => (v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v.toFixed(0))}
                           series={params.strategy === 'dca'
                             ? [{ name: '市值', values: bt.equity, color: '#4f46e5' }, { name: '累計投入本金', values: bt.invested, color: '#94a3b8', dash: '4 3' }]
-                            : [{ name: curStrategy.label, values: bt.equity, color: '#4f46e5' }, { name: '買進持有', values: bt.benchmark, color: '#94a3b8', dash: '4 3' }]}
+                            : [{ name: comboName, values: bt.equity, color: '#4f46e5' }, { name: '買進持有', values: bt.benchmark, color: '#94a3b8', dash: '4 3' }]}
                         />
                       </div>
                       <div className="bg-white border border-slate-200 rounded-2xl p-3 overflow-x-auto">

@@ -355,7 +355,13 @@ export interface BacktestParams {
   takeProfit?: number;      // 停利 %
   maxHold?: number;         // 最長持有交易日
   marketFilter?: number;    // 大盤濾網：0050 收盤在 N 日均線之上才買進（0 = 不使用）
+  // 多策略組合：同時看多個擇時策略，依規則合成一個持有訊號
+  combo?: { ids: StrategyId[]; mode: ComboMode };
 }
+
+/** and：全部策略都看多才持有；or：任一策略看多就持有；vote：過半數看多才持有 */
+export type ComboMode = 'and' | 'or' | 'vote';
+export const COMBO_LABEL: Record<ComboMode, string> = { and: '全部同意', or: '任一出現', vote: '過半數' };
 
 /** 大盤濾網用的市場序列（日期 → 收盤價） */
 export interface MarketSeries { date: string[]; close: number[] }
@@ -388,7 +394,25 @@ export interface BacktestResult {
   totalInvested: number;
 }
 
+/** 把「買進／賣出／維持」訊號轉成每天的持有狀態（null 延續前一天，一開始為空手） */
+export function holdState(want: (boolean | null)[]): boolean[] {
+  let cur = false;
+  return want.map(w => (w === null ? cur : (cur = w)));
+}
+
 function signalSeries(s: DailySeries, p: BacktestParams): (boolean | null)[] {
+  if (p.combo && p.combo.ids.length > 1) {
+    const states = p.combo.ids.map(id => holdState(singleSignal(s, { ...p, strategy: id, combo: undefined })));
+    const k = states.length;
+    return s.close.map((_, i) => {
+      const on = states.reduce((c, st) => c + (st[i] ? 1 : 0), 0);
+      return p.combo!.mode === 'and' ? on === k : p.combo!.mode === 'or' ? on > 0 : on * 2 > k;
+    });
+  }
+  return singleSignal(s, p);
+}
+
+function singleSignal(s: DailySeries, p: BacktestParams): (boolean | null)[] {
   // 回傳每天收盤後「是否應持有」；null 代表維持原狀
   const n = s.close.length;
   const want: (boolean | null)[] = new Array(n).fill(null);

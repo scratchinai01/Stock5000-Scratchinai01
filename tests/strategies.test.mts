@@ -100,4 +100,18 @@ for (const id of ALL) {
     assert.ok(ma[i - 1] === null || market.close[i - 1] > ma[i - 1]!, '大盤弱勢時仍買進');
   }
 }
+// 7. 多策略組合：全部同意的持股時間 ≤ 每個單一策略 ≤ 任一出現；過半數介於兩者之間
+{
+  const ids: StrategyId[] = ['ma_cross', 'macd', 'rsi'];
+  const single = ids.map(id => backtest(s, { ...base, strategy: id }).exposure);
+  const ex = (mode: 'and' | 'or' | 'vote') => backtest(s, { ...base, strategy: ids[0], combo: { ids, mode } }).exposure;
+  const and = ex('and'), or = ex('or'), vote = ex('vote');
+  assert.ok(and <= Math.min(...single) + 1e-3, `全部同意 ${and} 應 ≤ ${Math.min(...single)}`);
+  assert.ok(or >= Math.max(...single) - 1e-3, `任一出現 ${or} 應 ≥ ${Math.max(...single)}`);
+  assert.ok(and <= vote + 1e-3 && vote <= or + 1e-3, '過半數應介於兩者之間');
+  // 只選一個時等同單一策略
+  const a = backtest(s, { ...base, strategy: 'macd', combo: { ids: ['macd'], mode: 'and' } });
+  const b = backtest(s, { ...base, strategy: 'macd' });
+  assert.equal(a.finalValue, b.finalValue);
+}
 console.log(`strategies.test：${ALL.length} 個策略與風險控管檢查通過`);

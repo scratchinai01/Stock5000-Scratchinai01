@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, AlertTriangle, ChevronDown, ChevronUp, Filter, TrendingUp, TrendingDown, BookOpen, BarChart3, ListChecks } from 'lucide-react';
+import { StudyCardModal, CardSection, CardStat, CardFooter } from './StudyCardModal';
 
 /**
  * 型態選股（超級專業版）：三角收斂突破
@@ -100,7 +101,7 @@ export const PatternScreener: React.FC<{ onOpenSymbol: (symbol: string) => void 
         ))}
       </div>
 
-      {view === 'list' && (loading ? <Loading text="讀取今日型態清單…" /> : err ? <ErrorBox text={err} /> : latest && <ListView latest={latest} onOpenSymbol={onOpenSymbol} />)}
+      {view === 'list' && (loading ? <Loading text="讀取今日型態清單…" /> : err ? <ErrorBox text={err} /> : latest && <ListView latest={latest} bt={bt} onOpenSymbol={onOpenSymbol} />)}
       {view === 'backtest' && (bt ? <BacktestView bt={bt} /> : btErr ? <ErrorBox text={btErr} /> : <Loading text="讀取歷史回測統計…" />)}
       {view === 'rules' && <RulesView params={latest?.params || bt?.params} />}
 
@@ -115,7 +116,7 @@ const Loading = ({ text }: { text: string }) => <div className="flex items-cente
 const ErrorBox = ({ text }: { text: string }) => <div className="flex items-center gap-2 text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-4 text-[16px]"><AlertTriangle className="w-5 h-5" />{text}</div>;
 
 // ───────────────────────── 今日清單 ─────────────────────────
-function ListView({ latest, onOpenSymbol }: { latest: Latest; onOpenSymbol: (s: string) => void }) {
+function ListView({ latest, bt, onOpenSymbol }: { latest: Latest; bt: Backtest | null; onOpenSymbol: (s: string) => void }) {
   const [statuses, setStatuses] = useState<Status[]>(['breakout', 'confirming']);
   const [side, setSide] = useState<'all' | Side>('up');
   const [minVol, setMinVol] = useState(1.5);
@@ -195,7 +196,7 @@ function ListView({ latest, onOpenSymbol }: { latest: Latest; onOpenSymbol: (s: 
 
       <div className="space-y-3">
         {rows.slice(0, 120).map(r => (
-          <Card key={`${r.id}-${r.status}`} r={r} open={open === r.id} onToggle={() => setOpen(open === r.id ? null : r.id)} onOpenSymbol={onOpenSymbol} />
+          <Card key={`${r.id}-${r.status}`} r={r} bt={bt} open={open === r.id} onToggle={() => setOpen(open === r.id ? null : r.id)} onOpenSymbol={onOpenSymbol} />
         ))}
         {rows.length > 120 && <div className="text-[15px] text-slate-500">只顯示前 120 檔，請加嚴條件。</div>}
       </div>
@@ -210,9 +211,10 @@ const Row = ({ label, children }: { label: string; children: React.ReactNode }) 
   </div>
 );
 
-function Card({ r, open, onToggle, onOpenSymbol }: { r: Row; open: boolean; onToggle: () => void; onOpenSymbol: (s: string) => void }) {
+function Card({ r, bt, open, onToggle, onOpenSymbol }: { r: Row; bt: Backtest | null; open: boolean; onToggle: () => void; onOpenSymbol: (s: string) => void }) {
   const up = r.side === 'up';
   const isForming = r.status === 'forming';
+  const [card, setCard] = useState(false);
   return (
     <div className={`bg-white rounded-2xl border-2 ${open ? 'border-indigo-400' : 'border-slate-200'}`}>
       <button type="button" onClick={onToggle} className="w-full text-left p-4 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -261,12 +263,122 @@ function Card({ r, open, onToggle, onOpenSymbol }: { r: Row; open: boolean; onTo
               <KV k="量測目標價" v={num(r.target)} cls="text-rose-700" />
               {!isForming && <KV k="報酬風險比" v={`1 : ${num(r.rr, 2)}`} />}
               <KV k="20 日均量" v={`${Math.round(r.avgVol20 / 1000).toLocaleString()} 張`} />
-              <button type="button" onClick={() => onOpenSymbol(r.id)} className="mt-2 min-h-[44px] px-4 rounded-xl bg-slate-900 text-white font-black text-[16px]">看長期走勢與回測 →</button>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <button type="button" onClick={() => setCard(true)} className="min-h-[44px] px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[16px]">📖 教學卡片（可下載）</button>
+                <button type="button" onClick={() => onOpenSymbol(r.id)} className="min-h-[44px] px-4 rounded-xl bg-slate-900 text-white font-black text-[16px]">看長期走勢與回測 →</button>
+              </div>
             </div>
           </div>
         </div>
       )}
+      {card && <PatternStudyCard r={r} bt={bt} onClose={() => setCard(false)} />}
     </div>
+  );
+}
+
+// ───────────────────────── 教學卡片 ─────────────────────────
+const CHECK_EXPLAIN: Record<keyof Checks, string> = {
+  volume: '突破當天成交量至少是 20 日均量的 1.5 倍，代表真的有資金推動。',
+  vma: '5 日均量大於 20 日均量，最近交易變熱絡。',
+  obv: 'OBV（能量潮）同步創新高，量能和價格方向一致。',
+  rsi: 'RSI 站上 55（跌破看 45 以下），動能確實轉強。',
+  rsiDiverge: '收斂期間 RSI 低點一次比一次高，買盤慢慢回來。',
+  macd: 'MACD 的 DIF 在 DEA 之上且柱狀體放大，多方動能擴大。',
+  adx: '收斂時 ADX 偏低（盤整），突破當天開始轉升，趨勢正在形成。',
+  bb: '布林通道先縮窄、突破時張開，代表波動從壓縮轉為釋放。',
+  price: '收盤超出趨勢線 1% 或 0.5 倍 ATR，只看收盤、不看盤中，避免假突破。',
+  position: '突破發生在三角形長度的 1/2～3/4，太接近頂點的突破力道通常較弱。',
+  trend: '突破方向和 120 日均線（半年線）同向，順著大趨勢比較容易成功。',
+};
+const SHAPE_LESSON: Record<string, string> = {
+  sym: '對稱三角：高點越來越低、低點越來越高，多空力量逐漸均衡，最後往哪邊突破要看量能與收盤確認。',
+  asc: '上升三角：高點大致在同一水平（壓力），低點一次比一次高，代表買方越來越積極，較常見向上突破。',
+  desc: '下降三角：低點大致在同一水平（支撐），高點一次比一次低，代表賣方越來越積極，較常見向下跌破。',
+};
+
+function PatternStudyCard({ r, bt, onClose }: { r: Row; bt: Backtest | null; onClose: () => void }) {
+  const up = r.side === 'up';
+  const isForming = r.status === 'forming';
+  const passed = CORE.filter(k => r.checks[k]).length;
+  const g = grade(r.score);
+  const gs = bt?.stats?.[`${r.side}|grade|${g}`];
+  const head = up ? 'linear-gradient(135deg,#b91c1c,#e11d48)' : 'linear-gradient(135deg,#047857,#059669)';
+  const statusText =
+    r.status === 'breakout'
+      ? `今天收盤${up ? '站上上軌' : '跌破下軌'} ${(Math.abs(r.breakPct) * 100).toFixed(2)}%，成交量是 20 日均量的 ${num(r.volRatio, 1)} 倍。`
+      : r.status === 'confirming'
+      ? `${r.daysSince} 天前${up ? '突破上軌' : '跌破下軌'}，到今天收盤仍在線外，屬於「突破確認中」。`
+      : `目前還在三角形裡面，收盤距離${up ? '上軌' : '下軌'}約 ${pct(-r.distPct, 2).replace('+', '')}，尚未突破。`;
+  return (
+    <StudyCardModal title={`型態教學卡：${r.name}`} filename={`pattern_${r.id}_${r.date.replace(/-/g, '')}.png`} onClose={onClose}>
+      <div style={{ background: head }} className="text-white px-6 pt-5 pb-6">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-[16px] font-black px-3 py-1 rounded-full" style={{ background: 'rgba(0,0,0,0.22)' }}>📖 型態教學卡 · 三角收斂{up ? '突破' : '跌破'}</span>
+          <span className="text-[15px] font-mono font-bold">資料日 {r.date}</span>
+        </div>
+        <div className="mt-3 text-[34px] font-black leading-tight">{r.name} <span className="font-mono text-[26px] opacity-90">{r.id}</span></div>
+        <div className="mt-2 flex flex-wrap gap-2 text-[16px] font-black">
+          <span className="px-3 py-1 rounded-full bg-white/20">{STATUS[r.status].label}</span>
+          <span className="px-3 py-1 rounded-full bg-white/20">{SHAPE[r.shape]}</span>
+          <span className="px-3 py-1 rounded-full bg-white text-slate-900">{g} 級 · 符合 {passed}/9 項</span>
+        </div>
+      </div>
+      <div className="px-6 py-5 space-y-5">
+        <MiniChart r={r} />
+        <CardSection title="這是什麼型態？">
+          <p className="text-[17px] leading-relaxed">{SHAPE_LESSON[r.shape]}</p>
+          <p className="text-[17px] leading-relaxed">這一檔在 {r.lengthBars} 根 K 線內形成收斂，上下軌合計觸碰 {r.touches} 次。</p>
+        </CardSection>
+        <CardSection title="今天的訊號">
+          <p className="text-[17px] leading-relaxed">{statusText}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <CardStat label="收盤" value={num(r.close)} />
+            <CardStat label={`今日${up ? '上軌' : '下軌'}`} value={num(r.lineNow)} />
+            <CardStat label="RSI(14)" value={num(r.rsi, 0)} />
+            <CardStat label="突破位置" value={`${Math.round(r.position * 100)}%`} />
+          </div>
+        </CardSection>
+        <CardSection title={`條件檢查：符合 ${passed} / 9 項核心條件`}>
+          <ul className="space-y-1.5">
+            {(Object.keys(CHECK_LABEL) as (keyof Checks)[]).map(k => (
+              <li key={k} className="flex gap-2 text-[16px] leading-snug">
+                <span className="font-black w-5 shrink-0" style={{ color: r.checks[k] ? '#15803d' : '#9ca3af' }}>{r.checks[k] ? '✓' : '✗'}</span>
+                <span><b style={{ color: r.checks[k] ? '#1f2630' : '#6b7280' }}>{CHECK_LABEL[k]}{!CORE.includes(k) ? '（加分）' : ''}</b>：<span className="text-slate-600">{CHECK_EXPLAIN[k]}</span></span>
+              </li>
+            ))}
+          </ul>
+          {isForming && <p className="text-[15px] text-slate-500">尚未突破，所以量能、收盤確認等條件要等突破當天才會成立。</p>}
+        </CardSection>
+        <CardSection title="風險控制（教學示範）">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <CardStat label="停損（擺動點）" value={num(r.stop)} color="#11803d" />
+            <CardStat label="停損（1.5 倍 ATR）" value={num(r.stopAtr)} color="#11803d" />
+            <CardStat label="量測目標價" value={num(r.target)} color="#c81e2c" />
+            <CardStat label="報酬風險比" value={isForming ? '—' : `1 : ${num(r.rr, 2)}`} />
+          </div>
+          <p className="text-[15.5px] text-slate-600 leading-relaxed">量測目標 = 突破點 ± 三角形最寬處的高度；停損放在三角形內最後一個擺動點外側。先想好停損再進場，報酬風險比最好在 1 : 2 以上。</p>
+        </CardSection>
+        {gs && gs.n > 0 && (
+          <CardSection title={`30 年回測：${g} 級${up ? '向上突破' : '向下跌破'}的歷史表現`}>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <CardStat label="歷史次數" value={gs.n.toLocaleString()} />
+              <CardStat label="先達到目標" value={`${(gs.winRate * 100).toFixed(1)}%`} color="#c81e2c" />
+              <CardStat label="先碰到停損" value={`${(gs.stopRate * 100).toFixed(1)}%`} color="#11803d" />
+              <CardStat label="20 天平均報酬" value={pct(gs.avgR20, 2)} />
+            </div>
+            <p className="text-[15px] text-slate-500">歷史統計只代表過去同類型態的平均結果，不代表這一檔一定會照這樣走。</p>
+          </CardSection>
+        )}
+        <CardSection title="三個學習重點">
+          <ol className="list-decimal pl-6 space-y-1 text-[16.5px] leading-relaxed">
+            <li>只看<b>收盤</b>是否突破，盤中穿過又縮回來的常是假突破。</li>
+            <li><b>沒有量</b>的突破容易失敗；量能、OBV、RSI 同時確認，成功率較高。</li>
+            <li>突破後跌回三角形內，代表訊號失效，要依計畫<b>停損</b>，不要凹單。</li>
+          </ol>
+        </CardSection>
+      </div>
+      <CardFooter note="型態由程式依固定規則辨識，與人工看圖可能不同。本卡為技術分析教學內容，不構成投資建議。" />
+    </StudyCardModal>
   );
 }
 const Stat = ({ label, v, hi }: { label: string; v: string; hi?: boolean }) => (

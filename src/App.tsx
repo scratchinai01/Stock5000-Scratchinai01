@@ -2286,6 +2286,7 @@ export default function App() {
         isOpen={isProAnalysisOpen}
         onClose={() => setIsProAnalysisOpen(false)}
         initialSymbol={selectedInstrument?.symbol}
+        holdings={(currentProfile?.positions || []).filter(p => p.category === 'stocks').map(p => ({ symbol: p.symbol, name: p.name }))}
       />
       <GlobalMarketRadarModal
         isOpen={isGlobalRadarOpen}

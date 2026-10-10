@@ -18,7 +18,7 @@ import {
 } from './src/utils/twHolidays';
 import { getHistory, historyCacheStats } from './server-lib/history';
 import { registerOrderRoutes } from './server-lib/orders';
-import { getPatternLatest, getPatternBacktest } from './server-lib/patternStore';
+import { getPatternLatest, getPatternBacktest, getRiskLatest, getRiskBacktest } from './server-lib/patternStore';
 
 dotenv.config();
 
@@ -1094,6 +1094,31 @@ app.get('/api/pattern/backtest', async (_req, res) => {
   try {
     const data = await getPatternBacktest();
     if (!data) return res.status(404).json({ error: '歷史回測尚未執行' });
+
+// 台股下跌預警 2.0（教學版）：每天收盤後由排程算好，這裡只讀結果
+app.get('/api/risk/latest', async (_req, res) => {
+  try {
+    const data = await getRiskLatest();
+    if (!data) return res.status(404).json({ error: '今天的風險掃描還沒產生，收盤後排程完成就會出現' });
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json(data);
+  } catch (e: any) {
+    console.warn('[Risk] latest', e.message);
+    res.status(503).json({ error: '風險掃描資料暫時讀取不到，請稍後再試' });
+  }
+});
+app.get('/api/risk/backtest', async (_req, res) => {
+  try {
+    const data = await getRiskBacktest();
+    if (!data) return res.status(404).json({ error: '歷史回測尚未執行' });
+    const { models: _m, ...rest } = data as any;
+    res.set('Cache-Control', 'public, max-age=600');
+    res.json(rest);
+  } catch (e: any) {
+    console.warn('[Risk] backtest', e.message);
+    res.status(503).json({ error: '回測資料暫時讀取不到，請稍後再試' });
+  }
+});
     res.set('Cache-Control', 'public, max-age=600');
     res.json(data);
   } catch (e: any) {

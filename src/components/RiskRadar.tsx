@@ -10,10 +10,11 @@ import { FACTOR_KEYS, FACTOR_NAMES, FACTOR_WEIGHTS, NOT_INCLUDED, SIGNALS } from
 interface Row {
   id: string; name: string; market: string; industry: string | null; date: string; close: number; chg1: number; ret20: number;
   score: number; level: number; F: number[]; sig: Record<string, number>; hist: number[]; avgVal20: number; prob?: Record<string, number>;
+  nSig?: number; alert?: number; alertProb?: number;
 }
 interface Latest {
   asOf: string; generatedAt: string; version: string; counts: number[]; market: { taiexWeak: boolean | null; breadth5: number | null; avgScore: number };
-  industries: { name: string; ret20: number; n: number; avgScore: number }[]; rows: Row[]; hasModels: boolean;
+  industries: { name: string; ret20: number; n: number; avgScore: number }[]; rows: Row[]; hasModels: boolean; hasAlert?: boolean; nSignals?: number; alertBase?: number | null;
 }
 interface LevelStat { level: number; label: string; n: number; share: number; evRate: number; ev15Rate: number; r5: number; r10: number; r20: number; mdd20: number }
 interface Thr { baseRate: number; prAuc: number; rows: { threshold: number; alerts: number; alertRate: number; precision: number; recall: number }[] }
@@ -25,7 +26,13 @@ interface Backtest {
   factorLift: Record<string, Lift>; signalLift: Record<string, Lift>;
   lead: Record<string, { events: number; recall: number; avgLeadDays: number }>;
   drawdown: { stocks: number; medianMddBH: number; medianMddST: number; medianCagrBH: number; medianCagrST: number; medianInMarket: number; improvedShare: number };
-  ml: MlRow[]; cases: { id: string; name: string; date: string; score: number; F: number[]; ret5: number; ret20: number; mdd20: number }[];
+  ml: MlRow[];
+  alert?: {
+    trainLift: Record<string, Lift>; weights: { key: string; w: number; coef: number }[];
+    test: { n: number; baseRate: number; alertPrAuc: number; logitPrAuc: number; logitBrier: number; factorPrAuc: number; calibration: { bin: number; n: number; predicted: number; actual: number }[] };
+    bands: { band: string; n: number; share: number; evRate: number }[]; nSigBands: { range: string; n: number; evRate: number }[];
+  };
+  cases: { id: string; name: string; date: string; score: number; F: number[]; ret5: number; ret20: number; mdd20: number }[];
 }
 
 const LEVEL = [
@@ -35,6 +42,8 @@ const LEVEL = [
   { label: '高風險', emoji: '🔴', cls: 'bg-red-600 text-white', soft: 'bg-red-50 border-red-200 text-red-900', bar: '#dc2626', note: '重新評估部位與風險曝險' },
   { label: '極高風險', emoji: '🚨', cls: 'bg-rose-900 text-white', soft: 'bg-rose-100 border-rose-300 text-rose-950', bar: '#881337', note: '優先檢查趨勢反轉與極端下跌風險' },
 ];
+/** 各訊號在 2015 年前的預警倍數（卡片清單顯示用） */
+const LiftCtx = React.createContext<{ lift: Record<string, Lift> | null; base: number | null }>({ lift: null, base: null });
 const SIG_LABEL: Record<string, string> = Object.fromEntries(SIGNALS.map(s => [s.key, s.label]));
 const PROB_LABEL: Record<string, string> = { d5: '5 日內跌超過 5%', d10: '10 日內跌超過 8%', d20: '20 日內跌超過 10%', mdd: '20 日內最大回落超過 15%' };
 const pct = (x: number, d = 1) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(d)}%`;
@@ -83,13 +92,14 @@ export const RiskRadar: React.FC<{ onOpenSymbol: (symbol: string) => void; holdi
   }, []);
 
   return (
+    <LiftCtx.Provider value={{ lift: bt?.alert?.trainLift || null, base: bt?.alert?.test.baseRate ?? latest?.alertBase ?? null }}>
     <div className="space-y-4">
       <div className="bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 text-white rounded-2xl p-4 flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-3">
           <span className="text-[34px] leading-none">📉</span>
           <div>
             <div className="text-[22px] font-black">台股下跌預警 2.0 <span className="ml-1 text-[13px] px-2 py-0.5 rounded-full bg-emerald-400 text-slate-950 align-middle">免費教學版</span></div>
-            <div className="text-[15px] text-rose-100">六大風險因子 × 100 分評分｜每天收盤後計算全市場一次｜30 年回測驗證</div>
+            <div className="text-[15px] text-rose-100">六大風險因子 × 100 分評分｜33 項利空訊號清單｜每天收盤後計算全市場一次｜30 年回測驗證</div>
           </div>
         </div>
         {latest && (
@@ -137,6 +147,7 @@ export const RiskRadar: React.FC<{ onOpenSymbol: (symbol: string) => void; holdi
         「機率」是依過去相似情況統計出的比例，不是對未來的保證。實際投資請自行判斷並控制風險。
       </p>
     </div>
+    </LiftCtx.Provider>
   );
 };
 
@@ -168,7 +179,7 @@ function MineView({ latest, holdings, onOpenSymbol }: { latest: Latest; holdings
   const [open, setOpen] = useState<string | null>(null);
 
   const section = ({ title, icon, ids, removable, empty }: { title: string; icon: React.ReactNode; ids: string[]; removable?: boolean; empty: string }) => {
-    const list = ids.map(id => ({ id, r: byId.get(id) })).sort((a, b) => (b.r?.score ?? -1) - (a.r?.score ?? -1));
+    const list = ids.map(id => ({ id, r: byId.get(id) })).sort((a, b) => (b.r?.alert ?? b.r?.score ?? -1) - (a.r?.alert ?? a.r?.score ?? -1));
     return (
       <div className="space-y-2">
         <div className="text-[18px] font-black text-slate-900 flex items-center gap-2">{icon}{title}<span className="text-[15px] text-slate-500 font-bold">（{ids.length} 檔）</span></div>
@@ -218,12 +229,12 @@ function MarketView({ latest, onOpenSymbol, presetLevel }: { latest: Latest; onO
   const [levels, setLevels] = useState<number[]>(presetLevel != null ? [presetLevel] : [3, 4]);
   const [ind, setInd] = useState('');
   const [minVal, setMinVal] = useState(presetLevel != null ? 0 : 50e6);
-  const [sort, setSort] = useState<'score' | 'chg1' | 'ret20'>('score');
+  const [sort, setSort] = useState<'score' | 'alert' | 'nSig' | 'chg1' | 'ret20'>('score');
   const [limit, setLimit] = useState(50);
   const [open, setOpen] = useState<string | null>(null);
   const list = useMemo(() => {
     const out = latest.rows.filter(r => levels.includes(r.level) && (!ind || r.industry === ind) && r.avgVal20 >= minVal);
-    out.sort((a, b) => (sort === 'score' ? b.score - a.score : sort === 'chg1' ? a.chg1 - b.chg1 : a.ret20 - b.ret20));
+    out.sort((a, b) => (sort === 'score' ? b.score - a.score : sort === 'alert' ? (b.alert ?? 0) - (a.alert ?? 0) : sort === 'nSig' ? (b.nSig ?? 0) - (a.nSig ?? 0) : sort === 'chg1' ? a.chg1 - b.chg1 : a.ret20 - b.ret20));
     return out;
   }, [latest, levels, ind, minVal, sort]);
   const toggle = (i: number) => setLevels(levels.includes(i) ? levels.filter(x => x !== i) : [...levels, i]);
@@ -249,7 +260,7 @@ function MarketView({ latest, onOpenSymbol, presetLevel }: { latest: Latest; onO
             {latest.industries.map(x => <option key={x.name} value={x.name}>{x.name}（平均 {x.avgScore} 分）</option>)}
           </select>
           <span className="ml-3 text-[16px] font-black text-slate-700">排序</span>
-          {([['score', '風險分數高到低'], ['chg1', '今日跌幅大到小'], ['ret20', '20 日跌幅大到小']] as const).map(([k, l]) => (
+          {([['score', '風險分數高到低'], ['alert', '利空警戒分數'], ['nSig', '利空訊號最多'], ['chg1', '今日跌幅大到小'], ['ret20', '20 日跌幅大到小']] as const).map(([k, l]) => (
             <button key={k} type="button" onClick={() => setSort(k)} className={chip(sort === k)}>{l}</button>
           ))}
         </div>
@@ -298,10 +309,13 @@ const LevelBadge = ({ level, score, small }: { level: number; score: number; sma
 );
 
 function RiskCard({ r, open, onToggle, onOpenSymbol, extra }: { r: Row; open: boolean; onToggle: () => void; onOpenSymbol: (s: string) => void; extra?: React.ReactNode }) {
+  const { base } = React.useContext(LiftCtx);
   return (
     <div className={`bg-white border-2 rounded-2xl ${open ? 'border-slate-400' : 'border-slate-200'}`}>
       <div role="button" tabIndex={0} onClick={onToggle} onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onToggle()} className="w-full flex flex-wrap items-center gap-x-4 gap-y-1 p-3 text-left cursor-pointer">
         <LevelBadge level={r.level} score={r.score} />
+        {r.alert != null && <AlertBadge alert={r.alert} />}
+        {r.nSig != null && <span className="text-[15px] font-black px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700">利空 {r.nSig} / {SIGNALS.length}</span>}
         <span className="text-[18px] font-black"><span className="font-mono text-indigo-700">{r.id}</span> {r.name}</span>
         {r.industry && <span className="text-[14px] px-2 py-0.5 rounded bg-slate-100 text-slate-600">{r.industry}</span>}
         <span className="text-[16px] font-mono">{r.close.toLocaleString()}</span>
@@ -334,19 +348,17 @@ function RiskCard({ r, open, onToggle, onOpenSymbol, extra }: { r: Row; open: bo
             )}
           </div>
           <div className="space-y-2">
-            <div className="text-[17px] font-black">今天觸發的訊號</div>
-            {Object.keys(r.sig).length === 0 ? (
-              <div className="text-[16px] text-slate-500">沒有觸發任何風險訊號。</div>
-            ) : (
-              <ul className="space-y-1">
-                {SIGNALS.filter(s => r.sig[s.key] != null).map(s => (
-                  <li key={s.key} className="flex items-start gap-2 text-[16px]">
-                    <span className="mt-1 w-2.5 h-2.5 rounded-full shrink-0" style={{ background: r.sig[s.key] >= 0.75 ? '#dc2626' : '#f97316' }} />
-                    <span><span className="text-slate-500 font-mono text-[14px] mr-1">{s.f}</span>{s.label}{r.sig[s.key] < 1 && <span className="text-slate-500">（強度 {Math.round(r.sig[s.key] * 100)}%）</span>}</span>
-                  </li>
-                ))}
-              </ul>
+            {r.alert != null && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="flex items-center gap-2 flex-wrap"><span className="text-[17px] font-black">利空警戒分數</span><AlertBadge alert={r.alert} big /></div>
+                {r.alertProb != null && (
+                  <div className="text-[16px] mt-1">歷史上同樣訊號組合，20 日內回落超過 10% 的比例 <b className="font-mono">{p1(r.alertProb)}</b>
+                    {base != null && <span className="text-slate-500">（2015 年後所有股票平均 {p1(base, 0)}）</span>}</div>
+                )}
+                <div className="text-[13px] text-slate-500 mt-1">分數依每個訊號在 30 年回測中的實際預警力加權；預警力弱或反向的訊號只列出、不計分。</div>
+              </div>
             )}
+            <SignalChecklist r={r} />
             <div className="pt-2">
               <div className="text-[16px] font-black mb-1">近 {r.hist.length} 個交易日風險分數</div>
               <Spark hist={r.hist} big />
@@ -357,6 +369,59 @@ function RiskCard({ r, open, onToggle, onOpenSymbol, extra }: { r: Row; open: bo
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const alertTone = (a: number) => (a >= 60 ? 'bg-red-600 text-white' : a >= 40 ? 'bg-orange-500 text-white' : a >= 20 ? 'bg-yellow-400 text-slate-950' : 'bg-emerald-600 text-white');
+const AlertBadge = ({ alert, big }: { alert: number; big?: boolean }) => (
+  <span className={`inline-flex items-center gap-1 rounded-lg font-black ${alertTone(alert)} ${big ? 'px-3 py-1 text-[18px]' : 'px-2 py-0.5 text-[15px]'}`} title="利空警戒分數：依回測預警力加權的利空訊號分數（0–100）">
+    ⚠️ 警戒 <span className="font-mono">{Math.round(alert)}</span>
+  </span>
+);
+
+/** 33 項利空訊號清單：依因子分組，觸發的標紅並顯示歷史預警倍數 */
+function SignalChecklist({ r }: { r: Row }) {
+  const { lift } = React.useContext(LiftCtx);
+  const [showAll, setShowAll] = useState(false);
+  const on = SIGNALS.filter(s => r.sig[s.key] != null).length;
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <div className="text-[17px] font-black">利空訊號清單：觸發 {on} / {SIGNALS.length} 項</div>
+        <button type="button" onClick={() => setShowAll(!showAll)} className="text-[14px] font-bold text-indigo-700">{showAll ? '只看觸發的' : '顯示全部 33 項'}</button>
+      </div>
+      {on === 0 && !showAll && <div className="text-[16px] text-slate-500 mt-1">今天沒有觸發任何利空訊號。</div>}
+      <div className="mt-1 space-y-2">
+        {FACTOR_KEYS.map(fk => {
+          const list = SIGNALS.filter(s => s.f === fk && (showAll || r.sig[s.key] != null));
+          if (!list.length) return null;
+          return (
+            <div key={fk}>
+              <div className="text-[13px] font-bold text-slate-500">{fk} {FACTOR_NAMES[fk]}</div>
+              <ul className="space-y-0.5">
+                {list.map(s => {
+                  const x = r.sig[s.key];
+                  const hit = x != null;
+                  const lf = lift?.[s.key]?.lift ?? null;
+                  return (
+                    <li key={s.key} className={`flex items-start gap-2 text-[15.5px] ${hit ? 'text-slate-900' : 'text-slate-400'}`}>
+                      <span className={`mt-0.5 w-5 text-center font-black ${hit ? (x >= 0.75 ? 'text-red-600' : 'text-orange-500') : 'text-slate-300'}`}>{hit ? '✔' : '○'}</span>
+                      <span className="flex-1">{s.label}{hit && x < 1 && <span className="text-slate-500">（強度 {Math.round(x * 100)}%）</span>}{s.w === 0 && <span className="ml-1 text-[12px] px-1 rounded bg-indigo-50 text-indigo-700">清單</span>}</span>
+                      {lf != null && (
+                        <span className={`text-[13px] font-mono whitespace-nowrap ${lf >= 1.5 ? 'text-red-700 font-black' : lf >= 1.15 ? 'text-orange-600 font-bold' : 'text-slate-400'}`} title="2015 年前回測：觸發後重大下跌機率是未觸發時的幾倍">
+                          ×{lf.toFixed(2)}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+      {lift && <div className="text-[12.5px] text-slate-500 mt-1">右側 ×倍數：歷史上觸發後「20 日內回落超過 10%」的機率是沒觸發時的幾倍（2015 年前資料）。標「清單」的 13 項不計入六大因子 100 分。</div>}
     </div>
   );
 }
@@ -466,7 +531,40 @@ function BacktestView({ bt }: { bt: Backtest }) {
         )}
       </div>
 
+      {bt.alert && <AlertValidation a={bt.alert} />}
       {bt.cases.length > 0 && <Cases cases={bt.cases} />}
+    </div>
+  );
+}
+
+function AlertValidation({ a }: { a: NonNullable<Backtest['alert']> }) {
+  const t = a.test;
+  const top = a.weights.filter(w => w.w > 0).slice(0, 12);
+  const zero = a.weights.filter(w => w.w === 0);
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+      <div className="text-[18px] font-black">十、利空訊號清單（{SIGNALS.length} 項）與警戒分數驗證</div>
+      <div className="text-[16px] text-slate-700 leading-relaxed">
+        權重只用 <b>2015 年以前</b>的資料決定（每個訊號的預警倍數 − 1），再拿 <b>2015 年以後</b> {t.n.toLocaleString()} 個樣本檢驗，避免「用答案出題」。
+      </div>
+      <div className="grid sm:grid-cols-4 gap-3">
+        <Big label="利空警戒分數 PR-AUC" v={t.alertPrAuc.toFixed(3)} sub={`隨便猜 = ${t.baseRate.toFixed(3)}`} />
+        <Big label="33 訊號機器學習 PR-AUC" v={t.logitPrAuc.toFixed(3)} sub={`Brier ${t.logitBrier.toFixed(4)}`} />
+        <Big label="六大因子總分 PR-AUC" v={t.factorPrAuc.toFixed(3)} sub="同一批測試樣本" />
+        <Big label="測試期平均發生率" v={p1(t.baseRate)} sub="20 日內回落超過 10%" />
+      </div>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Table head={['利空警戒分數', '占所有交易日', '重大下跌機率']} rows={a.bands.map(b => [`${b.band} 分`, p1(b.share), p1(b.evRate)])}
+          note="分數越高，之後真的大跌的比例應該越高；這是在沒參與定權重的 2015 年後資料上驗證的。" />
+        <Table head={['觸發的利空訊號數', '樣本數', '重大下跌機率']} rows={a.nSigBands.map(b => [b.range, b.n.toLocaleString(), p1(b.evRate)])}
+          note="單純數「幾項」也能看出趨勢，但每項的預警力差很多，所以警戒分數改用加權。" />
+      </div>
+      <Table head={['預警力最強的訊號', '警戒分數權重', '機器學習係數']} rows={top.map(w => [SIG_LABEL[w.key] || w.key, w.w.toFixed(2), (w.coef > 0 ? '+' : '') + w.coef.toFixed(2)])} />
+      {zero.length > 0 && (
+        <div className="text-[14.5px] text-slate-600 leading-relaxed">
+          <b>只列出、不計分</b>（2015 年前預警倍數 ≤ 1）：{zero.map(w => SIG_LABEL[w.key] || w.key).join('、')}
+        </div>
+      )}
     </div>
   );
 }

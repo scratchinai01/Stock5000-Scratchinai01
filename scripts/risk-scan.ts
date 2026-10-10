@@ -17,6 +17,9 @@ import {
   NOT_INCLUDED,
   SIGNALS,
   addHist,
+  alertScore,
+  alertWeights,
+  signalVector,
   computeRisk,
   emptyHist,
   evalProb,
@@ -66,8 +69,10 @@ async function buildContext(sinceDays: number | null) {
   const tc = taiex.map(r => Number(r.c));
   const tma = sma(tc, 60);
   const taiexWeak = new Map<string, boolean>();
+  const taiexR20 = new Map<string, number>();
   taiex.forEach((r, i) => {
     if (isFinite(tma[i])) taiexWeak.set(r.d, tc[i] < tma[i]);
+    if (i >= 20 && tc[i - 20] > 0) taiexR20.set(r.d, tc[i] / tc[i - 20] - 1);
   });
 
   const daily = await query(`
@@ -110,6 +115,7 @@ async function buildContext(sinceDays: number | null) {
   log(`市場背景：加權指數 ${taiexWeak.size} 天、下跌家數 ${breadth.size} 天、產業 ${indRet.size} 個`);
   const ctx: MarketContext = {
     taiexWeak: d => taiexWeak.get(d),
+    taiexRet20: d => taiexR20.get(d),
     breadth: d => breadth.get(d),
     industryRet20: (ind, d) => ind20.get(`${ind}|${d}`),
   };
@@ -170,13 +176,16 @@ async function daily() {
   const db = await getDb();
   const bt = await db.collection('risk_scan').doc('backtest').get();
   const models: Record<string, LogitModel> = (bt.exists && bt.data()?.models) || {};
+  const trainLift = bt.exists ? bt.data()?.alert?.trainLift : null;
+  const aw = trainLift ? alertWeights(trainLift) : undefined;
+  const sigModel: LogitModel | undefined = models.sig;
 
   const rows: (RiskRow & { prob?: Record<string, number> })[] = [];
   let stocks = 0;
   await forEachSeries(450, (s, ind) => {
     stocks++;
     try {
-      const r = riskRowLatest(s, ind, ctx);
+      const r = riskRowLatest(s, ind, ctx, aw, sigModel);
       if (!r || r.date !== lastDate) return; // 停牌、下市的不列
       const prob: Record<string, number> = {};
       for (const t of LOGIT_TARGETS) if (models[t.key]) prob[t.key] = Math.round(predictLogit(models[t.key], r.F) * 1000) / 1000;
@@ -214,6 +223,9 @@ async function daily() {
     industries,
     chunks,
     hasModels: Object.keys(models).length > 0,
+    hasAlert: !!aw,
+    nSignals: SIGNALS.length,
+    alertBase: bt.exists ? bt.data()?.alert?.test?.baseRate ?? null : null,
   });
   log('✅ 每日風險掃描完成');
 }
@@ -250,6 +262,12 @@ async function backtest() {
   const eras: Record<string, ScoreHist> = { '1990s–2000s': emptyHist(), '2010s': emptyHist(), '2020s': emptyHist() };
   const factorLift = Object.fromEntries(FACTOR_KEYS.map(k => [k, emptyLift()])) as Record<string, Lift>;
   const signalLift = Object.fromEntries(SIGNALS.map(s => [s.key, emptyLift()])) as Record<string, Lift>;
+  // 只用 2015 年前資料算的訊號預警倍數（警戒分數權重用，避免偷看測試期）
+  const trainSigLift = Object.fromEntries(SIGNALS.map(s => [s.key, emptyLift()])) as Record<string, Lift>;
+  const trainSig: Float32Array[] = [];
+  const trainSigY: number[] = [];
+  const testSig: Float32Array[] = [];
+  const testSigY: number[] = [];
   // 機器學習樣本（2015 年前訓練、之後測試）
   const trainX: Float32Array[] = [];
   const trainY: Record<string, number[]> = Object.fromEntries(LOGIT_TARGETS.map(t => [t.key, []]));
@@ -306,23 +324,28 @@ async function backtest() {
       for (const sg of SIGNALS) {
         const x = r.sig[sg.key][t];
         if (!isFinite(x)) continue;
-        const L = signalLift[sg.key];
-        if (x >= 0.5) {
-          L.n1++;
-          if (ev) L.ev1++;
-        } else {
-          L.n0++;
-          if (ev) L.ev0++;
+        for (const L of d < '2015-01-01' ? [signalLift[sg.key], trainSigLift[sg.key]] : [signalLift[sg.key]]) {
+          if (x >= 0.5) {
+            L.n1++;
+            if (ev) L.ev1++;
+          } else {
+            L.n0++;
+            if (ev) L.ev0++;
+          }
         }
       }
       counter++;
       const feats = Float32Array.from(FACTOR_KEYS.map(k => r.F[k][t]));
       if (d < '2015-01-01') {
         if (counter % 20 === 0) {
+          trainSig.push(Float32Array.from(signalVector(r, t)));
+          trainSigY.push(ev ? 1 : 0);
           trainX.push(feats);
           for (const tg of LOGIT_TARGETS) trainY[tg.key].push(tg.y(f) ? 1 : 0);
         }
       } else if (counter % 8 === 0) {
+        testSig.push(Float32Array.from(signalVector(r, t)));
+        testSigY.push(ev ? 1 : 0);
         testX.push(feats);
         testScore.push(sc);
         for (const tg of LOGIT_TARGETS) testY[tg.key].push(tg.y(f) ? 1 : 0);
@@ -414,6 +437,46 @@ async function backtest() {
     log(`模型 ${tg.label}：測試 PR-AUC ${e.prAuc.toFixed(3)}（基準 ${e.baseRate.toFixed(3)}）、Brier ${e.brier.toFixed(4)}`);
   }
 
+  // ── 利空訊號清單：警戒分數（權重 = 2015 年前的預警倍數）＋ 33 訊號羅吉斯迴歸，2015 年後驗證 ──
+  const trainLiftOut = Object.fromEntries(Object.entries(trainSigLift).map(([k, L]) => [k, liftOut(L)]));
+  const aw = alertWeights(trainLiftOut as any);
+  const sigFeatures = SIGNALS.map(s => s.key);
+  const sigModel = trainLogit(trainSig, Uint8Array.from(trainSigY), sigFeatures, 400, 1.0);
+  models.sig = sigModel;
+  const alertScores = testSig.map(v => alertScore(Array.from(v), aw));
+  const eAlert = evalProb(alertScores.map(x => x / 100), testSigY);
+  const eSig = evalProb(testSig.map(v => predictLogit(sigModel, v)), testSigY);
+  const eFactor = evalProb(testScore.map(x => x / 100), testSigY);
+  const bands = [0, 20, 40, 60, 80].map((lo, i) => {
+    const hi = i === 4 ? 101 : lo + 20;
+    const idx = alertScores.map((x, j) => [x, j] as const).filter(([x]) => x >= lo && x < hi).map(([, j]) => j);
+    const ev = idx.reduce((a, j) => a + testSigY[j], 0);
+    return { band: `${lo}–${i === 4 ? 100 : hi - 1}`, n: idx.length, share: +(idx.length / Math.max(1, alertScores.length)).toFixed(4), evRate: idx.length ? +(ev / idx.length).toFixed(4) : 0 };
+  });
+  const nSigBands = [0, 1, 3, 5, 7, 9].map((lo, i, arr) => {
+    const hi = i === arr.length - 1 ? 99 : arr[i + 1] - 1;
+    const idx = testSig.map((v, j) => [v.reduce((a, x) => a + (x >= 0.5 ? 1 : 0), 0), j] as const).filter(([c]) => c >= lo && c <= hi).map(([, j]) => j);
+    const ev = idx.reduce((a, j) => a + testSigY[j], 0);
+    return { range: hi >= 99 ? `${lo} 項以上` : lo === hi ? `${lo} 項` : `${lo}–${hi} 項`, n: idx.length, evRate: idx.length ? +(ev / idx.length).toFixed(4) : 0 };
+  });
+  const alert = {
+    trainLift: trainLiftOut,
+    weights: SIGNALS.map((s, i) => ({ key: s.key, w: +aw.w[i].toFixed(3), coef: +sigModel.w[i].toFixed(3) })).sort((a, b) => b.w - a.w),
+    test: {
+      n: testSigY.length,
+      baseRate: +eAlert.baseRate.toFixed(4),
+      alertPrAuc: +eAlert.prAuc.toFixed(4),
+      logitPrAuc: +eSig.prAuc.toFixed(4),
+      logitBrier: +eSig.brier.toFixed(5),
+      factorPrAuc: +eFactor.prAuc.toFixed(4),
+      calibration: eSig.calibration.map(c => ({ ...c, predicted: +c.predicted.toFixed(4), actual: +c.actual.toFixed(4) })),
+    },
+    bands,
+    nSigBands,
+  };
+  log(`利空清單（測試期）：警戒分數 PR-AUC ${eAlert.prAuc.toFixed(3)}、33 訊號模型 ${eSig.prAuc.toFixed(3)}、六因子總分 ${eFactor.prAuc.toFixed(3)}（基準 ${eAlert.baseRate.toFixed(3)}）`);
+  for (const b of bands) log(`  警戒分數 ${b.band}：占 ${(b.share * 100).toFixed(1)}%，重大下跌機率 ${(b.evRate * 100).toFixed(1)}%`);
+
   const levels = levelStats(all);
   const thr = thresholdStats(all);
   const erasOut = Object.fromEntries(Object.entries(eras).map(([k, h]) => [k, { levels: levelStats(h), thr: thresholdStats(h) }]));
@@ -444,6 +507,7 @@ async function backtest() {
       improvedShare: mddBH.length ? +(improved / mddBH.length).toFixed(4) : 0,
     },
     ml,
+    alert,
     models,
     cases: cases.slice(0, 200),
     notIncluded: NOT_INCLUDED,

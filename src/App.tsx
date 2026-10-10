@@ -43,6 +43,7 @@ import { FinancialGlossaryDrawer } from './components/FinancialGlossaryDrawer';
 import { ContextualTermBanner } from './components/ContextualTermBanner';
 import { useGlossary } from './context/GlossaryContext';
 import { FontSizeControl } from './components/FontSizeControl';
+import { NavMenu, MenuItem, MenuDivider, MenuLabel } from './components/NavMenu';
 import {
   savePlayerProfileToFirebase,
   getPlayerProfileFromFirebase,
@@ -1394,88 +1395,58 @@ export default function App() {
             </div>
           </div>
         ) : (
-          /* Expanded header view with convenient Collapse toggle */
+          /* Expanded header view：品牌｜使用者選單｜資產｜盤況與收起 */
           <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
-            {/* Left: Brand & Trader Identity */}
+            {/* Left: Brand & 使用者選單（切換、設定、密碼、字體、登出都收在這裡） */}
             <div className="flex items-center gap-2 sm:gap-2.5">
               <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500 text-slate-950 font-black flex items-center justify-center text-base sm:text-lg shadow-2xs border border-amber-400 shrink-0">
                 📈
               </div>
-              <div>
-                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                  <h1 className="text-xs sm:text-base font-black text-slate-950 tracking-tight">
-                    5000萬股市大富翁
-                  </h1>
-                  <span className="text-slate-300 hidden sm:inline">｜</span>
-                  <div className="flex items-center gap-1.5">
-                    {isAuthenticated && currentProfile ? (
-                      <>
-                        {/* Trader Selector */}
-                        <button
-                          type="button"
-                          onClick={() => setIsPlayerSetupOpen(true)}
-                          className="flex items-center gap-1 sm:gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-950 px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 transition cursor-pointer shadow-2xs"
-                          title="點擊切換操盤手帳號或修改個人資料"
-                        >
-                          <span>{currentProfile.avatarEmoji || '👑'}</span>
-                          <span className="font-black text-slate-900 truncate max-w-[100px] sm:max-w-none">{currentProfile.studentName}</span>
-                          <span className="text-[10px] text-slate-500 font-semibold hidden sm:inline">操盤手</span>
-                          <span className="text-[10px] text-amber-700 font-bold ml-0.5">切換 / 設定 ▾</span>
-                        </button>
-
-                        {/* Prominent & Clear 個人設定 Button */}
-                        <button
-                          type="button"
-                          onClick={() => setIsPlayerSetupOpen(true)}
-                          className="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-slate-950 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 transition cursor-pointer shadow-2xs"
-                          title="修改個人資料、組別、頭銜與風格設定"
-                        >
-                          <Settings className="w-3.5 h-3.5 text-slate-500" />
-                          <span>設定</span>
-                        </button>
-
-                        {/* Prominent & Clear 修改密碼 Button */}
-                        <button
-                          type="button"
-                          onClick={() => setIsChangePasswordOpen(true)}
-                          className="flex items-center gap-1.5 text-xs font-black text-amber-950 hover:text-slate-950 px-2.5 sm:px-3 py-1 rounded-xl bg-gradient-to-r from-amber-100 via-amber-200 to-yellow-200 hover:from-amber-200 hover:to-yellow-300 border-2 border-amber-400 shadow-xs hover:shadow-sm transition active:scale-95 cursor-pointer"
-                          title="修改個人登入密碼"
-                        >
-                          <Lock className="w-3.5 h-3.5 text-amber-800 shrink-0" />
-                          <span>修改密碼</span>
-                        </button>
-
-                        {/* Prominent 登出 Button */}
-                        <button
-                          type="button"
-                          onClick={handleLogout}
-                          className="flex items-center gap-1.5 text-xs font-black text-rose-700 hover:text-rose-900 px-2.5 sm:px-3 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 shadow-2xs hover:shadow-xs transition active:scale-95 cursor-pointer"
-                          title="立即登出當前帳號並鎖定交易室"
-                        >
-                          <LogOut className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                          <span>登出</span>
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setIsPlayerSetupOpen(true)}
-                        className="flex items-center gap-1.5 text-xs font-black text-slate-950 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-105 border border-amber-500 shadow-sm transition cursor-pointer active:scale-95"
-                        title="點擊進行操盤手身分登入或新加入者登記"
-                      >
-                        <Lock className="w-3.5 h-3.5 text-slate-950" />
-                        <span>未登入 · 點此身分登入 / 註冊</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <h1 className="text-sm sm:text-lg font-black text-slate-950 tracking-tight">5000萬股市大富翁</h1>
+              {isAuthenticated && currentProfile ? (
+                <NavMenu
+                  title="切換操盤手、個人設定、修改密碼、字體大小、登出"
+                  width={300}
+                  buttonClass="flex items-center gap-1.5 text-sm font-bold text-slate-800 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 transition cursor-pointer"
+                  label={
+                    <>
+                      <span>{currentProfile.avatarEmoji || '👑'}</span>
+                      <span className="font-black text-slate-900 truncate max-w-[110px] sm:max-w-[180px]">{currentProfile.studentName}</span>
+                    </>
+                  }
+                >
+                  {close => (
+                    <>
+                      <MenuItem icon="🎓" label="切換操盤手 / 個人設定" desc="修改個人資料、組別、頭銜與風格" onClick={() => { close(); setIsPlayerSetupOpen(true); }} />
+                      <MenuItem icon="🔐" label="修改密碼" onClick={() => { close(); setIsChangePasswordOpen(true); }} />
+                      <MenuItem icon="🛡️" label="學生資產安全中心" desc="帳本與時間點還原" onClick={() => { close(); setIsSecurityCenterOpen(true); }} />
+                      <MenuDivider />
+                      <div className="px-4 py-2 flex items-center justify-between gap-2">
+                        <span className="text-[15px] font-black text-slate-800">🔠 字體大小</span>
+                        <FontSizeControl compact={true} showLabels={true} />
+                      </div>
+                      <MenuDivider />
+                      <MenuItem icon="🚪" label="登出" desc="登出並鎖定交易室" tone="danger" onClick={() => { close(); handleLogout(); }} />
+                    </>
+                  )}
+                </NavMenu>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsPlayerSetupOpen(true)}
+                  className="flex items-center gap-1.5 text-sm font-black text-slate-950 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-400 hover:brightness-105 border border-amber-500 shadow-sm transition cursor-pointer active:scale-95"
+                  title="點擊進行操盤手身分登入或新加入者登記"
+                >
+                  <Lock className="w-4 h-4 text-slate-950" />
+                  <span>未登入 · 點此登入 / 註冊</span>
+                </button>
+              )}
             </div>
 
             {/* Center: Total Asset & Today Return */}
             <div className="flex items-center gap-3 sm:gap-4 bg-slate-50 border border-slate-200 px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-2xl shadow-2xs">
               <div>
-                <span className="text-[9px] sm:text-[10px] text-slate-500 font-bold block">
+                <span className="text-[10px] sm:text-[11px] text-slate-500 font-bold block">
                   <Term id="inventory">總淨資產</Term>
                 </span>
                 <span className="text-xs sm:text-base font-black font-mono text-slate-950">
@@ -1486,7 +1457,7 @@ export default function App() {
               </div>
               <div className="w-px h-5 sm:h-6 bg-slate-200" />
               <div>
-                <span className="text-[9px] sm:text-[10px] text-slate-500 font-bold block">
+                <span className="text-[10px] sm:text-[11px] text-slate-500 font-bold block">
                   <Term id="turnover_rate">今日損益</Term>
                 </span>
                 <span
@@ -1505,37 +1476,17 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right: Clean Status Indicator, Font Size Controller & Collapse Toggle Button */}
+            {/* Right: 盤況（一個小標籤）＋ 收起 */}
             <div className="flex items-center gap-2">
-              <div className="hidden sm:flex items-center gap-2 text-[11px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200">
-                <span className="flex items-center gap-1">
-                  <span className={`w-2 h-2 rounded-full ${marketStatus.isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                  <span>
-                    {marketStatus.isOpen ? (
-                      <Term id="continuous_trading">盤中撮合</Term>
-                    ) : (
-                      <Term id="after_market">盤後定格</Term>
-                    )}
-                  </span>
-                </span>
-                <span className="text-slate-300">•</span>
-                <span className="flex items-center gap-1 text-slate-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                  <span>
-                    <Term id="settlement">雲端同步</Term>
-                  </span>
-                </span>
-              </div>
-
-              {/* Font Size Controller (A- / A / A+) in Expanded View */}
-              <FontSizeControl compact={false} showLabels={true} />
-
-              {/* Close / Collapse Toggle */}
+              <span className="hidden sm:flex items-center gap-1.5 text-[12px] font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200" title="資料已與雲端同步">
+                <span className={`w-2 h-2 rounded-full ${marketStatus.isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                {marketStatus.isOpen ? <Term id="continuous_trading">盤中撮合</Term> : <Term id="after_market">盤後定格</Term>}
+              </span>
               <button
                 type="button"
                 onClick={() => setIsHeaderCollapsed(true)}
-                className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 flex items-center gap-1 shadow-2xs transition cursor-pointer"
-                title="收起頂部面板，釋放更多手機畫面"
+                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200 flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                title="收起頂部面板，釋放更多畫面"
               >
                 <span>收起 ▴</span>
               </button>
@@ -1543,307 +1494,117 @@ export default function App() {
           </div>
         )}
 
-        {/* Layer 2: Core Action Nav Bar - Visible on desktop/tablet, hidden on mobile to avoid duplicating the bottom bar */}
-        <div className="hidden sm:flex max-w-7xl mx-auto px-4 sm:px-6 py-2 border-t border-slate-100 items-center justify-between gap-3 text-xs overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-2 shrink-0">
-            {/* 1. 資產儀表板 */}
-            <button
-              type="button"
-              onClick={() => {
-                if (!isAuthenticated) {
-                  setIsPlayerSetupOpen(true);
-                  return;
-                }
-                setActiveView('overview');
-              }}
-              className={`px-3.5 py-1.5 rounded-xl font-black transition flex items-center gap-1.5 cursor-pointer border ${
-                activeView === 'overview'
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                  : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 border-transparent'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>{isAuthenticated ? '📊 資產儀表板' : '🔒 資產儀表板'}</span>
-            </button>
+        {/* Layer 2: 主要功能（整合成 7 個入口）— 電腦與平板顯示，手機用底部導覽 */}
+        <nav className="hidden sm:flex max-w-7xl mx-auto px-4 sm:px-6 py-2 border-t border-slate-100 items-center gap-2 text-sm overflow-x-auto no-scrollbar" aria-label="主要功能">
+          {(() => {
+            const navBtn = (on: boolean) =>
+              `px-3.5 py-2 rounded-xl font-black transition flex items-center gap-1.5 cursor-pointer border whitespace-nowrap shrink-0 ${
+                on ? 'bg-slate-900 text-white border-slate-900 shadow-xs' : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 border-transparent'
+              }`;
+            const needLogin = (fn: () => void) => () => {
+              if (!isAuthenticated) {
+                setIsPlayerSetupOpen(true);
+                return;
+              }
+              fn();
+            };
+            const marketViews = ['trading', 'commodities', 'crypto'] as const;
+            const marketOn = (marketViews as readonly string[]).includes(activeView);
+            const marketLabel = activeView === 'commodities' ? '原物料 / StockQ' : activeView === 'crypto' ? '24/7 Crypto' : activeView === 'trading' ? '行情分析' : '全球行情';
+            return (
+              <>
+                <button type="button" onClick={needLogin(() => setActiveView('overview'))} className={navBtn(activeView === 'overview')}>
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span>{isAuthenticated ? '資產儀表板' : '🔒 資產儀表板'}</span>
+                </button>
 
-            {/* 2. 下單交易 - ⭐ 最重要，唯一亮黃色主 CTA */}
-            <button
-              type="button"
-              onClick={() => {
-                if (!isAuthenticated) {
-                  setIsPlayerSetupOpen(true);
-                  return;
-                }
-                handleOpenGeneralTrading();
-              }}
-              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 font-black shadow-sm border border-amber-500 flex items-center gap-1.5 cursor-pointer active:scale-95 transition"
-            >
-              <ShoppingCart className="w-3.5 h-3.5 text-slate-950" />
-              <span>{isAuthenticated ? '🛒 下單交易' : '🔒 下單交易 (需登入)'}</span>
-            </button>
-
-            {/* 3. 持倉與交易紀錄 */}
-            <button
-              type="button"
-              onClick={() => {
-                if (!isAuthenticated) {
-                  setIsPlayerSetupOpen(true);
-                  return;
-                }
-                setIsTradeStatementOpen(true);
-              }}
-              className="px-3.5 py-1.5 rounded-xl font-bold text-slate-700 hover:text-slate-950 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer border border-transparent"
-            >
-              <FileText className="w-3.5 h-3.5 text-slate-500" />
-              <span>{isAuthenticated ? '📒 持倉與交易紀錄' : '🔒 持倉紀錄'}</span>
-            </button>
-
-            {/* 4. 全球大宗原物料 (6大板塊) & StockQ 全球行情 */}
-            <button
-              type="button"
-              onClick={() => setActiveView('commodities')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer border ${
-                activeView === 'commodities'
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-black'
-                  : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 border-transparent'
-              }`}
-            >
-              <span className="text-amber-500">🌍</span>
-              <span>原物料 / StockQ</span>
-            </button>
-
-            {/* 4b. 🌐 24/7 Crypto & 穩定幣 (BTC/ETH/USDT/USDC/TWDT) */}
-            <button
-              type="button"
-              onClick={() => setActiveView('crypto')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer border ${
-                activeView === 'crypto'
-                  ? 'bg-gradient-to-r from-amber-600 via-amber-700 to-indigo-900 text-white border-amber-500 shadow-sm font-black'
-                  : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 border-transparent'
-              }`}
-            >
-              <span className="text-amber-400">🪙</span>
-              <span>24/7 Crypto & 穩定幣</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-700 font-mono font-bold border border-emerald-500/30">
-                TWDT · USDT · USDC
-              </span>
-            </button>
-
-            {/* 4c. 🛰️ 全球 7 大市場交易時鐘雷達 */}
-            <button
-              type="button"
-              onClick={() => setIsGlobalRadarOpen(true)}
-              className="px-3 py-1.5 rounded-xl font-bold text-cyan-900 bg-cyan-50 hover:bg-cyan-100 border border-cyan-300 transition flex items-center gap-1.5 cursor-pointer text-xs"
-              title="查看全球 7 大市場營業時鐘與 24 小時接力模擬器"
-            >
-              <span>🛰️</span>
-              <span>7大市場時鐘</span>
-            </button>
-
-            {/* 5. 行情分析 */}
-            <button
-              type="button"
-              onClick={() => setActiveView('trading')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer border ${
-                activeView === 'trading'
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-black'
-                  : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 border-transparent'
-              }`}
-            >
-              <TrendingUp className="w-3.5 h-3.5 text-slate-500" />
-              <span>📈 行情分析</span>
-            </button>
-
-            {/* 5b. 專業分析：30 年歷史、績效統計、策略回測 */}
-            <button
-              type="button"
-              onClick={() => setIsProAnalysisOpen(true)}
-              className="px-3.5 py-1.5 rounded-xl font-bold text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition flex items-center gap-1.5 cursor-pointer"
-              title="長期走勢、年化報酬、最大回撤、夏普值與策略回測"
-            >
-              <span>🔬</span>
-              <span>專業分析</span>
-            </button>
-
-            {/* 7. 全班排行 */}
-            <button
-              type="button"
-              onClick={() => {
-                if (!isAuthenticated) {
-                  setIsPlayerSetupOpen(true);
-                  return;
-                }
-                setActiveView('leaderboard');
-              }}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer border ${
-                activeView === 'leaderboard'
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs font-black'
-                  : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 border-transparent'
-              }`}
-            >
-              <Trophy className="w-3.5 h-3.5 text-amber-500" />
-              <span>{isAuthenticated ? '🏆 全班排行' : '🔒 全班排行'}</span>
-            </button>
-          </div>
-
-          {/* Right: Superuser 直接入口按鈕 + 更多工具 ▾ 下拉選單 */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* 名詞小學堂 📚 直接入口按鈕 */}
-            <button
-              type="button"
-              onClick={() => openDrawer()}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-950 font-black border border-amber-300 transition flex items-center gap-1.5 cursor-pointer text-xs shadow-2xs active:scale-95"
-              title="開啟 300 筆金融詞庫小學堂"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-              <span>📚 名詞小學堂</span>
-              <span className="text-[10px] px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded-full font-mono font-bold">
-                {totalLearnedCount}/300
-              </span>
-            </button>
-
-            {/* Superuser (程瑋翔) button - ONLY when logged in as authenticated 程瑋翔 */}
-            {isSuperUser && (
-              <button
-                type="button"
-                onClick={() => setIsAdminModalOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-500/10 hover:from-amber-500/30 hover:to-yellow-500/30 text-amber-950 font-black border border-amber-400/60 transition flex items-center gap-1.5 cursor-pointer text-xs shadow-2xs active:scale-95"
-                title="進入管理系統 (最高管理者: 程瑋翔)"
-              >
-                <Crown className="w-3.5 h-3.5 text-amber-600" />
-                <span>👑 Superuser (程瑋翔)</span>
-              </button>
-            )}
-
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
-                className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border border-slate-200 transition flex items-center gap-1 cursor-pointer text-xs"
-              >
-                <span>更多工具</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-              </button>
-
-              {isMoreMenuOpen && (
-                <div
-                  className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50 text-xs font-bold text-slate-800 animate-in fade-in zoom-in-95 duration-100"
-                  onClick={() => setIsMoreMenuOpen(false)}
+                <button
+                  type="button"
+                  onClick={needLogin(handleOpenGeneralTrading)}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 font-black shadow-sm border border-amber-500 flex items-center gap-1.5 cursor-pointer active:scale-95 transition whitespace-nowrap shrink-0"
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMoreMenuOpen(false);
-                      openDrawer();
-                    }}
-                    className="w-full text-left px-4 py-2 hover:bg-amber-50 flex items-center justify-between text-amber-950 font-black cursor-pointer border-b border-slate-100"
-                  >
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-amber-600" />
-                      <span>📚 名詞小學堂 (300詞庫)</span>
-                    </div>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 font-mono">
-                      {totalLearnedCount}/300
-                    </span>
-                  </button>
+                  <ShoppingCart className="w-4 h-4 text-slate-950" />
+                  <span>{isAuthenticated ? '下單交易' : '🔒 下單交易'}</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleOpenDerivatives('2317')}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
-                  >
-                    <Layers className="w-4 h-4 text-amber-600" />
-                    <span>🎯 標的衍生商品矩陣</span>
-                  </button>
+                <button type="button" onClick={needLogin(() => setIsTradeStatementOpen(true))} className={navBtn(false)}>
+                  <FileText className="w-4 h-4 text-slate-500" />
+                  <span>{isAuthenticated ? '持倉與交易紀錄' : '🔒 持倉紀錄'}</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveView('ppt_studio')}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
-                  >
-                    <Presentation className="w-4 h-4 text-indigo-600" />
-                    <span>📑 PPT 報告評分生成</span>
-                  </button>
-
-                  {isSuperUser && (
-                    <button
-                      type="button"
-                      onClick={() => setIsAdminModalOpen(true)}
-                      className="w-full text-left px-4 py-2 hover:bg-amber-50/70 flex items-center gap-2 text-amber-900 font-black cursor-pointer border-t border-slate-100"
-                    >
-                      <Crown className="w-4 h-4 text-amber-600" />
-                      <span>👑 管理系統 Superuser (程瑋翔)</span>
-                    </button>
-                  )}
-
-                  {/* Font Size Scaling Row */}
-                  <div
-                    onClick={e => e.stopPropagation()}
-                    className="w-full px-4 py-2 hover:bg-slate-50 flex items-center justify-between border-t border-slate-100"
-                  >
-                    <div className="flex items-center gap-1.5 text-slate-800">
-                      <span className="text-amber-600 font-black text-xs">🔠</span>
-                      <span>字體大小調整</span>
-                    </div>
-                    <FontSizeControl compact={true} showLabels={true} />
-                  </div>
-
-                  {/* Sensitive tools hidden when unauthenticated */}
-                  {isAuthenticated && (
+                <NavMenu
+                  title="行情分析、原物料 / StockQ、24/7 Crypto、7大市場時鐘"
+                  buttonClass={navBtn(marketOn)}
+                  label={<><TrendingUp className="w-4 h-4" /><span>{marketLabel}</span></>}
+                >
+                  {close => (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => setIsSecurityCenterOpen(true)}
-                        className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-emerald-800 cursor-pointer"
-                      >
-                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                        <span>🛡️ 學生資產安全中心 (PITR/帳本)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setIsChangePasswordOpen(true)}
-                        className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-800 cursor-pointer"
-                      >
-                        <Lock className="w-4 h-4 text-amber-600" />
-                        <span>🔐 修改個人登入密碼</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setIsResetModalOpen(true)}
-                        className="w-full text-left px-4 py-2 hover:bg-rose-50 flex items-center gap-2 text-rose-800 font-bold cursor-pointer"
-                      >
-                        <RotateCcw className="w-4 h-4 text-rose-600" />
-                        <span>🔄 清空部位重來 (密碼確認)</span>
-                      </button>
-
-                      <div className="border-t border-slate-100 my-1" />
-
-                      <button
-                        type="button"
-                        onClick={handleResetToAutonomousCash}
-                        className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-blue-800 cursor-pointer"
-                      >
-                        <GraduationCap className="w-4 h-4 text-blue-600" />
-                        <span>🎓 博士班 5,000萬純現金還原</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setIsFinmindVerificationOpen(true)}
-                        className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-600 cursor-pointer"
-                      >
-                        <Settings className="w-4 h-4 text-slate-500" />
-                        <span>⚙️ 系統工程資訊與 Token 檢驗</span>
-                      </button>
+                      <MenuItem icon="📈" label="行情分析" desc="即時 K 線與個股報價" active={activeView === 'trading'} onClick={() => { close(); setActiveView('trading'); }} />
+                      <MenuItem icon="🌍" label="原物料 / StockQ" desc="能源、金屬、農產品與全球指數" active={activeView === 'commodities'} onClick={() => { close(); setActiveView('commodities'); }} />
+                      <MenuItem icon="🪙" label="24/7 Crypto & 穩定幣" desc="BTC、ETH、USDT、USDC、TWDT" active={activeView === 'crypto'} onClick={() => { close(); setActiveView('crypto'); }} />
+                      <MenuItem icon="🛰️" label="7大市場時鐘" desc="全球市場營業時間與接力" onClick={() => { close(); setIsGlobalRadarOpen(true); }} />
                     </>
                   )}
+                </NavMenu>
+
+                <button
+                  type="button"
+                  onClick={() => setIsProAnalysisOpen(true)}
+                  className="px-3.5 py-2 rounded-xl font-black text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                  title="30 年走勢、績效統計、策略回測、型態選股、下跌預警"
+                >
+                  <span>🔬</span>
+                  <span>專業分析</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openDrawer()}
+                  className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-950 font-black border border-amber-300 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
+                  title="開啟 300 筆金融名詞小學堂"
+                >
+                  <BookOpen className="w-4 h-4 text-amber-600" />
+                  <span>名詞小學堂</span>
+                  <span className="text-[11px] px-1.5 rounded-full bg-amber-200 text-amber-900 font-mono font-bold">{totalLearnedCount}/300</span>
+                </button>
+
+                <div className="ml-auto shrink-0">
+                  <NavMenu
+                    align="right"
+                    width={320}
+                    title="全班排行、衍生商品矩陣、報告工作室與其他工具"
+                    buttonClass={navBtn(activeView === 'leaderboard' || activeView === 'ppt_studio')}
+                    label={<span>更多</span>}
+                  >
+                    {close => (
+                      <>
+                        <MenuItem icon="🏆" label="全班排行" active={activeView === 'leaderboard'} onClick={() => { close(); needLogin(() => setActiveView('leaderboard'))(); }} />
+                        <MenuItem icon="🎯" label="標的衍生商品矩陣" desc="同一標的的期貨、選擇權、權證" onClick={() => { close(); handleOpenDerivatives('2317'); }} />
+                        <MenuItem icon="📑" label="PPT 報告工作室" desc="簡報大綱、講稿與列印" active={activeView === 'ppt_studio'} onClick={() => { close(); setActiveView('ppt_studio'); }} />
+                        {isSuperUser && (
+                          <>
+                            <MenuDivider />
+                            <MenuLabel>管理者</MenuLabel>
+                            <MenuItem icon="👑" label="管理系統" desc="Superuser（程瑋翔）" tone="amber" onClick={() => { close(); setIsAdminModalOpen(true); }} />
+                          </>
+                        )}
+                        {isAuthenticated && (
+                          <>
+                            <MenuDivider />
+                            <MenuLabel>帳戶工具</MenuLabel>
+                            <MenuItem icon="🎓" label="博士班 5,000萬純現金還原" onClick={() => { close(); handleResetToAutonomousCash(); }} />
+                            <MenuItem icon="🔄" label="清空部位重來" desc="需要密碼確認" tone="danger" onClick={() => { close(); setIsResetModalOpen(true); }} />
+                            <MenuItem icon="⚙️" label="系統工程資訊" desc="資料連線與檢驗" onClick={() => { close(); setIsFinmindVerificationOpen(true); }} />
+                          </>
+                        )}
+                      </>
+                    )}
+                  </NavMenu>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
+              </>
+            );
+          })()}
+        </nav>
       </header>
 
       {/* Main Content View Switcher */}

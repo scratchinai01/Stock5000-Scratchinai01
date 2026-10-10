@@ -10,7 +10,7 @@
     "start": "node server.ts",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx tests/orderEngine.test.ts && tsx tests/orders.int.test.mts && tsx tests/historyCache.test.mts"
+    "test": "tsx tests/orderEngine.test.ts && tsx tests/orders.int.test.mts && tsx tests/historyCache.test.mts && tsx tests/strategies.test.mts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.3.1",

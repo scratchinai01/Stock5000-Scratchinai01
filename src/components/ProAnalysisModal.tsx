@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Search, LineChart as LineIcon, BarChart3, FlaskConical, Loader2, AlertTriangle, Info, Triangle, ShieldAlert } from 'lucide-react';
+import { X, Search, LineChart as LineIcon, BarChart3, FlaskConical, Loader2, AlertTriangle, Info, Triangle, ShieldAlert, BrainCircuit } from 'lucide-react';
+import { StockLearn } from './StockLearn';
 import { PatternScreener } from './PatternScreener';
 import { RiskRadar, RiskStock } from './RiskRadar';
 import {
@@ -210,9 +211,9 @@ const Stat: React.FC<{ label: string; value: string; sub?: string; tone?: string
 );
 
 // ───────────────────────── 主元件 ─────────────────────────
-type Tab = 'trend' | 'stats' | 'backtest' | 'stockRisk' | 'pattern' | 'risk';
+type Tab = 'trend' | 'stats' | 'backtest' | 'learn' | 'stockRisk' | 'pattern' | 'risk';
 export type ProMode = 'stock' | 'scan';
-const STOCK_TABS = ['trend', 'stats', 'backtest', 'stockRisk'] as const;
+const STOCK_TABS = ['trend', 'stats', 'backtest', 'learn', 'stockRisk'] as const;
 
 type StrategyGroup = '基準' | '趨勢追蹤' | '逆勢反轉' | '量價';
 type ParamKey = keyof BacktestParams;
@@ -338,6 +339,8 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
     }
   }, [tab]);
 
+  // 個股學習要用完整歷史（不受期間按鈕影響）
+  const fullAdj = useMemo(() => (data ? toSeries(data, true, undefined) : null), [data]);
   // 大盤濾網用完整的 0050 序列（均線需要暖機期，不能只取回測區間）
   const marketFull = useMemo(() => (bench ? toSeries(bench, true, undefined) : null), [bench]);
   // 可複選：擇時策略最多同時選 5 個，依「組合規則」合成一個持有訊號
@@ -393,7 +396,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
             <span className="text-2xl">{mode === 'stock' ? '🔬' : '🔎'}</span>
             <div>
               <div className="font-black text-slate-950 text-lg">{mode === 'stock' ? '個股分析' : '全市場海搜'}</div>
-              <div className="text-[12px] text-slate-500">{mode === 'stock' ? '一次看一檔：1994 年起長期走勢 · 績效統計 · 策略回測 · 個股下跌預警' : '每天收盤後掃描全市場：三角收斂突破 · 下跌預警排行'}</div>
+              <div className="text-[12px] text-slate-500">{mode === 'stock' ? '一次看一檔：1994 年起長期走勢 · 績效統計 · 策略回測 · 個股學習 · 個股下跌預警' : '每天收盤後掃描全市場：三角收斂突破 · 下跌預警排行'}</div>
             </div>
           </div>
           <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200" role="tablist" aria-label="切換分析模式">
@@ -434,7 +437,7 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
           {mode === 'stock' && data?.market && <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold">{data.market === 'tpex' ? '上櫃' : '上市'}</span>}
           <div className={`flex flex-wrap gap-1 ${mode === 'stock' ? 'ml-auto' : ''}`}>
             {(mode === 'stock'
-              ? ([['trend', '長期走勢', LineIcon], ['stats', '績效統計', BarChart3], ['backtest', '策略回測', FlaskConical], ['stockRisk', '個股下跌預警', ShieldAlert]] as const)
+              ? ([['trend', '長期走勢', LineIcon], ['stats', '績效統計', BarChart3], ['backtest', '策略回測', FlaskConical], ['learn', '個股學習', BrainCircuit], ['stockRisk', '個股下跌預警', ShieldAlert]] as const)
               : ([['pattern', '三角收斂突破', Triangle], ['risk', '下跌預警排行', ShieldAlert]] as const)
             ).map(([id, label, Icon]) => (
               <button key={id} type="button" onClick={() => setTab(id)}
@@ -473,9 +476,16 @@ export const ProAnalysisModal: React.FC<{ isOpen: boolean; onClose: () => void; 
           {tab === 'pattern' && <PatternScreener onOpenSymbol={sym => { pick(sym); setTab('trend'); }} />}
           {tab === 'risk' && <RiskRadar holdings={holdings} onOpenSymbol={sym => { pick(sym); setTab('stockRisk'); }} />}
           {tab === 'stockRisk' && <RiskStock symbol={symbol} onOpenScan={() => setTab('risk')} />}
-          {isStockData && loading && <div className="flex items-center gap-2 text-slate-600 text-sm"><Loader2 className="w-4 h-4 animate-spin" />讀取 {symbol} 歷史資料中…（第一次可能需要幾秒）</div>}
-          {isStockData && error && <div className="flex items-center gap-2 text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm"><AlertTriangle className="w-4 h-4" />{error}</div>}
+          {(isStockData || tab === 'learn') && loading && <div className="flex items-center gap-2 text-slate-600 text-sm"><Loader2 className="w-4 h-4 animate-spin" />讀取 {symbol} 歷史資料中…（第一次可能需要幾秒）</div>}
+          {(isStockData || tab === 'learn') && error && <div className="flex items-center gap-2 text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm"><AlertTriangle className="w-4 h-4" />{error}</div>}
 
+          {tab === 'learn' && !loading && data && fullAdj && (
+            <StockLearn symbol={symbol} name={data.name || symbol} series={fullAdj} params={params}
+              renderChart={(dates, series) => (
+                <LineChart dates={dates} series={series} log height={260}
+                  format={v => (v >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v.toFixed(0))} />
+              )} />
+          )}
           {isStockData && !loading && data && display && adjSeries && (
             <>
               {tab === 'trend' && (

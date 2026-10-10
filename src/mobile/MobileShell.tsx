@@ -39,6 +39,7 @@ interface Props {
   onClosePosition: (positionId: string) => void | Promise<void>;
   onOpenAdvancedTrade: (inst: InstrumentSpec) => void;
   onOpenProAnalysis: () => void;
+  onOpenScan?: () => void;
   onSwitchToDesktop: () => void;
   lastUpdateTime?: string;
   orders: ClientOrder[];
@@ -339,10 +340,15 @@ function Quote(p: Props & { inst: InstrumentSpec; watched: boolean; onToggleWatc
         )}
         {view === '分析' && (
           <div className="flex flex-col gap-2">
-            <div className="text-[14px] leading-relaxed" style={{ color: C.sub }}>用 1994 年起的歷史資料看長期走勢、年化報酬、最大回撤，並回測均線、RSI、KD 等策略。</div>
+            <div className="text-[14px] leading-relaxed" style={{ color: C.sub }}>個股分析：1994 年起長期走勢、績效統計、策略回測與個股下跌預警。全市場海搜：每天收盤後掃描三角收斂突破與下跌預警排行。</div>
             <button type="button" onClick={p.onOpenProAnalysis} className="min-h-[48px] rounded-xl font-black text-[15px]" style={{ background: C.card, border: `1px solid ${C.line2}`, color: C.accent }}>
-              開啟專業分析
+              🔬 個股分析
             </button>
+            {p.onOpenScan && (
+              <button type="button" onClick={p.onOpenScan} className="min-h-[48px] rounded-xl font-black text-[15px]" style={{ background: C.card, border: `1px solid ${C.line2}`, color: C.accent }}>
+                🔎 全市場海搜
+              </button>
+            )}
           </div>
         )}
         <TermCard inst={inst} />

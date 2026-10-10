@@ -265,7 +265,7 @@ function Card({ r, bt, open, onToggle, onOpenSymbol }: { r: Row; bt: Backtest | 
               <KV k="20 日均量" v={`${Math.round(r.avgVol20 / 1000).toLocaleString()} 張`} />
               <div className="flex flex-wrap gap-2 mt-2">
                 <button type="button" onClick={() => setCard(true)} className="min-h-[44px] px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[16px]">📖 教學卡片（可下載）</button>
-                <button type="button" onClick={() => onOpenSymbol(r.id)} className="min-h-[44px] px-4 rounded-xl bg-slate-900 text-white font-black text-[16px]">看長期走勢與回測 →</button>
+                <button type="button" onClick={() => onOpenSymbol(r.id)} className="min-h-[44px] px-4 rounded-xl bg-slate-900 text-white font-black text-[16px]">看個股分析 →</button>
               </div>
             </div>
           </div>

@@ -32,7 +32,8 @@ export const auth = getAuth(app);
 
 // Designated Administrator & Superuser
 export const SUPERUSER_NAME = '程瑋翔';
-export const DEFAULT_SUPERUSER_PASSWORD = '3226';
+/** 最高管理者登入改由伺服器驗證版主密碼；個人資料若缺密碼，填入隨機值（無法用來登入） */
+const randomUnusablePassword = () => `unusable-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 export const ADMIN_EMAIL = 'scratchinai01@gmail.com';
 
 export function isAdminEmail(identifier?: string | null): boolean {
@@ -154,7 +155,7 @@ export async function savePlayerProfileToFirebase(
     let secureHashedPassword = profile.password;
     if (!secureHashedPassword) {
       secureHashedPassword = await hashPassword(
-        profile.studentName.trim() === SUPERUSER_NAME ? DEFAULT_SUPERUSER_PASSWORD : 'money888'
+        profile.studentName.trim() === SUPERUSER_NAME ? randomUnusablePassword() : 'money888'
       );
     } else if (!isHashedPassword(secureHashedPassword)) {
       secureHashedPassword = await hashPassword(secureHashedPassword);
@@ -632,7 +633,7 @@ export async function resetPlayerInFirebase(
     let securePwd = current?.password;
     if (!securePwd) {
       securePwd = await hashPassword(
-        studentName.trim() === SUPERUSER_NAME ? DEFAULT_SUPERUSER_PASSWORD : 'money888'
+        studentName.trim() === SUPERUSER_NAME ? randomUnusablePassword() : 'money888'
       );
     } else if (!isHashedPassword(securePwd)) {
       securePwd = await hashPassword(securePwd);

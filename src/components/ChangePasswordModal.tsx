@@ -43,11 +43,12 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       return;
     }
 
-    const isMasterMatch =
-      currentPwd.trim() === '3226' ||
-      (isSuperUserTarget && (currentPwd.trim() === '3226' || currentPwd.trim() === currentExpected));
+    if (isSuperUserTarget) {
+      setErrorMsg('最高管理者帳號的密碼是版主密碼，請由雲端設定變更，無法在這裡修改。');
+      return;
+    }
 
-    if (currentPwd !== currentExpected && !isMasterMatch) {
+    if (currentPwd !== currentExpected) {
       setErrorMsg('目前密碼不正確，請確認後重新輸入');
       return;
     }

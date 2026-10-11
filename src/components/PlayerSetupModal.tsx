@@ -27,6 +27,7 @@ import { StudentProfile, DEFAULT_STUDENT_PASSWORD } from '../types/market';
 import { getPlayerProfileFromFirebase, savePlayerProfileToFirebase, deletePlayerFromFirebase, updateStudentPassword } from '../services/firebase';
 import { hashPassword, verifyPassword } from '../utils/cryptoUtils';
 import { logAccess, isNameBlocked, BLOCKED_MESSAGE } from '../utils/accessLog';
+import { isSuperUserName, verifyAdminPassword } from '../utils/adminAuth';
 import { getSystemDateStr } from '../utils/dateUtils';
 
 export interface CharacterRoleConfig {
@@ -304,15 +305,13 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
       p => p.studentName.trim().toLowerCase() === trimmed.toLowerCase()
     );
 
-    const isSuperUserAccount =
-      trimmed === '程瑋翔' ||
-      trimmed.toLowerCase() === 'admin' ||
-      trimmed.toLowerCase() === 'superuser';
+    const isSuperUserAccount = isSuperUserName(trimmed);
 
     if (existing) {
-      const expectedPwd = existing.password || (isSuperUserAccount ? '3226' : DEFAULT_STUDENT_PASSWORD);
-      const isPwdCorrect =
-        (await verifyPassword(inputPwd, expectedPwd)) || (isSuperUserAccount && inputPwd === '3226');
+      // 最高管理者帳號一律由伺服器驗證版主密碼；一般學員比對自己的密碼雜湊
+      const isPwdCorrect = isSuperUserAccount
+        ? (await verifyAdminPassword(inputPwd)).ok
+        : await verifyPassword(inputPwd, existing.password || DEFAULT_STUDENT_PASSWORD);
 
       if (!isPwdCorrect) {
         logAccess('login_failed', existing.studentName, existing.id);
@@ -325,7 +324,8 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
         return;
       }
 
-      const hashedPwd = await hashPassword(inputPwd !== '3226' ? inputPwd : (existing.password || '3226'));
+      // 版主密碼不寫進學員資料；最高管理者帳號保留原本的資料欄位
+      const hashedPwd = isSuperUserAccount ? existing.password || '' : await hashPassword(inputPwd);
 
       // Update existing profile with edited team, character role, avatar, motto, and password
       const updatedProfile: StudentProfile = {
@@ -361,8 +361,8 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
     }
 
     // New profile registration: 未來新加入者決定姓名與密碼
-    if (isSuperUserAccount && inputPwd !== '3226') {
-      setErrorMsg('此為系統最高超級管理者帳號，請輸入正確的管理員密碼！');
+    if (isSuperUserAccount) {
+      setErrorMsg('這是最高管理者保留的名稱，請改用其他姓名註冊。');
       return;
     }
 

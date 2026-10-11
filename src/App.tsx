@@ -22,6 +22,7 @@ import { FinmindVerificationModal } from './components/FinmindVerificationModal'
 import { AdminManagementModal } from './components/AdminManagementModal';
 import { AdminAccessModal } from './components/AdminAccessModal';
 import { logAccess, logVisitOnce } from './utils/accessLog';
+import { readAdminToken, clearAdminToken, isSuperUserName } from './utils/adminAuth';
 import { TradeStatementModal } from './components/TradeStatementModal';
 import { UnderlyingDerivativesModal } from './components/UnderlyingDerivativesModal';
 import { StudentSecurityCenterModal } from './components/StudentSecurityCenterModal';
@@ -189,9 +190,8 @@ export default function App() {
   const [isAccessAdminOpen, setIsAccessAdminOpen] = useState(() => typeof window !== 'undefined' && window.location.hash === '#admin');
   useEffect(() => { logVisitOnce(); }, []);
   const [adminEmail, setAdminEmail] = useState<string | null>(SUPERUSER_NAME);
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    return sessionStorage.getItem('finmind_superuser_authenticated') === 'true';
-  });
+  // 最高管理者狀態只認伺服器發的版主權杖（12 小時有效）
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => Boolean(readAdminToken()));
   // 內建清單的價格只是佔位，收到 行情前一律標示為不可交易，並移除編造的五檔掛單
   const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => DEFAULT_INSTRUMENTS.map(placeholderInstrument));
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
@@ -372,7 +372,7 @@ export default function App() {
     // 1. Clear active player session & admin token
     sessionStorage.removeItem('finmind_session_player_active');
     sessionStorage.removeItem('finmind_session_player_active_id');
-    sessionStorage.removeItem('finmind_superuser_authenticated');
+    clearAdminToken();
     // 2. Set authentication states to false & reset profile ID
     setIsAuthenticated(false);
     setIsAdminLoggedIn(false);
@@ -1053,6 +1053,7 @@ export default function App() {
   const isSuperUser = Boolean(
     isAuthenticated &&
     isAdminLoggedIn &&
+    readAdminToken() &&
     (currentProfile?.studentName === '程瑋翔' ||
      currentProfile?.studentName?.toLowerCase() === 'superuser' ||
      currentProfile?.studentName?.toLowerCase() === 'admin' ||
@@ -1657,10 +1658,7 @@ export default function App() {
               logAccess('login', player.studentName, player.id);
               localStorage.setItem('finmind_player_setup_done', 'true');
               setIsAuthenticated(true);
-              if (player.studentName === '程瑋翔') {
-                setIsAdminLoggedIn(true);
-                sessionStorage.setItem('finmind_superuser_authenticated', 'true');
-              }
+              setIsAdminLoggedIn(isSuperUserName(player.studentName) && Boolean(readAdminToken()));
             }}
             onRegisterNewStudent={(name, password, team, roleId) => {
               logAccess('register', name);
@@ -1937,10 +1935,7 @@ export default function App() {
           logAccess('login', player.studentName, player.id);
           localStorage.setItem('finmind_player_setup_done', 'true');
           setIsAuthenticated(true);
-          if (player.studentName === '程瑋翔') {
-            setIsAdminLoggedIn(true);
-            sessionStorage.setItem('finmind_superuser_authenticated', 'true');
-          }
+          setIsAdminLoggedIn(isSuperUserName(player.studentName) && Boolean(readAdminToken()));
           setIsPlayerSetupOpen(false);
         }}
       />

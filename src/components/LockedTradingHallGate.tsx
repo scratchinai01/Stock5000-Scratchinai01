@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { StudentProfile } from '../types/market';
 import { verifyPassword, hashPassword } from '../utils/cryptoUtils';
 import { logAccess, isNameBlocked, BLOCKED_MESSAGE } from '../utils/accessLog';
+import { isSuperUserName, verifyAdminPassword } from '../utils/adminAuth';
 import {
   Lock,
   ShieldCheck,
@@ -97,12 +98,17 @@ export const LockedTradingHallGate: React.FC<LockedTradingHallGateProps> = ({
       p => p.studentName && p.studentName.trim().toLowerCase() === cleanLower
     );
 
-    const isSuperUserAccount =
-      cleanName === '程瑋翔' || cleanLower === 'admin' || cleanLower === 'superuser';
+    const isSuperUserAccount = isSuperUserName(cleanName);
 
     if (match) {
-      const expectedPwd = match.password || (isSuperUserAccount ? '3226' : 'money888');
-      const isMatch = (await verifyPassword(cleanPwd, expectedPwd)) || (isSuperUserAccount && cleanPwd === '3226');
+      // 最高管理者帳號一律由伺服器驗證版主密碼；一般學員比對自己的密碼雜湊
+      let isMatch: boolean;
+      if (isSuperUserAccount) {
+        const r = await verifyAdminPassword(cleanPwd);
+        isMatch = r.ok;
+      } else {
+        isMatch = await verifyPassword(cleanPwd, match.password || 'money888');
+      }
       if (!isMatch) {
         logAccess('login_failed', match.studentName, match.id);
         setErrorMsg('密碼不正確！請確認您的個人密碼，或向最高管理者程瑋翔確認。');
@@ -160,6 +166,11 @@ export const LockedTradingHallGate: React.FC<LockedTradingHallGateProps> = ({
     );
     if (exists) {
       setErrorMsg(`「${cleanName}」操盤手帳號已存在！請切換至【操盤手身分登入】標籤輸入密碼登入。`);
+      return;
+    }
+
+    if (isSuperUserName(cleanName)) {
+      setErrorMsg('這是最高管理者保留的名稱，請改用其他姓名註冊。');
       return;
     }
 

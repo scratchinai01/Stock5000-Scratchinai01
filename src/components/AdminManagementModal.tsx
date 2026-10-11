@@ -1,3 +1,4 @@
+import { isSuperUserName, verifyAdminPassword } from '../utils/adminAuth';
 import React, { useState } from 'react';
 import {
   ShieldAlert,
@@ -33,7 +34,6 @@ import { StudentProfile } from '../types/market';
 import {
   ADMIN_EMAIL,
   SUPERUSER_NAME,
-  DEFAULT_SUPERUSER_PASSWORD,
   resetPlayerInFirebase,
   resetAllPlayersInFirebase,
   deletePlayerFromFirebase,
@@ -105,7 +105,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
   const [createName, setCreateName] = useState<string>('程瑋翔');
   const [createTeam, setCreateTeam] = useState<string>('金融博士班計量實務組');
   const [createCash, setCreateCash] = useState<number>(50000000);
-  const [createPassword, setCreatePassword] = useState<string>('3226');
+  const [createPassword, setCreatePassword] = useState<string>('');
   const [createRoleTitle, setCreateRoleTitle] = useState<string>('最高操盤手 (SUPERUSER)');
   const [createAvatarEmoji, setCreateAvatarEmoji] = useState<string>('👑');
 
@@ -130,45 +130,18 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       return;
     }
 
-    // 1. Try server-side API verification (validates against process.env.ADMIN_SUPERUSER_PASSWORD secrets)
-    try {
-      const res = await fetch('/api/admin/verify-superuser', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: inputUser, password: inputPass }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        onAdminLogin('程瑋翔 (SUPERUSER)');
-        showToast('👑 最高超級管理者 程瑋翔 (SUPERUSER) 驗證成功！已啟用管理控制權限');
-        setIsProcessing(false);
-        return;
-      } else if (res.status === 401) {
-        setLoginError(data.message || '密碼錯誤，請確認輸入正確的 Superuser 管理密碼');
-        setIsProcessing(false);
-        return;
-      }
-    } catch (err) {
-      console.warn('Backend superuser verification fallback to client rules:', err);
+    // 一律由伺服器驗證版主密碼（前端不保存任何管理密碼）
+    if (!isSuperUserName(inputUser)) {
+      setLoginError(`僅授權最高管理者 程瑋翔 (${ADMIN_EMAIL}) 登入使用此管理面板`);
+      setIsProcessing(false);
+      return;
     }
-
-    // 2. Client fallback verification (including VITE_SUPERUSER_PASSWORD)
-    const envSuperPass = (import.meta as any).env?.VITE_SUPERUSER_PASSWORD || DEFAULT_SUPERUSER_PASSWORD;
-    const isUserValid =
-      inputUser === SUPERUSER_NAME ||
-      inputUser.toLowerCase() === ADMIN_EMAIL.toLowerCase() ||
-      inputUser.toLowerCase() === 'admin' ||
-      inputUser.toLowerCase() === 'superuser' ||
-      inputUser === '程瑋翔';
-    const isPassValid = inputPass === envSuperPass || inputPass === '3226';
-
-    if (isUserValid && isPassValid) {
+    const r = await verifyAdminPassword(inputPass);
+    if (r.ok) {
       onAdminLogin('程瑋翔 (SUPERUSER)');
-      showToast('👑 最高超級管理者 程瑋翔 (SUPERUSER) 登入成功！已驗證 Secrets 金鑰密碼');
-    } else if (!isPassValid) {
-      setLoginError('密碼錯誤！請輸入正確的超級管理員密碼');
+      showToast('👑 最高管理者驗證成功！已啟用管理控制權限');
     } else {
-      setLoginError(`僅授權最高管理者 程瑋翔 (${ADMIN_EMAIL}) 登入使用此重置面板`);
+      setLoginError(r.error);
     }
     setIsProcessing(false);
   };
@@ -179,7 +152,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
     setEditName(p.studentName);
     setEditTeam(p.teamName || '金融博士班計量實務組');
     setEditCash(p.availableCash ?? 50000000);
-    setEditPassword(p.password || (p.studentName === '程瑋翔' ? '3226' : 'money888'));
+    setEditPassword(p.password || 'money888');
     setEditRoleTitle(p.roleTitle || (p.studentName === '程瑋翔' ? '最高操盤手 (SUPERUSER)' : '操盤手'));
     setEditAvatarEmoji(p.avatarEmoji || (p.studentName === '程瑋翔' ? '👑' : '👤'));
     setEditCustomMotto(p.customMotto || '專注價值，穩健配置！');
@@ -277,7 +250,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
   const handleExecutePasswordUpdate = async (p: StudentProfile) => {
     setIsProcessing(true);
     try {
-      const newPwd = customPasswordInput.trim() || (p.studentName === '程瑋翔' ? '3226' : 'money888');
+      const newPwd = customPasswordInput.trim() || 'money888';
       const ok = await updateStudentPassword(p.studentName, newPwd);
       if (ok) {
         onRefreshProfiles();
@@ -317,7 +290,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       const name = createName.trim();
       const team = createTeam.trim() || '金融博士班計量實務組';
       const cash = Number(createCash) || 50000000;
-      const pwd = createPassword.trim() || (name === '程瑋翔' ? '3226' : 'money888');
+      const pwd = createPassword.trim() || 'money888';
       const docId = getPlayerDocId(name);
       const uid = getOrGeneratePermanentUID(name);
 
@@ -453,7 +426,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
                   <label className="text-xs font-black text-slate-700 flex items-center justify-between mb-1">
                     <span>管理者密碼：</span>
                     <span className="text-[10px] text-slate-500 font-medium">
-                      (支援 Secrets 密碼或 3226)
+                      (版主密碼，由伺服器驗證)
                     </span>
                   </label>
                   <div className="relative">
@@ -462,7 +435,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
                       value={loginPasscodeInput}
                       onChange={e => setLoginPasscodeInput(e.target.value)}
                       required
-                      placeholder="請輸入 Superuser 管理密碼 (3226)"
+                      placeholder="請輸入版主密碼"
                       autoComplete="current-password"
                       className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-mono font-bold text-sm focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
                     />
@@ -593,7 +566,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
                       setCreateName('程瑋翔');
                       setCreateTeam('金融博士班計量實務組');
                       setCreateCash(50000000);
-                      setCreatePassword('3226');
+                      setCreatePassword('');
                       setCreateRoleTitle('最高操盤手 (SUPERUSER)');
                       setCreateAvatarEmoji('👑');
                       setIsCreateModalOpen(true);
@@ -851,7 +824,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
                                       type="button"
                                       onClick={() => {
                                         setConfirmPasswordTarget(p);
-                                        setCustomPasswordInput(p.password || (p.studentName === '程瑋翔' ? '3226' : 'money888'));
+                                        setCustomPasswordInput(p.password || 'money888');
                                       }}
                                       disabled={isProcessing}
                                       title="設定/重置此學員密碼"
@@ -1044,7 +1017,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
                   type="text"
                   value={customPasswordInput}
                   onChange={e => setCustomPasswordInput(e.target.value)}
-                  placeholder={confirmPasswordTarget.studentName === '程瑋翔' ? '3226' : 'money888'}
+                  placeholder={'money888'}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 font-mono text-sm font-bold bg-white text-slate-900 focus:ring-2 focus:ring-amber-500"
                 />
               </div>
@@ -1052,10 +1025,10 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setCustomPasswordInput(confirmPasswordTarget.studentName === '程瑋翔' ? '3226' : 'money888')}
+                  onClick={() => setCustomPasswordInput('money888')}
                   className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold"
                 >
-                  帶入預設密碼 ({confirmPasswordTarget.studentName === '程瑋翔' ? '3226' : 'money888'})
+                  帶入預設密碼 ({'money888'})
                 </button>
               </div>
             </div>
@@ -1316,7 +1289,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
                     required
                     value={createPassword}
                     onChange={e => setCreatePassword(e.target.value)}
-                    placeholder="例如：3226 或 money888"
+                    placeholder="例如：money888"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500"
                   />
                 </div>

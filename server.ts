@@ -212,7 +212,6 @@ function sanitizeForAI(obj: any): any {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === 'string') {
     return obj
-      .replace(/3226/g, '[PROTECTED]')
       .replace(/money888/g, '[PROTECTED]');
   }
   if (Array.isArray(obj)) {
@@ -241,7 +240,6 @@ function sanitizeForAI(obj: any): any {
 function sanitizeAIOutput(text: string): string {
   if (!text) return text;
   return text
-    .replace(/3226/g, '••••')
     .replace(/money888/g, '••••');
 }
 
@@ -1574,46 +1572,17 @@ app.post('/api/admin/blocklist', async (req, res) => {
   }
 });
 
-// 0.25 API: Superuser Authentication & Status (管理系統最高權限驗證)
+// 0.25 API: Superuser Authentication（舊管理面板用）：與版主後台同一組版主密碼，只存雜湊於雲端設定
 const SUPERUSER_NAME = process.env.ADMIN_SUPERUSER_NAME || process.env.SUPERUSER_NAME || '程瑋翔';
-const SUPERUSER_PASSWORD = process.env.ADMIN_SUPERUSER_PASSWORD || process.env.SUPERUSER_PASSWORD || '3226';
-
 app.post('/api/admin/verify-superuser', async (req, res) => {
-  try {
-    const { username, password } = req.body || {};
-    const cleanUser = String(username || '').trim();
-    const cleanPass = String(password || '').trim();
-
-    const isUserValid =
-      cleanUser === SUPERUSER_NAME ||
-      cleanUser.toLowerCase() === 'scratchinai01@gmail.com' ||
-      cleanUser.toLowerCase() === 'admin' ||
-      cleanUser === '程瑋翔' ||
-      cleanUser.toLowerCase() === 'superuser';
-
-    const isPassValid = cleanPass === SUPERUSER_PASSWORD || cleanPass === '3226';
-
-    if (isUserValid && isPassValid) {
-      return res.json({
-        success: true,
-        message: '最高超級管理者驗證成功！已啟用管理控制權限',
-        user: {
-          name: '程瑋翔',
-          role: 'superuser',
-          email: 'scratchinai01@gmail.com',
-          isSecretInjected: Boolean(process.env.ADMIN_SUPERUSER_PASSWORD || process.env.SUPERUSER_PASSWORD),
-          verifiedAt: new Date().toISOString(),
-        },
-      });
-    } else {
-      return res.status(401).json({
-        success: false,
-        message: !isPassValid ? '密碼錯誤，請確認輸入正確的 Superuser 管理密碼' : '帳號非授權超級管理者',
-      });
-    }
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
+  const r = await adminLogin(req, { username: 'admin', password: String(req.body?.password ?? '') });
+  if (!r.ok) return res.status(r.status).json({ success: false, message: r.error });
+  return res.json({
+    success: true,
+    token: r.token,
+    message: '最高管理者驗證成功！已啟用管理控制權限',
+    user: { name: SUPERUSER_NAME, role: 'superuser', email: 'scratchinai01@gmail.com', verifiedAt: new Date().toISOString() },
+  });
 });
 
 app.get('/api/admin/superuser-info', async (req, res) => {
@@ -1622,7 +1591,7 @@ app.get('/api/admin/superuser-info', async (req, res) => {
     superuserName: SUPERUSER_NAME,
     adminEmail: 'scratchinai01@gmail.com',
     role: 'superuser',
-    isSecretInjected: Boolean(process.env.ADMIN_SUPERUSER_PASSWORD || process.env.SUPERUSER_PASSWORD),
+    isSecretInjected: adminConfigured(),
     systemTime: new Date().toISOString(),
   });
 });

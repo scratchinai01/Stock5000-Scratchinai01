@@ -23,6 +23,7 @@ import { AdminManagementModal } from './components/AdminManagementModal';
 import { AdminAccessModal } from './components/AdminAccessModal';
 import { logAccess, logVisitOnce } from './utils/accessLog';
 import { readAdminToken, clearAdminToken, isSuperUserName } from './utils/adminAuth';
+import { mustChangeFor, markMustChange, clearPlayerToken } from './services/playerSession';
 import { TradeStatementModal } from './components/TradeStatementModal';
 import { UnderlyingDerivativesModal } from './components/UnderlyingDerivativesModal';
 import { StudentSecurityCenterModal } from './components/StudentSecurityCenterModal';
@@ -157,6 +158,10 @@ function placeholderInstrument(inst: InstrumentSpec): InstrumentSpec {
   };
 }
 
+// 舊版內建的示範學員名單（非真人資料），一律不顯示
+const BLANK_PROFILE: StudentProfile = { id: 'guest', studentName: '訪客', teamName: '', initialCapital: 50000000, availableCash: 50000000, marginDeposits: 0, positions: [], tradeHistory: [], benchmarkDate: '', createdAt: 0, updatedAt: 0 } as any;
+const DEMO_NAMES = new Set(INITIAL_STUDENT_PROFILES.map(p => p.studentName.trim()));
+
 export default function App() {
   const { openDrawer, closeDrawer, totalLearnedCount } = useGlossary();
   const [profiles, setProfiles] = useState<StudentProfile[]>(() => {
@@ -165,13 +170,14 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return deduplicateProfiles(parsed);
+          // 移除舊版內建的示範學員（不是真人），並且不在記憶體保留任何密碼欄位
+          return deduplicateProfiles(parsed.filter((p: any) => p?.studentName && !DEMO_NAMES.has(p.studentName.trim())).map((p: any) => ({ ...p, password: undefined })));
         }
       } catch (e) {
         console.error('Failed to parse saved profiles', e);
       }
     }
-    return deduplicateProfiles(INITIAL_STUDENT_PROFILES);
+    return [];
   });
 
   const profilesRef = useRef(profiles);
@@ -192,6 +198,8 @@ export default function App() {
   const [adminEmail, setAdminEmail] = useState<string | null>(SUPERUSER_NAME);
   // 最高管理者狀態只認伺服器發的版主權杖（12 小時有效）
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => Boolean(readAdminToken()));
+  // 使用預設密碼 money888 或版主重設的臨時密碼登入時，必須先改密碼
+  const [forcePasswordChange, setForcePasswordChange] = useState(false);
   // 內建清單的價格只是佔位，收到 行情前一律標示為不可交易，並移除編造的五檔掛單
   const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => DEFAULT_INSTRUMENTS.map(placeholderInstrument));
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
@@ -373,6 +381,8 @@ export default function App() {
     sessionStorage.removeItem('finmind_session_player_active');
     sessionStorage.removeItem('finmind_session_player_active_id');
     clearAdminToken();
+    if (currentProfile) { clearPlayerToken(currentProfile.studentName); markMustChange(currentProfile.studentName, false); }
+    setForcePasswordChange(false);
     // 2. Set authentication states to false & reset profile ID
     setIsAuthenticated(false);
     setIsAdminLoggedIn(false);
@@ -405,27 +415,19 @@ export default function App() {
       );
       setFirebasePlayers(activeRemote);
 
+      // 伺服器名單為準；目前登入者若還沒同步上去，暫時保留本機這一筆
       setProfiles(prev => {
         const mapByName = new Map<string, StudentProfile>();
-        prev.forEach(p => {
-          if (p && p.studentName) {
-            const key = p.studentName.trim().toLowerCase();
-            if (!deletedStudentNames.has(key)) {
-              mapByName.set(key, p);
-            }
-          }
-        });
         activeRemote.forEach(rp => {
           const key = rp.studentName.trim().toLowerCase();
-          if (!deletedStudentNames.has(key)) {
-            const existing = mapByName.get(key);
-            mapByName.set(key, {
-              ...existing,
-              ...rp,
-              id: rp.id || existing?.id || `player-${encodeURIComponent(rp.studentName.trim())}`,
-            });
-          }
+          const local = prev.find(p => p.studentName.trim().toLowerCase() === key);
+          // 自己的資料以較新的那份為準（剛下單、尚未同步時以本機為準）
+          const mine = local && local.id === currentProfileId;
+          const pick = mine && (local.updatedAt || 0) > (rp.updatedAt || 0) ? local : { ...local, ...rp };
+          mapByName.set(key, { ...pick, id: local?.id || rp.id || `player-${encodeURIComponent(rp.studentName.trim())}` } as StudentProfile);
         });
+        const me = prev.find(p => p.id === currentProfileId);
+        if (me && !mapByName.has(me.studentName.trim().toLowerCase())) mapByName.set(me.studentName.trim().toLowerCase(), me);
         return deduplicateProfiles(Array.from(mapByName.values()), currentProfileId);
       });
     });
@@ -546,6 +548,15 @@ export default function App() {
 
     // Explicitly ensure player setup modal closes
     setIsPlayerSetupOpen(false);
+    setIsAuthenticated(true);
+
+    // 用預設密碼建立的帳號：先強制改密碼，不自動打開下單機
+    const must = mustChangeFor();
+    if (must && must.trim().toLowerCase() === studentName.toLowerCase()) {
+      setForcePasswordChange(true);
+      setIsChangePasswordOpen(true);
+      return;
+    }
 
     if (isAutonomous) {
       setTimeout(() => {
@@ -1048,6 +1059,14 @@ export default function App() {
        profiles.find(p => p.studentName.trim().toLowerCase() === sessionStorage.getItem('finmind_session_player_active')?.trim().toLowerCase()) ||
        null)
     : null;
+
+  useEffect(() => {
+    const must = mustChangeFor();
+    if (isAuthenticated && currentProfile && must && must.trim().toLowerCase() === currentProfile.studentName.trim().toLowerCase()) {
+      setForcePasswordChange(true);
+      setIsChangePasswordOpen(true);
+    }
+  }, [isAuthenticated, currentProfile?.studentName]);
 
   // Superuser check: Only authenticated superuser (程瑋翔 / superuser / scratchinai01@gmail.com) can see admin controls and secrets/Groq manager
   const isSuperUser = Boolean(
@@ -1985,7 +2004,7 @@ export default function App() {
       <TradeStatementModal
         isOpen={isTradeStatementOpen}
         onClose={() => setIsTradeStatementOpen(false)}
-        profile={currentProfile || profiles[0]}
+        profile={currentProfile || profiles[0] || BLANK_PROFILE}
         allInstruments={instruments}
         onClosePosition={handleCloseRequest}
         onViewInstrumentKLine={inst => setViewingKLineInst(inst)}
@@ -2010,7 +2029,7 @@ export default function App() {
         isOpen={isSecurityCenterOpen}
         onClose={() => setIsSecurityCenterOpen(false)}
         profiles={profiles}
-        currentProfile={currentProfile || profiles[0]}
+        currentProfile={currentProfile || profiles[0] || BLANK_PROFILE}
         onStudentRestored={restored => {
           setProfiles(prev =>
             prev.map(p =>
@@ -2024,18 +2043,14 @@ export default function App() {
 
       {/* Change Password Modal (Default: money888, Custom Self-Modification Supported) */}
       <ChangePasswordModal
-        isOpen={isChangePasswordOpen}
-        onClose={() => setIsChangePasswordOpen(false)}
-        profile={currentProfile || profiles[0]}
-        onPasswordChanged={newPassword => {
-          if (!currentProfile) return;
-          setProfiles(prev =>
-            prev.map(p =>
-              p.id === currentProfile.id || p.studentName.trim().toLowerCase() === currentProfile.studentName.trim().toLowerCase()
-                ? { ...p, password: newPassword, updatedAt: Date.now() }
-                : p
-            )
-          );
+        isOpen={isChangePasswordOpen && Boolean(currentProfile)}
+        forced={forcePasswordChange}
+        onClose={() => { if (!forcePasswordChange) setIsChangePasswordOpen(false); }}
+        profile={currentProfile || profiles[0] || BLANK_PROFILE}
+        onPasswordChanged={() => {
+          // 密碼只存在伺服器；這裡只解除「必須改密碼」的鎖定
+          if (currentProfile) markMustChange(currentProfile.studentName, false);
+          setForcePasswordChange(false);
         }}
       />
 
@@ -2043,7 +2058,7 @@ export default function App() {
       <ResetPortfolioModal
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
-        profile={currentProfile || profiles[0]}
+        profile={currentProfile || profiles[0] || BLANK_PROFILE}
         onConfirmReset={handleConfirmResetPortfolio}
       />
 

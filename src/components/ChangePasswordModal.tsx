@@ -8,6 +8,8 @@ interface ChangePasswordModalProps {
   onClose: () => void;
   profile: StudentProfile;
   onPasswordChanged: (newPassword: string) => void;
+  /** 強制模式：使用預設密碼或版主重設的臨時密碼登入後，必須先改密碼才能繼續 */
+  forced?: boolean;
 }
 
 export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
@@ -15,6 +17,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   onClose,
   profile,
   onPasswordChanged,
+  forced = false,
 }) => {
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
@@ -28,7 +31,6 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentExpected = profile.password || DEFAULT_STUDENT_PASSWORD;
   const isSuperUserTarget =
     profile.studentName.trim() === '程瑋翔' ||
     profile.studentName.trim().toLowerCase() === 'admin' ||
@@ -48,11 +50,6 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       return;
     }
 
-    if (currentPwd !== currentExpected) {
-      setErrorMsg('目前密碼不正確，請確認後重新輸入');
-      return;
-    }
-
     if (!newPwd || newPwd.trim().length < 4) {
       setErrorMsg('新密碼長度至少需 4 個字元');
       return;
@@ -63,15 +60,19 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       return;
     }
 
-    if (newPwd === currentExpected) {
+    if (newPwd === currentPwd) {
       setErrorMsg('新密碼不能與目前密碼相同');
+      return;
+    }
+    if (newPwd.trim() === DEFAULT_STUDENT_PASSWORD) {
+      setErrorMsg('不能使用預設密碼，請換一組');
       return;
     }
 
     setIsSaving(true);
     try {
       const cleanNew = newPwd.trim();
-      await updateStudentPassword(profile.studentName, cleanNew);
+      await updateStudentPassword(profile.studentName, cleanNew, currentPwd.trim());
       onPasswordChanged(cleanNew);
       setIsSuccess(true);
       setTimeout(() => {
@@ -91,9 +92,9 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   return (
     <div
       onClick={e => {
-        if (e.target === e.currentTarget && !isSaving) onClose();
+        if (e.target === e.currentTarget && !isSaving && !forced) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150 text-slate-900"
+      className={`fixed inset-0 ${forced ? 'z-[300]' : 'z-50'} flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150 text-slate-900`}
     >
       <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden">
         {/* Header */}
@@ -103,20 +104,21 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
               <KeyRound className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <h3 className="font-black text-slate-950 text-base">修改個人登入密碼</h3>
+              <h3 className="font-black text-slate-950 text-base">{forced ? '請先設定新密碼' : '修改個人登入密碼'}</h3>
+              {forced && <p className="text-xs text-rose-700 font-bold mt-0.5">您目前使用預設密碼或版主給的臨時密碼，任何人都可能猜到，請先換一組自己的密碼才能繼續。</p>}
               <p className="text-[11px] font-bold text-amber-950">
                 帳號：{profile.studentName} ({profile.teamName || '金融博士班'})
               </p>
             </div>
           </div>
-          <button
+          {!forced && <button
             type="button"
             onClick={onClose}
             disabled={isSaving}
             className="w-7 h-7 rounded-full bg-black/10 hover:bg-black/20 text-slate-900 flex items-center justify-center font-bold text-xs transition cursor-pointer"
           >
             ✕
-          </button>
+          </button>}
         </div>
 
         {/* Content */}
@@ -218,14 +220,14 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
           {/* Actions */}
           <div className="pt-2 flex items-center justify-end gap-2.5">
-            <button
+            {!forced && <button
               type="button"
               onClick={onClose}
               disabled={isSaving}
               className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
             >
               取消
-            </button>
+            </button>}
             <button
               type="submit"
               disabled={isSaving || isSuccess}

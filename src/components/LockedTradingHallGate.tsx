@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { StudentProfile } from '../types/market';
 import { verifyPassword, hashPassword } from '../utils/cryptoUtils';
+import { logAccess, isNameBlocked, BLOCKED_MESSAGE } from '../utils/accessLog';
 import {
   Lock,
   ShieldCheck,
@@ -103,7 +104,13 @@ export const LockedTradingHallGate: React.FC<LockedTradingHallGateProps> = ({
       const expectedPwd = match.password || (isSuperUserAccount ? '3226' : 'money888');
       const isMatch = (await verifyPassword(cleanPwd, expectedPwd)) || (isSuperUserAccount && cleanPwd === '3226');
       if (!isMatch) {
+        logAccess('login_failed', match.studentName, match.id);
         setErrorMsg('密碼不正確！請確認您的個人密碼，或向最高管理者程瑋翔確認。');
+        return;
+      }
+      if (await isNameBlocked(match.studentName)) {
+        logAccess('blocked', match.studentName, match.id);
+        setErrorMsg(BLOCKED_MESSAGE);
         return;
       }
       setSuccessMsg(`驗證成功！歡迎操盤手「${match.studentName}」回歸交易大廳。`);
@@ -117,7 +124,7 @@ export const LockedTradingHallGate: React.FC<LockedTradingHallGateProps> = ({
   };
 
   // Handle Registration
-  const handleExecuteRegister = (e: React.FormEvent) => {
+  const handleExecuteRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -156,6 +163,11 @@ export const LockedTradingHallGate: React.FC<LockedTradingHallGateProps> = ({
       return;
     }
 
+    if (await isNameBlocked(cleanName)) {
+      logAccess('blocked', cleanName);
+      setErrorMsg(BLOCKED_MESSAGE);
+      return;
+    }
     setSuccessMsg(`🎉 註冊成功！已為「${cleanName}」建立 5,000 萬資產帳號並設定密碼。正在解鎖交易大廳...`);
     setTimeout(() => {
       onRegisterNewStudent(cleanName, cleanPwd, regTeam, 'phd_autonomous');

@@ -18,6 +18,7 @@ import {
 } from './src/utils/twHolidays';
 import { getHistory, historyCacheStats } from './server-lib/history';
 import { registerOrderRoutes } from './server-lib/orders';
+import { recordAccess, adminLogin, isAdmin, adminConfigured, queryLogs, getBlocklist, setBlocked, isBlocked } from './server-lib/access';
 import { getPatternLatest, getPatternBacktest, getRiskLatest, getRiskBacktest, getLearnDoc } from './server-lib/patternStore';
 
 dotenv.config();
@@ -1531,6 +1532,46 @@ app.get('/api/finmind/verify-live', async (req, res) => {
       compliance: 'VERIFIED_STRICT',
     },
   });
+});
+
+// 進站紀錄與版主後台
+app.post('/api/access/event', async (req, res) => {
+  try {
+    const r = await recordAccess(req, req.body);
+    res.status(r.ok ? 200 : 429).json(r);
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+app.get('/api/access/blocked', async (req, res) => {
+  try {
+    res.json({ blocked: await isBlocked(String(req.query.name || '')) });
+  } catch {
+    res.json({ blocked: false }); // 名單讀不到時不擋人
+  }
+});
+app.post('/api/admin/login', async (req, res) => {
+  const r = await adminLogin(req, req.body);
+  if (!r.ok) return res.status(r.status).json({ ok: false, error: r.error });
+  res.json(r);
+});
+app.get('/api/admin/access-logs', async (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false, error: adminConfigured() ? '請重新登入版主帳號' : '版主帳號尚未設定' });
+  try {
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, ...(await queryLogs({ days: Number(req.query.days) })), blocklist: await getBlocklist() });
+  } catch (e: any) {
+    console.warn('[Access] 查詢失敗', e.message);
+    res.status(503).json({ ok: false, error: '紀錄暫時讀取不到，請稍後再試' });
+  }
+});
+app.post('/api/admin/blocklist', async (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false, error: '請重新登入版主帳號' });
+  try {
+    res.json({ ok: true, blocklist: await setBlocked(String(req.body?.name || ''), Boolean(req.body?.blocked)) });
+  } catch (e: any) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
 });
 
 // 0.25 API: Superuser Authentication & Status (管理系統最高權限驗證)

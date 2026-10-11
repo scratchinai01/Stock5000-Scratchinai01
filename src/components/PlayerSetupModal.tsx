@@ -26,6 +26,7 @@ import {
 import { StudentProfile, DEFAULT_STUDENT_PASSWORD } from '../types/market';
 import { getPlayerProfileFromFirebase, savePlayerProfileToFirebase, deletePlayerFromFirebase, updateStudentPassword } from '../services/firebase';
 import { hashPassword, verifyPassword } from '../utils/cryptoUtils';
+import { logAccess, isNameBlocked, BLOCKED_MESSAGE } from '../utils/accessLog';
 import { getSystemDateStr } from '../utils/dateUtils';
 
 export interface CharacterRoleConfig {
@@ -314,7 +315,13 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
         (await verifyPassword(inputPwd, expectedPwd)) || (isSuperUserAccount && inputPwd === '3226');
 
       if (!isPwdCorrect) {
+        logAccess('login_failed', existing.studentName, existing.id);
         setErrorMsg(`密碼不正確！請輸入【${trimmed}】正確的個人密碼。`);
+        return;
+      }
+      if (await isNameBlocked(existing.studentName)) {
+        logAccess('blocked', existing.studentName, existing.id);
+        setErrorMsg(BLOCKED_MESSAGE);
         return;
       }
 
@@ -369,6 +376,12 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
       return;
     }
 
+    if (await isNameBlocked(trimmed)) {
+      logAccess('blocked', trimmed);
+      setErrorMsg(BLOCKED_MESSAGE);
+      return;
+    }
+
     const hashedNewPwd = await hashPassword(inputPwd);
 
     const newProfile: StudentProfile = {
@@ -402,6 +415,7 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
     });
 
     savePlayerProfileToFirebase(newProfile).catch(err => console.warn('Cloud sync:', err));
+    logAccess('register', newProfile.studentName, newProfile.id);
 
     onSaveProfile({
       studentName: trimmed,

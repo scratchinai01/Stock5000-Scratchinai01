@@ -20,6 +20,8 @@ import { PlayerSetupModal } from './components/PlayerSetupModal';
 import { LockedTradingHallGate } from './components/LockedTradingHallGate';
 import { FinmindVerificationModal } from './components/FinmindVerificationModal';
 import { AdminManagementModal } from './components/AdminManagementModal';
+import { AdminAccessModal } from './components/AdminAccessModal';
+import { logAccess, logVisitOnce } from './utils/accessLog';
 import { TradeStatementModal } from './components/TradeStatementModal';
 import { UnderlyingDerivativesModal } from './components/UnderlyingDerivativesModal';
 import { StudentSecurityCenterModal } from './components/StudentSecurityCenterModal';
@@ -183,6 +185,9 @@ export default function App() {
   });
 
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  // 版主後台（進站紀錄）：網址加上 #admin 也可以直接開啟
+  const [isAccessAdminOpen, setIsAccessAdminOpen] = useState(() => typeof window !== 'undefined' && window.location.hash === '#admin');
+  useEffect(() => { logVisitOnce(); }, []);
   const [adminEmail, setAdminEmail] = useState<string | null>(SUPERUSER_NAME);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     return sessionStorage.getItem('finmind_superuser_authenticated') === 'true';
@@ -363,6 +368,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    logAccess('logout', currentProfile?.studentName || sessionStorage.getItem('finmind_session_player_active') || '', currentProfile?.id || '');
     // 1. Clear active player session & admin token
     sessionStorage.removeItem('finmind_session_player_active');
     sessionStorage.removeItem('finmind_session_player_active_id');
@@ -1597,6 +1603,7 @@ export default function App() {
                         <MenuItem icon="🎯" label="標的衍生商品矩陣" desc="同一標的的期貨、選擇權、權證" onClick={() => { close(); handleOpenDerivatives('2317'); }} />
                         <MenuItem icon="📑" label="PPT 報告工作室" desc="簡報大綱、講稿與列印" active={activeView === 'ppt_studio'} onClick={() => { close(); setActiveView('ppt_studio'); }} />
                         <MenuItem icon="ℹ️" label="關於本系統" desc="版權、聯絡方式、用途聲明與研究限制" onClick={() => { close(); setIsAboutOpen(true); }} />
+                        <MenuItem icon="🛡️" label="版主後台" desc="查詢誰進入系統、登入紀錄、暫停帳號（需版主密碼）" onClick={() => { close(); setIsAccessAdminOpen(true); }} />
                         {isSuperUser && (
                           <>
                             <MenuDivider />
@@ -1647,6 +1654,7 @@ export default function App() {
               setCurrentProfileId(player.id);
               sessionStorage.setItem('finmind_session_player_active', player.studentName);
               sessionStorage.setItem('finmind_session_player_active_id', player.id);
+              logAccess('login', player.studentName, player.id);
               localStorage.setItem('finmind_player_setup_done', 'true');
               setIsAuthenticated(true);
               if (player.studentName === '程瑋翔') {
@@ -1655,6 +1663,7 @@ export default function App() {
               }
             }}
             onRegisterNewStudent={(name, password, team, roleId) => {
+              logAccess('register', name);
               handleSavePlayerProfile({
                 studentName: name,
                 password,
@@ -1925,6 +1934,7 @@ export default function App() {
           setCurrentProfileId(player.id);
           sessionStorage.setItem('finmind_session_player_active', player.studentName);
           sessionStorage.setItem('finmind_session_player_active_id', player.id);
+          logAccess('login', player.studentName, player.id);
           localStorage.setItem('finmind_player_setup_done', 'true');
           setIsAuthenticated(true);
           if (player.studentName === '程瑋翔') {
@@ -2059,6 +2069,7 @@ export default function App() {
       <ContextualTermBanner />
 
       {/* 🌐 全球 7 大市場 × 24/7 交易時鐘雷達 Modal */}
+      <AdminAccessModal isOpen={isAccessAdminOpen} onClose={() => { setIsAccessAdminOpen(false); if (window.location.hash === '#admin') history.replaceState(null, '', window.location.pathname + window.location.search); }} />
       <AboutModal open={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
       <ProAnalysisModal
         isOpen={isProAnalysisOpen}

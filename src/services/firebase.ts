@@ -1,39 +1,17 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  getDocs,
-  collection,
-  onSnapshot,
-  getDocFromServer,
-  query,
-  limit,
-  orderBy,
-} from 'firebase/firestore';
-import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
+/**
+ * 學員資料服務
+ *
+ * 原本直接連 AI Studio 附帶的 Firebase 專案；該專案已失效（每個人的資料只留在自己的瀏覽器，彼此看不到）。
+ * 現在一律透過本系統伺服器（/api/players*）讀寫，密碼只在伺服器驗證。
+ * 不可變帳本、稽核紀錄、快照仍保存在這台瀏覽器（localStorage）。
+ */
 import { StudentProfile, ImmutableTransaction, BackupSnapshot, AuditLog } from '../types/market';
-import { hashPassword, isHashedPassword, verifyPassword } from '../utils/cryptoUtils';
+import { adminHeaders, playerHeaders, getPlayerToken } from './playerSession';
 
 export const CURRENT_SCHEMA_VERSION = 3;
 
-// Initialize Firebase App
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-
-// Use the specific firestoreDatabaseId provisioned
-export const db = (firebaseConfig as any).firestoreDatabaseId
-  ? getFirestore(app, (firebaseConfig as any).firestoreDatabaseId)
-  : getFirestore(app);
-
-export const auth = getAuth(app);
-
 // Designated Administrator & Superuser
 export const SUPERUSER_NAME = '程瑋翔';
-/** 最高管理者登入改由伺服器驗證版主密碼；個人資料若缺密碼，填入隨機值（無法用來登入） */
-const randomUnusablePassword = () => `unusable-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 export const ADMIN_EMAIL = 'scratchinai01@gmail.com';
 
 export function isAdminEmail(identifier?: string | null): boolean {
@@ -42,7 +20,6 @@ export function isAdminEmail(identifier?: string | null): boolean {
   return (
     clean === ADMIN_EMAIL.toLowerCase() ||
     clean === SUPERUSER_NAME.toLowerCase() ||
-    clean === '程瑋翔' ||
     clean === 'admin' ||
     clean === 'superuser' ||
     clean.includes('程瑋翔') ||
@@ -50,39 +27,21 @@ export function isAdminEmail(identifier?: string | null): boolean {
   );
 }
 
-let currentUser: User | null = null;
-
-export const ensureAuth = async (): Promise<User | null> => {
-  if (currentUser) return currentUser;
-  if (auth.currentUser) {
-    currentUser = auth.currentUser;
-    return currentUser;
-  }
-  return new Promise(resolve => {
-    const unsubscribe = onAuthStateChanged(auth, user => {
-      unsubscribe();
-      currentUser = user;
-      resolve(user);
-    });
-    setTimeout(() => {
-      unsubscribe();
-      resolve(null);
-    }, 300);
-  });
-};
-
-// Validate Firestore connection
+/** 伺服器學員資料是否可用 */
 export async function testConnection(): Promise<boolean> {
   try {
-    await ensureAuth().catch(() => null);
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    return true;
-  } catch (error: any) {
-    if (error?.message && error.message.includes('the client is offline')) {
-      console.warn('Firebase client is offline or permissions pending.');
-    }
+    const r = await fetch('/api/players', { cache: 'no-store' });
+    return r.ok;
+  } catch {
     return false;
   }
+}
+
+async function fetchAllPlayers(): Promise<StudentProfile[]> {
+  const r = await fetch('/api/players', { cache: 'no-store' });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
+  return (j.players || []) as StudentProfile[];
 }
 
 // 1. Permanent Deterministic Student UID Generation (Decoupled from name/machine changes)
@@ -108,171 +67,81 @@ export function getPlayerDocId(studentName: string): string {
   return `player_${encoded.slice(0, 115)}`;
 }
 
-// Fetch player profile from Firebase by name
-export async function getPlayerProfileFromFirebase(
-  studentName: string
-): Promise<StudentProfile | null> {
+// 讀取單一學員（不含密碼）
+export async function getPlayerProfileFromFirebase(studentName: string): Promise<StudentProfile | null> {
   try {
-    const docId = getPlayerDocId(studentName);
-    const snap = await getDoc(doc(db, 'players', docId));
-    if (snap.exists()) {
-      return snap.data() as StudentProfile;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Failed to fetch player profile from Firebase:', err);
+    const key = studentName.trim().toLowerCase();
+    return (await fetchAllPlayers()).find(p => p.studentName?.trim().toLowerCase() === key) || null;
+  } catch {
     return null;
   }
 }
 
-// Save player profile to Firebase with Schema v3 and Permanent UID
-export async function savePlayerProfileToFirebase(
-  profile: StudentProfile
-): Promise<boolean> {
+function summarize(profile: StudentProfile) {
+  let sec = 0, margin = 0, unreal = 0;
+  (profile.positions || []).forEach(pos => {
+    unreal += pos.unrealizedPnL || 0;
+    if (pos.category === 'futures') margin += pos.totalCostOrMargin || 0;
+    else sec += pos.notionalValue || 0;
+  });
+  const initialCapital = profile.initialCapital || 50000000;
+  const availableCash = typeof profile.availableCash === 'number' ? profile.availableCash : 50000000;
+  const netAssetValue = availableCash + sec + margin + unreal;
+  return { initialCapital, availableCash, netAssetValue, totalReturnPct: ((netAssetValue - initialCapital) / initialCapital) * 100 };
+}
+
+/** 儲存資產資料到伺服器：只有本人（學員權杖）或版主可以寫入；密碼欄位一律不送 */
+export async function savePlayerProfileToFirebase(profile: StudentProfile): Promise<boolean> {
   try {
-    const docId = getPlayerDocId(profile.studentName);
-    const uid = getOrGeneratePermanentUID(profile.studentName, profile.uid);
-
-    let totalSecuritiesVal = 0;
-    let totalMargin = 0;
-    let totalUnrealized = 0;
-
-    (profile.positions || []).forEach(pos => {
-      totalUnrealized += pos.unrealizedPnL || 0;
-      if (pos.category === 'futures') {
-        totalMargin += pos.totalCostOrMargin || 0;
-      } else {
-        totalSecuritiesVal += pos.notionalValue || 0;
-      }
-    });
-
-    const initialCapital = profile.initialCapital || 50000000;
-    const availableCash = typeof profile.availableCash === 'number' ? profile.availableCash : 50000000;
-    const netAssetValue = availableCash + totalSecuritiesVal + totalMargin + totalUnrealized;
-    const totalReturnPct = ((netAssetValue - initialCapital) / initialCapital) * 100;
-
-    // Cryptographic SHA-256 Password Hash Protection
-    let secureHashedPassword = profile.password;
-    if (!secureHashedPassword) {
-      secureHashedPassword = await hashPassword(
-        profile.studentName.trim() === SUPERUSER_NAME ? randomUnusablePassword() : 'money888'
-      );
-    } else if (!isHashedPassword(secureHashedPassword)) {
-      secureHashedPassword = await hashPassword(secureHashedPassword);
-    }
-
-    const rawData = {
-      ...profile,
-      id: docId,
-      uid,
-      password: secureHashedPassword,
+    const name = profile.studentName.trim();
+    const headers = getPlayerToken(name) ? playerHeaders(name) : adminHeaders();
+    if (!headers) return false;
+    const { password: _pw, ...rest } = profile as any;
+    const body = {
+      ...rest,
+      uid: getOrGeneratePermanentUID(name, profile.uid),
       schemaVersion: CURRENT_SCHEMA_VERSION,
       role: profile.role || 'student',
       status: profile.status || 'active',
-      studentName: profile.studentName.trim() || '未命名操盤手',
-      initialCapital,
-      availableCash,
-      netAssetValue,
-      totalReturnPct,
-      updatedAt: Date.now(),
+      ...summarize(profile),
       createdAt: profile.createdAt || Date.now(),
     };
-
-    // Strip any undefined keys
-    const dataToSave: Record<string, any> = {};
-    Object.entries(rawData).forEach(([key, val]) => {
-      if (val !== undefined) {
-        dataToSave[key] = val;
-      }
-    });
-    await setDoc(doc(db, 'players', docId), dataToSave, { merge: true });
-    return true;
+    const r = await fetch('/api/players/me', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ profile: body }) });
+    return r.ok;
   } catch (err: any) {
-    console.warn('Could not sync player profile to Firebase (saved locally):', err?.message || err);
+    console.warn('學員資料同步失敗（已先存在本機）:', err?.message || err);
     return false;
   }
 }
 
-// Update student password in Firebase and record audit
-export async function updateStudentPassword(studentName: string, newPassword: string): Promise<boolean> {
+/**
+ * 改密碼：學員本人需提供目前密碼；版主（已用版主密碼登入）可直接設定臨時密碼，學員下次登入必須再改
+ */
+export async function updateStudentPassword(studentName: string, newPassword: string, currentPassword?: string): Promise<boolean> {
   try {
-    const cleanName = studentName.trim();
-    const cleanLower = cleanName.toLowerCase();
-    const docId = getPlayerDocId(cleanName);
-
-    // Cryptographic SHA-256 Hash
-    const secureHashedPassword = isHashedPassword(newPassword)
-      ? newPassword
-      : await hashPassword(newPassword);
-    
-    await setDoc(
-      doc(db, 'players', docId),
-      {
-        password: secureHashedPassword,
-        updatedAt: Date.now(),
-      },
-      { merge: true }
-    );
-
-    // Also update any matching documents by studentName
-    try {
-      const snap = await getDocs(collection(db, 'players'));
-      for (const d of snap.docs) {
-        const data = d.data() as StudentProfile;
-        if (data && data.studentName && data.studentName.trim().toLowerCase() === cleanLower && d.id !== docId) {
-          await setDoc(doc(db, 'players', d.id), { password: secureHashedPassword, updatedAt: Date.now() }, { merge: true });
-        }
-      }
-    } catch (e) {
-      console.warn('Sync other matching password docs error:', e);
+    const admin = adminHeaders();
+    if (currentPassword === undefined && admin) {
+      const r = await fetch('/api/admin/players/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json', ...admin }, body: JSON.stringify({ name: studentName, password: newPassword }) });
+      return r.ok;
     }
-
-    // Mirror to local caches (hashed to prevent plain text in localStorage)
-    try {
-      const enteredStr = localStorage.getItem('finmind_entered_player_profiles');
-      if (enteredStr) {
-        const parsed = JSON.parse(enteredStr);
-        if (Array.isArray(parsed)) {
-          const updated = parsed.map((p: any) =>
-            p?.studentName?.trim().toLowerCase() === cleanLower ? { ...p, password: secureHashedPassword } : p
-          );
-          localStorage.setItem('finmind_entered_player_profiles', JSON.stringify(updated));
-        }
-      }
-      const savedStr = localStorage.getItem('finmind_student_profiles_v3_authentic');
-      if (savedStr) {
-        const parsed = JSON.parse(savedStr);
-        if (Array.isArray(parsed)) {
-          const updated = parsed.map((p: any) =>
-            p?.studentName?.trim().toLowerCase() === cleanLower ? { ...p, password: secureHashedPassword } : p
-          );
-          localStorage.setItem('finmind_student_profiles_v3_authentic', JSON.stringify(updated));
-        }
-      }
-    } catch {}
-
-    await recordAuditLog(
-      'PASSWORD_UPDATE',
-      studentName,
-      `學生【${studentName}】已成功更新密碼`
-    );
+    const r = await fetch('/api/players/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(playerHeaders(studentName) || {}) },
+      body: JSON.stringify({ name: studentName, current: currentPassword || '', next: newPassword }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    recordAuditLog('PASSWORD_UPDATE', studentName, `學生【${studentName}】已成功更新密碼`).catch(() => {});
     return true;
   } catch (err: any) {
-    console.warn('Failed to update student password in Firebase:', err?.message || err);
-    return false;
+    console.warn('更新密碼失敗:', err?.message || err);
+    throw err;
   }
 }
 
 // 2. Immutable Transaction Ledger (Append-Only, No Delete, No Edit)
 export async function saveImmutableTransaction(tx: ImmutableTransaction): Promise<boolean> {
   try {
-    // Write to Firestore /transactions/{txId}
-    await setDoc(doc(db, 'transactions', tx.transactionId), {
-      ...tx,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      createdAt: tx.createdAt || Date.now(),
-    });
-
     // Also mirror into local persistent ledger
     const existingLedgerJson = localStorage.getItem('finmind_immutable_ledger_v3');
     const existingLedger: ImmutableTransaction[] = existingLedgerJson ? JSON.parse(existingLedgerJson) : [];
@@ -298,20 +167,6 @@ export async function saveImmutableTransaction(tx: ImmutableTransaction): Promis
 
 // Fetch all immutable transactions for a student or entire class
 export async function fetchClassTransactions(limitCount = 100): Promise<ImmutableTransaction[]> {
-  try {
-    const q = query(collection(db, 'transactions'), limit(limitCount));
-    const snap = await getDocs(q);
-    const list: ImmutableTransaction[] = [];
-    snap.forEach(d => {
-      list.push(d.data() as ImmutableTransaction);
-    });
-    if (list.length > 0) {
-      return list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    }
-  } catch (e) {
-    console.warn('Fetch remote transactions error, using local mirror:', e);
-  }
-
   // Fallback to local storage
   const localJson = localStorage.getItem('finmind_immutable_ledger_v3');
   return localJson ? JSON.parse(localJson) : [];
@@ -334,12 +189,6 @@ export async function recordAuditLog(
     createdAt: Date.now(),
   };
 
-  try {
-    await setDoc(doc(db, 'audit_logs', logEntry.id), logEntry);
-  } catch {
-    // Local fallback
-  }
-
   const localLogsJson = localStorage.getItem('finmind_audit_logs_v3');
   const localLogs: AuditLog[] = localLogsJson ? JSON.parse(localLogsJson) : [];
   localLogs.unshift(logEntry);
@@ -347,17 +196,6 @@ export async function recordAuditLog(
 }
 
 export async function fetchAuditLogs(limitCount = 50): Promise<AuditLog[]> {
-  try {
-    const snap = await getDocs(query(collection(db, 'audit_logs'), limit(limitCount)));
-    const list: AuditLog[] = [];
-    snap.forEach(d => list.push(d.data() as AuditLog));
-    if (list.length > 0) {
-      return list.sort((a, b) => b.createdAt - a.createdAt);
-    }
-  } catch (e) {
-    console.warn('Fetch audit logs error, using local logs:', e);
-  }
-
   const localLogsJson = localStorage.getItem('finmind_audit_logs_v3');
   return localLogsJson ? JSON.parse(localLogsJson) : [];
 }
@@ -384,17 +222,6 @@ export async function createBackupSnapshot(
     studentsSnapshot: profiles,
   };
 
-  // 1. Save to Firestore
-  try {
-    await setDoc(doc(db, 'backups', snapshotId), {
-      ...snapshot,
-      // For firestore document size safety, serialize students JSON
-      studentsSnapshotJson: JSON.stringify(profiles),
-    });
-  } catch (e) {
-    console.warn('Remote backup snapshot write error, saved locally:', e);
-  }
-
   // 2. Save to localStorage
   const existingBackupsJson = localStorage.getItem('finmind_backup_snapshots_v3');
   const existingBackups: BackupSnapshot[] = existingBackupsJson ? JSON.parse(existingBackupsJson) : [];
@@ -411,29 +238,6 @@ export async function createBackupSnapshot(
 }
 
 export async function fetchBackupSnapshots(): Promise<BackupSnapshot[]> {
-  try {
-    const snap = await getDocs(query(collection(db, 'backups'), limit(20)));
-    const list: BackupSnapshot[] = [];
-    snap.forEach(d => {
-      const data = d.data();
-      list.push({
-        id: data.id,
-        snapshotTime: data.snapshotTime,
-        timestamp: data.timestamp,
-        reason: data.reason,
-        totalStudents: data.totalStudents,
-        totalTransactions: data.totalTransactions,
-        schemaVersion: data.schemaVersion || 3,
-        studentsSnapshot: data.studentsSnapshot || (data.studentsSnapshotJson ? JSON.parse(data.studentsSnapshotJson) : []),
-      });
-    });
-    if (list.length > 0) {
-      return list.sort((a, b) => b.timestamp - a.timestamp);
-    }
-  } catch (e) {
-    console.warn('Fetch backup snapshots error, using local snapshots:', e);
-  }
-
   const localBackupsJson = localStorage.getItem('finmind_backup_snapshots_v3');
   return localBackupsJson ? JSON.parse(localBackupsJson) : [];
 }
@@ -497,208 +301,62 @@ export function exportClassroomData(profiles: StudentProfile[]): string {
   return JSON.stringify(exportPayload, null, 2);
 }
 
-// Subscribe to all players for class leaderboard (Real-time updates! Supports 100+ players)
-export function subscribeToAllPlayers(
-  callback: (players: StudentProfile[]) => void
-): () => void {
-  try {
-    const q = query(collection(db, 'players'), limit(150));
-    const unsubscribe = onSnapshot(
-      q,
-      snapshot => {
-        const players: StudentProfile[] = [];
-        const seenNames = new Set<string>();
-        snapshot.forEach(docSnap => {
-          const data = docSnap.data() as StudentProfile;
-          if (data && data.studentName) {
-            const cleanName = data.studentName.trim();
-            if (!seenNames.has(cleanName.toLowerCase())) {
-              seenNames.add(cleanName.toLowerCase());
-              players.push({
-                ...data,
-                id: docSnap.id || data.id,
-                uid: data.uid || getOrGeneratePermanentUID(data.studentName, data.uid),
-                schemaVersion: data.schemaVersion || 3,
-              });
-            }
-          }
-        });
-        callback(players);
-      },
-      err => {
-        console.warn('Failed to subscribe to players:', err);
-      }
-    );
-    return unsubscribe;
-  } catch (e) {
-    console.warn('Subscribe error:', e);
-    return () => {};
-  }
-}
-
-// Delete player from Firebase and local caches
-export async function deletePlayerFromFirebase(studentName: string, docId?: string): Promise<boolean> {
-  const cleanName = studentName.trim();
-  const cleanLower = cleanName.toLowerCase();
-
-  // 1. Synchronously purge all local storage keys immediately
-  try {
-    const enteredStr = localStorage.getItem('finmind_entered_player_profiles');
-    if (enteredStr) {
-      const parsed = JSON.parse(enteredStr);
-      if (Array.isArray(parsed)) {
-        const filtered = parsed.filter((p: any) => p?.studentName?.trim().toLowerCase() !== cleanLower);
-        localStorage.setItem('finmind_entered_player_profiles', JSON.stringify(filtered));
-      }
-    }
-    const savedStr = localStorage.getItem('finmind_student_profiles_v3_authentic');
-    if (savedStr) {
-      const parsed = JSON.parse(savedStr);
-      if (Array.isArray(parsed)) {
-        const filtered = parsed.filter((p: any) => p?.studentName?.trim().toLowerCase() !== cleanLower);
-        localStorage.setItem('finmind_student_profiles_v3_authentic', JSON.stringify(filtered));
-      }
-    }
-    // Add to persistent blacklist
-    const blacklistStr = localStorage.getItem('finmind_deleted_students_blacklist');
-    const blacklist = blacklistStr ? JSON.parse(blacklistStr) : [];
-    if (!blacklist.includes(cleanLower)) {
-      blacklist.push(cleanLower);
-      localStorage.setItem('finmind_deleted_students_blacklist', JSON.stringify(blacklist));
-    }
-  } catch (e) {
-    console.warn('Purge local storage error:', e);
-  }
-
-  // 2. Wrap remote Firestore delete in a 2500ms timeout race so UI NEVER hangs
-  const remoteDelete = async (): Promise<boolean> => {
+// 全班名單：每 20 秒向伺服器更新一次
+export function subscribeToAllPlayers(callback: (players: StudentProfile[]) => void): () => void {
+  let stopped = false;
+  const tick = async () => {
     try {
-      // Direct docId delete
-      if (docId) {
-        try {
-          await deleteDoc(doc(db, 'players', docId));
-        } catch (e) {
-          console.warn('Delete by docId error:', e);
-        }
-      }
-
-      // Standard calculated docId delete
-      const stdDocId = getPlayerDocId(cleanName);
-      try {
-        await deleteDoc(doc(db, 'players', stdDocId));
-      } catch (e) {
-        console.warn('Delete by getPlayerDocId error:', e);
-      }
-
-      // Scan all docs in players to find any document matching studentName or id
-      try {
-        const snap = await getDocs(collection(db, 'players'));
-        for (const d of snap.docs) {
-          const data = d.data() as StudentProfile;
-          if (
-            (data && data.studentName && data.studentName.trim().toLowerCase() === cleanLower) ||
-            d.id === docId ||
-            d.id === stdDocId
-          ) {
-            await deleteDoc(doc(db, 'players', d.id));
-          }
-        }
-      } catch (e) {
-        console.warn('Scan & delete matching players error:', e);
-      }
-
-      recordAuditLog('PLAYER_DELETE', '教師管理中心', `已永久刪除學生【${studentName}】帳戶與所有紀錄`).catch(() => {});
-      return true;
-    } catch (err) {
-      console.warn('Remote delete warning:', err);
-      return true;
+      const list = await fetchAllPlayers();
+      if (!stopped) callback(list.map(p => ({ ...p, uid: p.uid || getOrGeneratePermanentUID(p.studentName, p.uid), schemaVersion: p.schemaVersion || 3 })));
+    } catch (e) {
+      console.warn('讀取全班名單失敗:', e);
     }
   };
-
-  const timeoutPromise = new Promise<boolean>(resolve => setTimeout(() => resolve(true), 2500));
-  return Promise.race([remoteDelete(), timeoutPromise]);
+  tick();
+  const id = setInterval(tick, 20_000);
+  return () => { stopped = true; clearInterval(id); };
 }
 
-// Reset single player profile in Firebase back to initial 50,000,000 cash
-export async function resetPlayerInFirebase(
-  studentName: string,
-  initialCapital = 50000000
-): Promise<boolean> {
+function purgeLocal(cleanLower: string) {
   try {
-    const docId = getPlayerDocId(studentName);
-    const snap = await getDoc(doc(db, 'players', docId));
-    const current = snap.exists() ? (snap.data() as StudentProfile) : null;
-    const uid = current?.uid || getOrGeneratePermanentUID(studentName);
-
-    let securePwd = current?.password;
-    if (!securePwd) {
-      securePwd = await hashPassword(
-        studentName.trim() === SUPERUSER_NAME ? randomUnusablePassword() : 'money888'
-      );
-    } else if (!isHashedPassword(securePwd)) {
-      securePwd = await hashPassword(securePwd);
+    for (const key of ['finmind_entered_player_profiles', 'finmind_student_profiles_v3_authentic']) {
+      const str = localStorage.getItem(key);
+      if (!str) continue;
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) localStorage.setItem(key, JSON.stringify(parsed.filter((p: any) => p?.studentName?.trim().toLowerCase() !== cleanLower)));
     }
+    const bl = JSON.parse(localStorage.getItem('finmind_deleted_students_blacklist') || '[]');
+    if (!bl.includes(cleanLower)) { bl.push(cleanLower); localStorage.setItem('finmind_deleted_students_blacklist', JSON.stringify(bl)); }
+  } catch { /* ignore */ }
+}
 
-    const resetData: Record<string, any> = {
-      id: docId,
-      uid,
-      password: securePwd,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      role: 'student',
-      status: 'active',
-      studentName: studentName.trim(),
-      teamName: current?.teamName || '實務投資隊',
-      characterRole: current?.characterRole || 'wealth_tycoon',
-      roleTitle: current?.roleTitle || '5000萬資產掌門人',
-      avatarEmoji: current?.avatarEmoji || '👑',
-      strategyBadge: current?.strategyBadge || '大富翁·全新起跑',
-      customMotto: current?.customMotto || '重新配置，再戰股海！',
-      initialCapital,
-      availableCash: initialCapital,
-      marginDeposits: 0,
-      netAssetValue: initialCapital,
-      totalReturnPct: 0,
-      positions: [],
-      tradeHistory: [],
-      benchmarkDate: '即時撮合',
-      updatedAt: Date.now(),
-      createdAt: current?.createdAt || Date.now(),
-    };
-
-    await setDoc(doc(db, 'players', docId), resetData, { merge: false });
-    await recordAuditLog(
-      'PLAYER_RESET',
-      '教師管理中心',
-      `重設學生【${studentName}】資金為 5,000 萬，保留永久 UID ${uid}`,
-      uid
-    );
-    return true;
-  } catch (err) {
-    console.warn('Failed to reset player in Firebase:', err);
+/** 刪除學員：伺服器端需版主權限 */
+export async function deletePlayerFromFirebase(studentName: string, _docId?: string): Promise<boolean> {
+  const name = studentName.trim();
+  purgeLocal(name.toLowerCase());
+  const admin = adminHeaders();
+  if (!admin) return false;
+  try {
+    const r = await fetch('/api/admin/players/delete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...admin }, body: JSON.stringify({ name }) });
+    recordAuditLog('PLAYER_DELETE', '教師管理中心', `已刪除學生【${name}】帳戶`).catch(() => {});
+    return r.ok;
+  } catch {
     return false;
   }
 }
 
-// Reset ALL players in Firebase back to initial 50M
-export async function resetAllPlayersInFirebase(): Promise<{ success: boolean; count: number }> {
-  try {
-    const snap = await getDocs(collection(db, 'players'));
-    let count = 0;
-    const promises = snap.docs.map(async docSnap => {
-      const p = docSnap.data() as StudentProfile;
-      if (p && p.studentName) {
-        await resetPlayerInFirebase(p.studentName);
-        count++;
-      }
-    });
-    await Promise.all(promises);
-    await recordAuditLog('ALL_PLAYERS_RESET', '教師管理中心', `已將全班 ${count} 位學生帳戶初始化為 5,000 萬純現金`);
-    return { success: true, count };
-  } catch (err) {
-    console.warn('Failed to reset all players in Firebase:', err);
-    return { success: false, count: 0 };
-  }
+/** 資金歸零重來（版主） */
+export async function resetPlayerInFirebase(studentName: string, _initialCapital = 50000000): Promise<boolean> {
+  const admin = adminHeaders();
+  if (!admin) return false;
+  const r = await fetch('/api/admin/players/reset', { method: 'POST', headers: { 'Content-Type': 'application/json', ...admin }, body: JSON.stringify({ name: studentName }) }).catch(() => null);
+  return Boolean(r?.ok);
 }
 
-// Run connection check on initialization
-testConnection().catch(() => {});
+export async function resetAllPlayersInFirebase(): Promise<{ success: boolean; count: number }> {
+  const admin = adminHeaders();
+  if (!admin) return { success: false, count: 0 };
+  const r = await fetch('/api/admin/players/reset', { method: 'POST', headers: { 'Content-Type': 'application/json', ...admin }, body: JSON.stringify({ all: true }) }).catch(() => null);
+  const j = r ? await r.json().catch(() => ({})) : {};
+  return { success: Boolean(r?.ok), count: j.count || 0 };
+}

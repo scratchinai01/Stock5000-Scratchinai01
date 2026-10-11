@@ -28,6 +28,7 @@ import { getPlayerProfileFromFirebase, savePlayerProfileToFirebase, deletePlayer
 import { hashPassword, verifyPassword } from '../utils/cryptoUtils';
 import { logAccess, isNameBlocked, BLOCKED_MESSAGE } from '../utils/accessLog';
 import { isSuperUserName, verifyAdminPassword } from '../utils/adminAuth';
+import { authenticatePlayer, serverRegister, markMustChange } from '../services/playerSession';
 import { getSystemDateStr } from '../utils/dateUtils';
 
 export interface CharacterRoleConfig {
@@ -301,31 +302,33 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
       return;
     }
 
-    const existing = enteredPlayers.find(
-      p => p.studentName.trim().toLowerCase() === trimmed.toLowerCase()
-    );
-
     const isSuperUserAccount = isSuperUserName(trimmed);
 
+    let existing = enteredPlayers.find(
+      p => p.studentName.trim().toLowerCase() === trimmed.toLowerCase()
+    ) || null;
     if (existing) {
-      // 最高管理者帳號一律由伺服器驗證版主密碼；一般學員比對自己的密碼雜湊
-      const isPwdCorrect = isSuperUserAccount
-        ? (await verifyAdminPassword(inputPwd)).ok
-        : await verifyPassword(inputPwd, existing.password || DEFAULT_STUDENT_PASSWORD);
-
-      if (!isPwdCorrect) {
-        logAccess('login_failed', existing.studentName, existing.id);
-        setErrorMsg(`密碼不正確！請輸入【${trimmed}】正確的個人密碼。`);
-        return;
+      // 最高管理者：伺服器驗證版主密碼；一般學員：伺服器驗證（必要時把本機舊資料搬上雲端）
+      if (isSuperUserAccount) {
+        const a = await verifyAdminPassword(inputPwd);
+        if (!a.ok) {
+          logAccess('login_failed', existing.studentName, existing.id);
+          setErrorMsg(a.error);
+          return;
+        }
+      } else {
+        const r = await authenticatePlayer(trimmed, inputPwd);
+        if (!r.ok || !r.profile) {
+          logAccess(r.blocked ? 'blocked' : 'login_failed', existing.studentName, existing.id);
+          setErrorMsg(r.blocked ? BLOCKED_MESSAGE : r.error || `密碼不正確！請輸入【${trimmed}】正確的個人密碼。`);
+          return;
+        }
+        markMustChange(r.profile.studentName, Boolean(r.mustChangePassword));
+        existing = { ...existing, ...r.profile };
       }
-      if (await isNameBlocked(existing.studentName)) {
-        logAccess('blocked', existing.studentName, existing.id);
-        setErrorMsg(BLOCKED_MESSAGE);
-        return;
-      }
 
-      // 版主密碼不寫進學員資料；最高管理者帳號保留原本的資料欄位
-      const hashedPwd = isSuperUserAccount ? existing.password || '' : await hashPassword(inputPwd);
+      // 密碼只存在伺服器，學員資料裡不再保存
+      const hashedPwd = undefined as any;
 
       // Update existing profile with edited team, character role, avatar, motto, and password
       const updatedProfile: StudentProfile = {
@@ -404,6 +407,14 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
+
+    const reg = await serverRegister(newProfile, inputPwd);
+    if (!reg.ok) {
+      setErrorMsg(reg.error || '註冊失敗，請稍後再試');
+      return;
+    }
+    markMustChange(trimmed, Boolean(reg.mustChangePassword));
+    delete (newProfile as any).password;
 
     setLocalEnteredProfiles(prev => {
       const filtered = prev.filter(p => p.studentName.trim().toLowerCase() !== trimmed.toLowerCase());

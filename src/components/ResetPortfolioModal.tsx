@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { RotateCcw, Lock, Eye, EyeOff, CheckCircle2, AlertTriangle, ShieldCheck, X } from 'lucide-react';
 import { StudentProfile, DEFAULT_STUDENT_PASSWORD } from '../types/market';
-import { getPlayerProfileFromFirebase, recordAuditLog } from '../services/firebase';
+import { recordAuditLog } from '../services/firebase';
+import { verifyOwnPassword } from '../services/playerSession';
+import { isSuperUserName, verifyAdminPassword } from '../utils/adminAuth';
 
 interface ResetPortfolioModalProps {
   isOpen: boolean;
@@ -35,18 +37,9 @@ export const ResetPortfolioModal: React.FC<ResetPortfolioModalProps> = ({
 
     setIsProcessing(true);
     try {
-      // 1. Fetch latest profile from Firebase if possible to verify against updated password
-      let expectedPwd = profile.password || DEFAULT_STUDENT_PASSWORD;
-      try {
-        const cloudProf = await getPlayerProfileFromFirebase(profile.studentName);
-        if (cloudProf && cloudProf.password) {
-          expectedPwd = cloudProf.password;
-        }
-      } catch (err) {
-        console.warn('Could not fetch cloud profile for pwd check:', err);
-      }
-
-      if (password !== expectedPwd) {
+      // 1. 由伺服器確認本人密碼（最高管理者用版主密碼）
+      const ok = isSuperUserName(profile.studentName) ? (await verifyAdminPassword(password)).ok : await verifyOwnPassword(profile.studentName, password);
+      if (!ok) {
         setErrorMsg('密碼不正確！請確認後重新輸入');
         setIsProcessing(false);
         return;

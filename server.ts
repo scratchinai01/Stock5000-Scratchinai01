@@ -18,7 +18,8 @@ import {
 } from './src/utils/twHolidays';
 import { getHistory, historyCacheStats } from './server-lib/history';
 import { registerOrderRoutes } from './server-lib/orders';
-import { recordAccess, adminLogin, isAdmin, adminConfigured, queryLogs, getBlocklist, setBlocked, isBlocked } from './server-lib/access';
+import * as players from './server-lib/players';
+import { recordAccess, adminLogin, isAdmin, adminConfigured, queryLogs, getBlocklist, setBlocked, isBlocked, clientIp } from './server-lib/access';
 import { getPatternLatest, getPatternBacktest, getRiskLatest, getRiskBacktest, getLearnDoc } from './server-lib/patternStore';
 
 dotenv.config();
@@ -37,7 +38,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 // ── AI 功能全站關閉（Groq / Gemini 每次呼叫都會產生費用）──
 // 需要時在 Cloud Run 設定 ENABLE_AI=1 才會放行
@@ -1571,6 +1572,42 @@ app.post('/api/admin/blocklist', async (req, res) => {
     res.status(400).json({ ok: false, error: e.message });
   }
 });
+
+// 學員帳號與資產資料（伺服器保存）
+const blockedSafe = async (name: string) => { try { return await isBlocked(name); } catch { return false; } };
+const playerActor = (req: any) => ({ player: players.playerFromToken(req), admin: isAdmin(req) });
+const send = (res: any, r: { status: number; body: any }) => res.status(r.status).json(r.body);
+const wrap = (fn: (req: any, res: any) => Promise<any>) => async (req: any, res: any) => {
+  try { await fn(req, res); } catch (e: any) { console.warn('[Players]', e.message); res.status(503).json({ ok: false, error: '學員資料暫時無法存取，請稍後再試' }); }
+};
+app.get('/api/players', wrap(async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true, players: await players.listPlayers() });
+}));
+app.post('/api/players/login', wrap(async (req, res) => {
+  const name = String(req.body?.name || '');
+  if (await blockedSafe(name)) return res.status(403).json({ ok: false, blocked: true, error: '此帳號已被版主暫停使用，如有疑問請洽版主。' });
+  send(res, await players.login(name, String(req.body?.password || ''), clientIp(req)));
+}));
+app.post('/api/players/register', wrap(async (req, res) => {
+  const name = String(req.body?.profile?.studentName || '');
+  if (await blockedSafe(name)) return res.status(403).json({ ok: false, blocked: true, error: '此帳號已被版主暫停使用，如有疑問請洽版主。' });
+  send(res, await players.register(req.body?.profile, String(req.body?.password || ''), { migrate: Boolean(req.body?.migrate), legacyHash: req.body?.legacyHash ? String(req.body.legacyHash) : undefined }));
+}));
+app.put('/api/players/me', wrap(async (req, res) => send(res, await players.saveProfile(playerActor(req), req.body?.profile))));
+app.post('/api/players/password', wrap(async (req, res) => send(res, await players.changePassword(playerActor(req), String(req.body?.name || ''), String(req.body?.current || ''), String(req.body?.next || '')))));
+app.post('/api/admin/players/reset-password', wrap(async (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false, error: '請先以版主密碼登入' });
+  send(res, await players.adminResetPassword(String(req.body?.name || ''), String(req.body?.password || '')));
+}));
+app.post('/api/admin/players/delete', wrap(async (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false, error: '請先以版主密碼登入' });
+  send(res, await players.adminDelete(String(req.body?.name || '')));
+}));
+app.post('/api/admin/players/reset', wrap(async (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false, error: '請先以版主密碼登入' });
+  send(res, req.body?.all ? await players.adminResetAll() : await players.adminReset(String(req.body?.name || '')));
+}));
 
 // 0.25 API: Superuser Authentication（舊管理面板用）：與版主後台同一組版主密碼，只存雜湊於雲端設定
 const SUPERUSER_NAME = process.env.ADMIN_SUPERUSER_NAME || process.env.SUPERUSER_NAME || '程瑋翔';

@@ -1,5 +1,9 @@
-import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from './firebase';
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User, getAuth } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import firebaseConfig from '../../firebase-applet-config.json';
+
+// Google 試算表登入仍沿用原本的 Firebase 設定（只用在這個功能）
+const auth = getAuth(getApps().length === 0 ? initializeApp(firebaseConfig) : getApp());
 
 export const SHEETS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 

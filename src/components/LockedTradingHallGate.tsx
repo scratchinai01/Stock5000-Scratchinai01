@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { StudentProfile } from '../types/market';
-import { verifyPassword, hashPassword } from '../utils/cryptoUtils';
 import { logAccess, isNameBlocked, BLOCKED_MESSAGE } from '../utils/accessLog';
 import { isSuperUserName, verifyAdminPassword } from '../utils/adminAuth';
+import { authenticatePlayer, serverRegister, markMustChange } from '../services/playerSession';
 import {
   Lock,
   ShieldCheck,
@@ -100,33 +100,34 @@ export const LockedTradingHallGate: React.FC<LockedTradingHallGateProps> = ({
 
     const isSuperUserAccount = isSuperUserName(cleanName);
 
-    if (match) {
-      // 最高管理者帳號一律由伺服器驗證版主密碼；一般學員比對自己的密碼雜湊
-      let isMatch: boolean;
-      if (isSuperUserAccount) {
-        const r = await verifyAdminPassword(cleanPwd);
-        isMatch = r.ok;
-      } else {
-        isMatch = await verifyPassword(cleanPwd, match.password || 'money888');
-      }
-      if (!isMatch) {
-        logAccess('login_failed', match.studentName, match.id);
-        setErrorMsg('密碼不正確！請確認您的個人密碼，或向最高管理者程瑋翔確認。');
+    // 最高管理者：伺服器驗證版主密碼
+    if (isSuperUserAccount) {
+      const r = await verifyAdminPassword(cleanPwd);
+      if (!r.ok) {
+        logAccess('login_failed', cleanName);
+        setErrorMsg(r.error);
         return;
       }
-      if (await isNameBlocked(match.studentName)) {
-        logAccess('blocked', match.studentName, match.id);
-        setErrorMsg(BLOCKED_MESSAGE);
-        return;
-      }
-      setSuccessMsg(`驗證成功！歡迎操盤手「${match.studentName}」回歸交易大廳。`);
-      setTimeout(() => {
-        onLoginSuccess(match);
-      }, 350);
-    } else {
-      // Not registered
-      setErrorMsg(`找不到學員「${cleanName}」。若是新加入者，請切換至【新加入者 註冊登記】標籤建立帳號！`);
+      const prof = match || ({ id: 'superuser', studentName: '程瑋翔', teamName: '系統管理', initialCapital: 50000000, availableCash: 50000000, marginDeposits: 0, positions: [], tradeHistory: [], benchmarkDate: '', createdAt: Date.now(), updatedAt: Date.now() } as any);
+      setSuccessMsg('最高管理者驗證成功！');
+      setTimeout(() => onLoginSuccess(prof), 350);
+      return;
     }
+
+    // 一般學員：伺服器驗證；伺服器還沒有、但這台電腦有舊資料時，自動搬上伺服器
+    setSuccessMsg('驗證中…');
+    const r = await authenticatePlayer(cleanName, cleanPwd);
+    if (!r.ok || !r.profile) {
+      setSuccessMsg('');
+      if (!r.notFound && !r.blocked) logAccess(r.blocked ? 'blocked' : 'login_failed', match?.studentName || cleanName, match?.id || '');
+      if (r.blocked) logAccess('blocked', cleanName);
+      setErrorMsg(r.notFound ? `找不到學員「${cleanName}」。若是新加入者，請切換至【新加入者 註冊登記】標籤建立帳號！` : r.error || '登入失敗');
+      return;
+    }
+    markMustChange(r.profile.studentName, Boolean(r.mustChangePassword));
+    setSuccessMsg(r.migrated ? `已把「${r.profile.studentName}」原本存在這台電腦的資產資料搬到雲端，之後任何裝置都能登入。` : `驗證成功！歡迎操盤手「${r.profile.studentName}」回歸交易大廳。`);
+    const prof = r.profile;
+    setTimeout(() => onLoginSuccess(prof), r.migrated ? 1200 : 350);
   };
 
   // Handle Registration
@@ -177,6 +178,11 @@ export const LockedTradingHallGate: React.FC<LockedTradingHallGateProps> = ({
     if (await isNameBlocked(cleanName)) {
       logAccess('blocked', cleanName);
       setErrorMsg(BLOCKED_MESSAGE);
+      return;
+    }
+    const reg = await serverRegister({ id: `player_${Date.now()}`, studentName: cleanName, teamName: regTeam, initialCapital: 50000000, availableCash: 50000000, marginDeposits: 0, positions: [], tradeHistory: [], benchmarkDate: '', createdAt: Date.now(), updatedAt: Date.now() } as any, cleanPwd);
+    if (!reg.ok) {
+      setErrorMsg(reg.error || '註冊失敗，請稍後再試');
       return;
     }
     setSuccessMsg(`🎉 註冊成功！已為「${cleanName}」建立 5,000 萬資產帳號並設定密碼。正在解鎖交易大廳...`);

@@ -103,7 +103,14 @@ export function playerFromToken(req: any): string | null {
 }
 
 // ── 資料 ──
-const PRIVATE_FIELDS = ['password', 'passwordHash', 'mustChangePassword', 'key'];
+const PRIVATE_FIELDS = ['password', 'passwordHash', 'mustChangePassword', 'key', 'passwordHint'];
+
+/** 忘記密碼提示：密碼 5 個字以上顯示第一個和最後一個字，較短的只顯示第一個字（不洩漏長度） */
+export function makeHint(password: string): string {
+  const c = Array.from(String(password || ''));
+  if (c.length === 0) return '';
+  return c.length >= 5 ? `${c[0]} ＊＊＊ ${c[c.length - 1]}` : `${c[0]} ＊＊＊`;
+}
 function publicProfile(d: any) {
   const out: any = {};
   for (const [k, v] of Object.entries(d || {})) if (!PRIVATE_FIELDS.includes(k)) out[k] = v;
@@ -162,14 +169,37 @@ export async function login(name: string, password: string, ip: string) {
   }
   fails.delete(lockKey);
   const mustChange = Boolean(raw.mustChangePassword) || password === DEFAULT_PASSWORD;
-  if (mustChange !== Boolean(raw.mustChangePassword)) {
+  const hint = makeHint(password);
+  const patch: any = {};
+  if (mustChange !== Boolean(raw.mustChangePassword)) patch.mustChangePassword = mustChange;
+  if (raw.passwordHint !== hint) patch.passwordHint = hint; // 舊帳號登入一次就會有提示
+  if (Object.keys(patch).length) {
     const db = await getDb();
-    await db.collection(COLLECTION).doc(docIdOf(n)).update({ mustChangePassword: mustChange });
+    await db.collection(COLLECTION).doc(docIdOf(n)).update(patch);
   }
   return { status: 200, body: { ok: true, token: issueToken(raw.studentName), profile: publicProfile(raw), mustChangePassword: mustChange } };
 }
 
 /** 建立帳號（新註冊，或把舊瀏覽器裡的資料搬上來） */
+// ── 忘記密碼提示（每個 IP 15 分鐘最多查 10 次） ──
+const hintHits = new Map<string, number[]>();
+export async function passwordHint(name: string, ip: string) {
+  const n = cleanName(name);
+  if (!n) return { status: 400, body: { ok: false, error: '請先輸入姓名' } };
+  if (isReservedName(n)) return { status: 400, body: { ok: false, error: '最高管理者不提供密碼提示' } };
+  const now = Date.now();
+  const arr = (hintHits.get(ip) || []).filter(t => now - t < 15 * 60_000);
+  if (arr.length >= 10) return { status: 429, body: { ok: false, error: '查詢次數過多，請 15 分鐘後再試' } };
+  hintHits.set(ip, [...arr, now]);
+  const raw = await getRaw(n);
+  if (!raw) return { status: 404, body: { ok: false, notFound: true, error: `找不到學員「${n}」` } };
+  if (raw.mustChangePassword && raw.passwordHint && raw.passwordHint !== makeHint(DEFAULT_PASSWORD)) {
+    return { status: 200, body: { ok: true, hint: raw.passwordHint, note: '這是版主幫你重設的臨時密碼，登入後要設定新密碼。' } };
+  }
+  if (!raw.passwordHint) return { status: 200, body: { ok: true, hint: null, note: '這個帳號還沒有建立提示（上次登入是在這個功能上線之前）。請洽版主重設密碼。' } };
+  return { status: 200, body: { ok: true, hint: raw.passwordHint } };
+}
+
 export async function register(profile: any, password: string, opts: { migrate?: boolean; legacyHash?: string } = {}) {
   const n = cleanName(profile?.studentName);
   if (!n) return { status: 400, body: { ok: false, error: '請輸入姓名' } };
@@ -190,6 +220,7 @@ export async function register(profile: any, password: string, opts: { migrate?:
         ...sanitizeProfile(profile, n),
         key: nameKey(n),
         passwordHash: scryptHash(password),
+        passwordHint: makeHint(password),
         mustChangePassword: password === DEFAULT_PASSWORD,
         createdAt: profile?.createdAt || now,
         updatedAt: now,
@@ -237,7 +268,7 @@ export async function changePassword(actor: { player: string | null; admin: bool
     if (!verifyPassword(current, raw.passwordHash)) return { status: 401, body: { ok: false, error: '目前密碼不正確' } };
   }
   const db = await getDb();
-  await db.collection(COLLECTION).doc(docIdOf(n)).update({ passwordHash: scryptHash(next), mustChangePassword: false, passwordChangedAt: Date.now() });
+  await db.collection(COLLECTION).doc(docIdOf(n)).update({ passwordHash: scryptHash(next), passwordHint: makeHint(next), mustChangePassword: false, passwordChangedAt: Date.now() });
   return { status: 200, body: { ok: true } };
 }
 
@@ -247,7 +278,7 @@ export async function adminResetPassword(name: string, temp: string) {
   if (!raw) return { status: 404, body: { ok: false, error: '找不到這位學員' } };
   if (String(temp || '').length < 3) return { status: 400, body: { ok: false, error: '臨時密碼至少 3 個字元' } };
   const db = await getDb();
-  await db.collection(COLLECTION).doc(docIdOf(name)).update({ passwordHash: scryptHash(temp), mustChangePassword: true, passwordChangedAt: Date.now() });
+  await db.collection(COLLECTION).doc(docIdOf(name)).update({ passwordHash: scryptHash(temp), passwordHint: makeHint(temp), mustChangePassword: true, passwordChangedAt: Date.now() });
   return { status: 200, body: { ok: true } };
 }
 

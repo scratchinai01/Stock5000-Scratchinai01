@@ -61,5 +61,16 @@ assert.equal(mg.body.profile.availableCash, 777, '搬家要保留原本的資產
 // 錯誤次數限制
 for (let i = 0; i < 8; i++) await P.login('舊學員', 'bad', '9.9.9.9');
 assert.equal((await P.login('舊學員', 'mypw', '9.9.9.9')).status, 429);
+// 忘記密碼提示：首尾字、不外流到名單
+assert.equal(P.makeHint('abc12345'), 'a ＊＊＊ 5');
+assert.equal(P.makeHint('abc'), 'a ＊＊＊');
+const h1 = await P.passwordHint('老帳號', '7.7.7.7');
+assert.equal(h1.body.hint, 'n ＊＊＊ 1');
+const h2 = await P.passwordHint('小明', '7.7.7.7');
+assert.ok(h2.body.note?.includes('臨時密碼'));
+assert.equal((await P.passwordHint('沒這人', '7.7.7.7')).status, 404);
+assert.ok(!(await P.listPlayers()).some((x: any) => 'passwordHint' in x), '名單不能帶出提示');
+for (let i = 0; i < 10; i++) await P.passwordHint('老帳號', '6.6.6.6');
+assert.equal((await P.passwordHint('老帳號', '6.6.6.6')).status, 429);
 console.log('players.test：學員帳號檢查通過');
 process.exit(0);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { PasswordHint } from './PasswordHint';
 import {
   Trophy,
   User,
@@ -667,6 +668,7 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
                     </button>
                   </div>
                 </div>
+                {enteredPlayers.some(p => p.studentName.trim().toLowerCase() === chineseName.trim().toLowerCase()) && <PasswordHint name={chineseName} />}
 
                 {/* Password Field 2: 未來新加入者需再次確認密碼 */}
                 {chineseName.trim() && !enteredPlayers.some(p => p.studentName.trim().toLowerCase() === chineseName.trim().toLowerCase()) && (

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { PasswordHint } from './PasswordHint';
 import { StudentProfile } from '../types/market';
 import { logAccess, isNameBlocked, BLOCKED_MESSAGE } from '../utils/accessLog';
 import { isSuperUserName, verifyAdminPassword } from '../utils/adminAuth';
@@ -330,6 +331,7 @@ export const LockedTradingHallGate: React.FC<LockedTradingHallGateProps> = ({
                 </button>
               </div>
             </div>
+            <PasswordHint name={loginName} />
 
             <button
               type="submit"

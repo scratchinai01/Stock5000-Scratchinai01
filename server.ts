@@ -1629,6 +1629,11 @@ app.post('/api/players/login', wrap(async (req, res) => {
   if (await blockedSafe(name)) return res.status(403).json({ ok: false, blocked: true, error: '此帳號已被版主暫停使用，如有疑問請洽版主。' });
   send(res, await players.login(name, String(req.body?.password || ''), clientIp(req)));
 }));
+app.post('/api/players/hint', wrap(async (req, res) => {
+  const name = String(req.body?.name || '');
+  if (await blockedSafe(name)) return res.status(403).json({ ok: false, blocked: true, error: '此帳號已被版主暫停使用，如有疑問請洽版主。' });
+  send(res, await players.passwordHint(name, clientIp(req)));
+}));
 app.post('/api/players/register', wrap(async (req, res) => {
   const name = String(req.body?.profile?.studentName || '');
   if (await blockedSafe(name)) return res.status(403).json({ ok: false, blocked: true, error: '此帳號已被版主暫停使用，如有疑問請洽版主。' });

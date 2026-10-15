@@ -79,13 +79,11 @@ const fmtPx = (n: number) => (Number.isFinite(n) ? n.toLocaleString('zh-TW', { m
 const tradable = (i: InstrumentSpec) => !i.isMock && i.price > 0;
 
 // ───────── 共用外觀 ─────────
-const StepDots = ({ step }: { step: number }) => (
-  <div className="flex items-center gap-1.5" aria-label={`第 ${step + 1} 步，共 6 步`}>
-    {['市場', '商品', '多空', '輸入', '確認', '成交'].map((t, i) => (
-      <div key={t} className="flex flex-col items-center gap-0.5">
-        <span className={`h-2 rounded-full transition-all ${i <= step ? 'bg-amber-500' : 'bg-slate-200'} ${i === step ? 'w-8' : 'w-4'}`} />
-        <span className={`text-[11px] font-bold ${i === step ? 'text-amber-700' : 'text-slate-400'}`}>{t}</span>
-      </div>
+const STEP_NAMES = ['市場', '商品', '多空', '輸入', '確認', '成交'];
+const StepBar = ({ step }: { step: number }) => (
+  <div className="flex items-center gap-1" aria-label={`第 ${step + 1} 步，共 6 步：${STEP_NAMES[step]}`}>
+    {STEP_NAMES.map((t, i) => (
+      <span key={t} className={`h-1.5 flex-1 rounded-full transition-all ${i <= step ? 'bg-amber-500' : 'bg-slate-200'}`} />
     ))}
   </div>
 );
@@ -110,11 +108,12 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
   const [showCard, setShowCard] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [hideAuto, setHideAuto] = useState(false);
+  const [minimized, setMinimized] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     setStep(0); setMarketId(null); setSymbol(null); setSide(null); setQtyText('1'); setPriceMode('now'); setLimitText('');
-    setSearch(''); setSubmitError(null); setOrderId(null); setInstantFill(null); setShowCard(false); setNow(new Date());
+    setSearch(''); setSubmitError(null); setOrderId(null); setInstantFill(null); setShowCard(false); setNow(new Date()); setMinimized(false);
     setHideAuto(guideHiddenFor(profile.studentName));
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
@@ -210,7 +209,7 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
     if (step === 0)
       return (
         <div className="space-y-3">
-          <h3 className="text-[22px] font-black text-slate-900">第 1 步：選一個市場</h3>
+          <h3 className="text-[19px] sm:text-[22px] font-black text-slate-900">第 1 步：選一個市場</h3>
           <Tip>綠色「開盤中」的市場，送出後<b>馬上就有機會成交</b>。休市中的台灣市場也能下單，會變成「預約單」，下一次開盤才撮合。</Tip>
           <div className="grid gap-2.5">
             {[...markets].sort((a, b) => Number(b.open) - Number(a.open)).map(m => (
@@ -220,13 +219,13 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
                   <span className="text-[30px]">{m.icon}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[19px] font-black text-slate-900">{m.name}</span>
+                      <span className="text-[17px] sm:text-[19px] font-black text-slate-900">{m.name}</span>
                       <span className={`text-[13px] font-black px-2 py-0.5 rounded-full ${m.open ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>{m.open ? '🟢 開盤中' : '⚪ 休市中'}</span>
                     </div>
                     <div className="text-[14px] text-slate-600">{m.hours}</div>
                     <div className="text-[14px] text-slate-500">{m.open ? m.session : `下一盤：${m.next}`} · {m.hint}</div>
                   </div>
-                  <span className="text-[22px] text-slate-400">›</span>
+                  <span className="text-[19px] sm:text-[22px] text-slate-400">›</span>
                 </div>
               </button>
             ))}
@@ -241,20 +240,20 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
       const rows = needle ? market.list.filter(i => i.symbol.toLowerCase().includes(needle) || i.name.toLowerCase().includes(needle)) : [...pop, ...market.list.filter(i => !pop.includes(i))].slice(0, 12);
       return (
         <div className="space-y-3">
-          <h3 className="text-[22px] font-black text-slate-900">第 2 步：選一檔商品</h3>
+          <h3 className="text-[19px] sm:text-[22px] font-black text-slate-900">第 2 步：選一檔商品</h3>
           <Tip tone="sky">不知道選什麼？先挑你聽過的公司或 <b>0050</b>。價格旁邊<span className="text-red-600 font-bold">紅色是上漲</span>、<span className="text-green-700 font-bold">綠色是下跌</span>（台灣習慣）。</Tip>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="輸入代號或名稱，例如 2330、台積電" aria-label="搜尋商品"
-            className="w-full min-h-[52px] rounded-2xl border-2 border-slate-200 px-4 text-[17px] focus:border-amber-500 outline-none" />
+            className="w-full min-h-[52px] rounded-2xl border-2 border-slate-200 px-4 text-[16px] sm:text-[17px] focus:border-amber-500 outline-none" />
           <div className="grid gap-2">
             {rows.map(i => (
               <button key={i.symbol} type="button" onClick={() => { setSymbol(i.symbol); setSide(null); setStep(2); }}
                 className={`flex items-center gap-3 rounded-2xl border-2 px-4 py-2.5 text-left ${symbol === i.symbol ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[18px] font-black text-slate-900 truncate">{i.name}</div>
+                  <div className="text-[16px] sm:text-[18px] font-black text-slate-900 truncate">{i.name}</div>
                   <div className="text-[14px] text-slate-500 font-mono">{i.symbol} · {i.unitLabel}</div>
                 </div>
                 <div className="text-right">
-                  <div className={`text-[19px] font-black font-mono ${i.change > 0 ? 'text-red-600' : i.change < 0 ? 'text-green-700' : 'text-slate-800'}`}>{fmtPx(i.price)}</div>
+                  <div className={`text-[17px] sm:text-[19px] font-black font-mono ${i.change > 0 ? 'text-red-600' : i.change < 0 ? 'text-green-700' : 'text-slate-800'}`}>{fmtPx(i.price)}</div>
                   <div className={`text-[13px] font-bold font-mono ${i.change > 0 ? 'text-red-600' : i.change < 0 ? 'text-green-700' : 'text-slate-500'}`}>{i.change > 0 ? '▲' : i.change < 0 ? '▼' : ''}{fmt(Math.abs(i.changePercent), 2)}%</div>
                 </div>
               </button>
@@ -270,17 +269,17 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
       const perPoint = inst.category === 'futures' ? `每 1 點 = NT$ ${fmt(mult)}` : inst.category === 'stocks' || inst.category === 'etfs' || inst.category === 'bonds' ? `每 1 元 = NT$ ${fmt(mult)}（1 張 1000 股）` : '';
       return (
         <div className="space-y-3">
-          <h3 className="text-[22px] font-black text-slate-900">第 3 步：你覺得 {inst.name} 會漲還是會跌？</h3>
+          <h3 className="text-[19px] sm:text-[22px] font-black text-slate-900">第 3 步：你覺得 {inst.name} 會漲還是會跌？</h3>
           <div className="grid sm:grid-cols-2 gap-3">
             <button type="button" disabled={!acts.long} onClick={() => { setSide('long'); setStep(3); }}
               className={`rounded-3xl border-2 p-4 text-left transition disabled:opacity-40 ${side === 'long' ? 'border-red-500 bg-red-50' : 'border-red-200 bg-white hover:bg-red-50'}`}>
-              <div className="text-[26px] font-black text-red-600">📈 做多（買進）</div>
+              <div className="text-[22px] sm:text-[26px] font-black text-red-600">📈 做多（買進）</div>
               <div className="text-[16px] text-slate-700 leading-relaxed mt-1">我覺得會<b className="text-red-600">漲</b>。先買進，之後漲了再賣出，<b>賺中間的價差</b>。</div>
               <div className="text-[14px] text-slate-500 mt-1">例：100 元買、110 元賣 → 每股賺 10 元</div>
             </button>
             <button type="button" disabled={!acts.short} onClick={() => { setSide('short'); setStep(3); }}
               className={`rounded-3xl border-2 p-4 text-left transition disabled:opacity-40 ${side === 'short' ? 'border-green-600 bg-green-50' : 'border-green-200 bg-white hover:bg-green-50'}`}>
-              <div className="text-[26px] font-black text-green-700">📉 做空（{inst.category === 'stocks' || inst.category === 'etfs' ? '融券賣出' : '賣出'}）</div>
+              <div className="text-[22px] sm:text-[26px] font-black text-green-700">📉 做空（{inst.category === 'stocks' || inst.category === 'etfs' ? '融券賣出' : '賣出'}）</div>
               <div className="text-[16px] text-slate-700 leading-relaxed mt-1">我覺得會<b className="text-green-700">跌</b>。先賣出，之後跌了再買回來還，<b>一樣賺價差</b>。</div>
               <div className="text-[14px] text-slate-500 mt-1">{acts.short ? '例：100 元賣、90 元買回 → 每股賺 10 元' : '這類商品在本系統不能做空'}</div>
             </button>
@@ -296,39 +295,39 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
     if (step === 3 && inst && action) {
       return (
         <div className="space-y-4">
-          <h3 className="text-[22px] font-black text-slate-900">第 4 步：輸入數量和價格</h3>
+          <h3 className="text-[19px] sm:text-[22px] font-black text-slate-900">第 4 步：輸入數量和價格</h3>
 
           <div className="space-y-1.5">
-            <div className="text-[17px] font-black text-slate-800">① 要{sideWord}幾{unit}？</div>
+            <div className="text-[16px] sm:text-[17px] font-black text-slate-800">① 要{sideWord}幾{unit}？</div>
             <div className="flex items-center gap-2">
-              <button type="button" aria-label="減少" onClick={() => setQtyText(String(Math.max(1, qty - 1)))} className="w-14 h-14 rounded-2xl bg-slate-100 text-[26px] font-black">−</button>
+              <button type="button" aria-label="減少" onClick={() => setQtyText(String(Math.max(1, qty - 1)))} className="w-14 h-14 rounded-2xl bg-slate-100 text-[22px] sm:text-[26px] font-black">−</button>
               <input inputMode="numeric" value={qtyText} onChange={e => setQtyText(e.target.value.replace(/[^\d]/g, ''))} aria-label="數量"
-                className="w-28 h-14 rounded-2xl border-2 border-slate-300 text-center text-[24px] font-black font-mono focus:border-amber-500 outline-none" />
-              <button type="button" aria-label="增加" onClick={() => setQtyText(String(qty + 1))} className="w-14 h-14 rounded-2xl bg-slate-100 text-[26px] font-black">＋</button>
-              <span className="text-[18px] font-bold text-slate-700">{unit}</span>
+                className="w-28 h-14 rounded-2xl border-2 border-slate-300 text-center text-[21px] sm:text-[24px] font-black font-mono focus:border-amber-500 outline-none" />
+              <button type="button" aria-label="增加" onClick={() => setQtyText(String(qty + 1))} className="w-14 h-14 rounded-2xl bg-slate-100 text-[22px] sm:text-[26px] font-black">＋</button>
+              <span className="text-[16px] sm:text-[18px] font-bold text-slate-700">{unit}</span>
             </div>
             <div className="text-[14px] text-slate-500">單位：{inst.unitLabel}。新手建議從 1 {unit} 開始。</div>
           </div>
 
           <div className="space-y-1.5">
-            <div className="text-[17px] font-black text-slate-800">② 用什麼價格？</div>
+            <div className="text-[16px] sm:text-[17px] font-black text-slate-800">② 用什麼價格？</div>
             {book ? (
               <>
                 <div className="grid sm:grid-cols-2 gap-2">
                   <button type="button" onClick={() => setPriceMode('now')} className={`rounded-2xl border-2 p-3 text-left ${priceMode === 'now' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white'}`}>
-                    <div className="text-[17px] font-black">⚡ 立即成交價（推薦）</div>
-                    <div className="text-[24px] font-black font-mono text-slate-900">{fmtPx(nowPrice)}</div>
+                    <div className="text-[16px] sm:text-[17px] font-black">⚡ 立即成交價（推薦）</div>
+                    <div className="text-[21px] sm:text-[24px] font-black font-mono text-slate-900">{fmtPx(nowPrice)}</div>
                     <div className="text-[13px] text-slate-600">{counterPrice != null ? (isBuy ? '＝目前「委賣價」：賣方最便宜的要價' : '＝目前「委買價」：買方最高的出價') : '目前沒有五檔掛單資料，先用成交價'}</div>
                   </button>
                   <button type="button" onClick={() => { setPriceMode('limit'); if (!limitText) setLimitText(String(nowPrice)); }} className={`rounded-2xl border-2 p-3 text-left ${priceMode === 'limit' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white'}`}>
-                    <div className="text-[17px] font-black">✍️ 自己輸入價格（限價）</div>
+                    <div className="text-[16px] sm:text-[17px] font-black">✍️ 自己輸入價格（限價）</div>
                     <div className="text-[13px] text-slate-600 mt-1">{isBuy ? '想買便宜一點，就掛低一點，等價格跌下來才成交' : '想賣貴一點，就掛高一點，等價格漲上去才成交'}</div>
                   </button>
                 </div>
                 {priceMode === 'limit' && (
                   <div className="space-y-1">
                     <input inputMode="decimal" value={limitText} onChange={e => setLimitText(e.target.value.replace(/[^\d.]/g, ''))} aria-label="委託價格"
-                      className="w-44 h-14 rounded-2xl border-2 border-slate-300 px-3 text-[24px] font-black font-mono focus:border-amber-500 outline-none" />
+                      className="w-44 h-14 rounded-2xl border-2 border-slate-300 px-3 text-[21px] sm:text-[24px] font-black font-mono focus:border-amber-500 outline-none" />
                     {lim && <div className="text-[14px] text-slate-500">今天可輸入範圍：跌停 {fmtPx(lim.down)} ～ 漲停 {fmtPx(lim.up)}</div>}
                     {priceError && <div className="text-[15px] font-bold text-rose-700">{priceError}</div>}
                   </div>
@@ -373,9 +372,9 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
         : '送出後依市場最新價格撮合。';
       return (
         <div className="space-y-3">
-          <h3 className="text-[22px] font-black text-slate-900">第 5 步：確認後送出</h3>
+          <h3 className="text-[19px] sm:text-[22px] font-black text-slate-900">第 5 步：確認後送出</h3>
           <div className={`rounded-3xl border-2 p-4 ${side === 'short' ? 'border-green-500 bg-green-50' : 'border-red-400 bg-red-50'}`}>
-            <div className="text-[20px] leading-relaxed text-slate-900">
+            <div className="text-[18px] sm:text-[20px] leading-relaxed text-slate-900">
               我要 <b className={side === 'short' ? 'text-green-700' : 'text-red-600'}>{sideWord}（{verb}）</b><br />
               <b>{inst.name}</b> <span className="font-mono text-slate-600">{inst.symbol}</span>　<b className="font-mono">{qty}</b> {unit}<br />
               價格 <b className="font-mono">{fmtPx(limitPrice)}</b>{inst.category === 'us_stocks' ? ' 美元' : ''}{book ? '（限價、當日有效 ROD）' : '（最新報價）'}
@@ -393,28 +392,28 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
       const done = Boolean(filled);
       return (
         <div className="space-y-3">
-          <h3 className="text-[22px] font-black text-slate-900">第 6 步：{done ? '🎉 成交了！' : '委託已送出'}</h3>
+          <h3 className="text-[19px] sm:text-[22px] font-black text-slate-900">第 6 步：{done ? '🎉 成交了！' : '委託已送出'}</h3>
           {done ? (
             <Tip tone="emerald">
-              <div className="text-[19px]"><b>{sideWord} {inst.name}</b> 成交 <b className="font-mono">{filled!.qty}</b> {unit}，成交價 <b className="font-mono">{fmtPx(filled!.price)}</b></div>
+              <div className="text-[17px] sm:text-[19px]"><b>{sideWord} {inst.name}</b> 成交 <b className="font-mono">{filled!.qty}</b> {unit}，成交價 <b className="font-mono">{fmtPx(filled!.price)}</b></div>
               {order && order.status === 'PARTIAL' && <div>還有 {order.quantity - order.filledQty} {unit} 在委託中。</div>}
               <div className="mt-1">部位已放進「我的持倉」。{side === 'short' ? '之後價格下跌你就賺錢；想結束時按「平倉」買回。' : '之後價格上漲你就賺錢；想結束時按「平倉」賣出。'}</div>
             </Tip>
           ) : (
             <Tip tone="amber">
-              <div className="text-[18px] font-black">目前狀態：{status ? STATUS_LABEL[status] : '處理中'}</div>
+              <div className="text-[16px] sm:text-[18px] font-black">目前狀態：{status ? STATUS_LABEL[status] : '處理中'}</div>
               {status === 'QUEUED' && <div>現在休市，下一次開盤（{market?.next}）會自動撮合。成交後這裡和「委託／成交回報」都會通知你。</div>}
               {status === 'WORKING' && <div>正在排隊等成交。可以先關掉這個視窗；成交時畫面上方會跳出「成交回報」。想改價或刪單，請到「委託」清單。</div>}
               {(status === 'CANCELLED' || status === 'REJECTED' || status === 'EXPIRED') && <div>{order?.rejectReason || order?.events[order.events.length - 1]?.text || '這筆委託沒有成交。'}</div>}
             </Tip>
           )}
           {cardInfo && (
-            <button type="button" onClick={() => setShowCard(true)} className="w-full min-h-[60px] rounded-full text-[20px] font-black text-white shadow-lg" style={{ background: INK }}>
+            <button type="button" onClick={() => setShowCard(true)} className="w-full min-h-[60px] rounded-full text-[18px] sm:text-[20px] font-black text-white shadow-lg" style={{ background: INK }}>
               🪪 下載{cardInfo.kind}
             </button>
           )}
           <button type="button" onClick={() => { setStep(0); setMarketId(null); setSymbol(null); setSide(null); setQtyText('1'); setPriceMode('now'); setLimitText(''); setOrderId(null); setInstantFill(null); setSubmitError(null); }}
-            className="w-full min-h-[52px] rounded-full text-[17px] font-black border-2 border-slate-300 text-slate-700">再下一筆</button>
+            className="w-full min-h-[52px] rounded-full text-[16px] sm:text-[17px] font-black border-2 border-slate-300 text-slate-700">再下一筆</button>
         </div>
       );
     }
@@ -476,32 +475,46 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
 
   return (
     <>
-      <div className="fixed inset-0 z-[120] flex items-end md:items-center justify-center bg-slate-900/60 backdrop-blur-sm" onClick={onClose}>
+      {minimized ? (
+        <button type="button" onClick={() => setMinimized(false)}
+          className="fixed z-[120] right-3 px-4 min-h-[46px] rounded-full bg-amber-500 text-white text-[15px] font-black shadow-2xl flex items-center gap-1.5 whitespace-nowrap ring-4 ring-amber-200/60"
+          style={{ bottom: 'calc(84px + env(safe-area-inset-bottom))' }} aria-label="展開新手下單引導">
+          🧭 繼續引導 {step + 1}/6
+        </button>
+      ) : (
+      <div className="fixed inset-0 z-[120] flex items-end md:items-center justify-center bg-slate-900/50" onClick={() => setMinimized(true)}>
         <div role="dialog" aria-modal="true" aria-label="新手下單引導" onClick={e => e.stopPropagation()}
-          className="w-full md:w-[720px] h-[94dvh] md:h-auto md:max-h-[92vh] bg-white rounded-t-[28px] md:rounded-[28px] shadow-2xl flex flex-col overflow-hidden">
-          <div className="shrink-0 px-5 pt-4 pb-3 border-b border-slate-100 flex items-start justify-between gap-3">
-            <div className="space-y-2">
-              <div className="text-[20px] font-black text-slate-900">🧭 新手下單引導 <span className="text-[14px] font-bold text-slate-500">· {profile.studentName}</span></div>
-              <StepDots step={step} />
-              <label className="flex items-center gap-2 text-[14px] text-slate-500 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 accent-amber-500" checked={hideAuto}
-                  onChange={e => { setHideAuto(e.target.checked); setGuideHidden(profile.studentName, e.target.checked); }} />
-                登入後不要自動跳出（隨時可從選單「🧭 新手下單引導」打開）
-              </label>
+          className="w-full md:w-[720px] max-h-[92dvh] md:max-h-[92vh] bg-white rounded-t-[24px] md:rounded-[28px] shadow-2xl flex flex-col overflow-hidden">
+          <div className="shrink-0 px-4 sm:px-5 pt-3 pb-2.5 border-b border-slate-100 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0 truncate text-[16px] sm:text-[19px] font-black text-slate-900">
+                🧭 下單引導 <span className="text-[13px] sm:text-[14px] font-bold text-amber-700">第 {step + 1}/6 步・{STEP_NAMES[step]}</span>
+              </div>
+              <button type="button" onClick={() => setMinimized(true)} className="shrink-0 whitespace-nowrap min-h-[40px] px-3 rounded-full border-2 border-slate-200 text-[14px] font-black text-slate-600" aria-label="收起引導">收起 ▾</button>
+              <button type="button" onClick={onClose} className="shrink-0 w-10 h-10 rounded-full border-2 border-slate-200 text-[18px] font-black text-slate-500 flex items-center justify-center" aria-label="關閉引導">✕</button>
             </div>
-            <button type="button" onClick={onClose} className="shrink-0 whitespace-nowrap min-h-[44px] px-4 rounded-full border-2 border-slate-200 text-[16px] font-black text-slate-600" aria-label="關閉引導">關閉</button>
+            <StepBar step={step} />
           </div>
-          <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">{body}</div>
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-5 py-3 sm:py-4">
+            {body}
+            {(step === 0 || step === 5) && (
+              <label className="mt-4 flex items-center gap-2 text-[13px] text-slate-500 cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 accent-amber-500 shrink-0" checked={hideAuto}
+                  onChange={e => { setHideAuto(e.target.checked); setGuideHidden(profile.studentName, e.target.checked); }} />
+                下次登入不要自動跳出（選單「🧭 新手下單引導」可再打開）
+              </label>
+            )}
+          </div>
           {step < 5 && (
-            <div className="shrink-0 border-t border-slate-100 px-5 py-3 flex gap-2" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+            <div className="shrink-0 border-t border-slate-100 px-4 sm:px-5 py-2.5 flex gap-2" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
               {step > 0 && (
-                <button type="button" onClick={() => setStep(s => s - 1)} className="min-h-[56px] px-6 rounded-full border-2 border-slate-300 text-[18px] font-black text-slate-700">上一步</button>
+                <button type="button" onClick={() => setStep(s => s - 1)} className="min-h-[50px] sm:min-h-[56px] px-6 rounded-full border-2 border-slate-300 text-[18px] font-black text-slate-700">上一步</button>
               )}
               {step < 4 ? (
-                <button type="button" disabled={!canNext} onClick={() => setStep(s => s + 1)} className="flex-1 min-h-[56px] rounded-full bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 disabled:text-slate-400 text-[19px] font-black text-white">下一步</button>
+                <button type="button" disabled={!canNext} onClick={() => setStep(s => s + 1)} className="flex-1 min-h-[50px] sm:min-h-[56px] rounded-full bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 disabled:text-slate-400 text-[19px] font-black text-white">下一步</button>
               ) : (
                 <button type="button" disabled={busy} onClick={submit}
-                  className={`flex-1 min-h-[56px] rounded-full text-[19px] font-black text-white disabled:opacity-60 ${side === 'short' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
+                  className={`flex-1 min-h-[50px] sm:min-h-[56px] rounded-full text-[19px] font-black text-white disabled:opacity-60 ${side === 'short' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
                   {busy ? '送出中…' : `確認送出：${sideWord} ${qty} ${unit}`}
                 </button>
               )}
@@ -509,6 +522,7 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
           )}
         </div>
       </div>
+      )}
       {card}
     </>
   );

@@ -98,3 +98,9 @@ html[data-ui="desktop"] body {
     row-gap: 0.5rem;
   }
 }
+
+/* 手機瀏覽器不要自作主張放大字體（版面以我們設定的字級為準） */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}

@@ -599,12 +599,7 @@ export default function App() {
       return;
     }
 
-    if (isAutonomous) {
-      setTimeout(() => {
-        setTradingModalStep('select_category');
-        setIsTradingModalOpen(true);
-      }, 350);
-    }
+    // 登入後改由「新手下單引導」帶領，不再自動打開下單終端機（手機上會疊在引導下面）
   };
 
   // Reset all positions, trade history & cash to 50M with password confirmation

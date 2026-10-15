@@ -9,6 +9,7 @@ import {
   ImmutableTransaction,
 } from './types/market';
 import { DEFAULT_INSTRUMENTS, INITIAL_STUDENT_PROFILES } from './data/defaultMarketData';
+import { RAW_COMMODITIES } from './data/commoditiesData';
 import { setTwHolidays } from './utils/twHolidays';
 import { PortfolioOverview } from './components/PortfolioOverview';
 import { TradingModal } from './components/TradingModal';
@@ -159,6 +160,14 @@ function placeholderInstrument(inst: InstrumentSpec): InstrumentSpec {
   };
 }
 
+// 原物料、加密貨幣也放進商品清單，才會每 3 秒收到即時報價（收到前一律不可交易）
+const ALL_BASE_INSTRUMENTS: InstrumentSpec[] = [
+  ...DEFAULT_INSTRUMENTS,
+  ...RAW_COMMODITIES.filter(c => !DEFAULT_INSTRUMENTS.some(d => d.symbol === c.symbol)).map(
+    ({ sector, sectorName, emoji, contractUnit, currency, cmeExchange, englishName, aliases, ...inst }) => inst as InstrumentSpec
+  ),
+];
+
 // 舊版內建的示範學員名單（非真人資料），一律不顯示
 const BLANK_PROFILE: StudentProfile = { id: 'guest', studentName: '訪客', teamName: '', initialCapital: 50000000, availableCash: 50000000, marginDeposits: 0, positions: [], tradeHistory: [], benchmarkDate: '', createdAt: 0, updatedAt: 0 } as any;
 const DEMO_NAMES = new Set(INITIAL_STUDENT_PROFILES.map(p => p.studentName.trim()));
@@ -202,7 +211,7 @@ export default function App() {
   // 使用預設密碼 money888 或版主重設的臨時密碼登入時，必須先改密碼
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   // 內建清單的價格只是佔位，收到 行情前一律標示為不可交易，並移除編造的五檔掛單
-  const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => DEFAULT_INSTRUMENTS.map(placeholderInstrument));
+  const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => ALL_BASE_INSTRUMENTS.map(placeholderInstrument));
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
   const [isProAnalysisOpen, setIsProAnalysisOpen] = useState(false);
   const [proMode, setProMode] = useState<'stock' | 'scan'>('stock');

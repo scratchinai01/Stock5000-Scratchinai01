@@ -17,7 +17,8 @@ import {
   formatTradingDay,
 } from './src/utils/twHolidays';
 import { getHistory, historyCacheStats } from './server-lib/history';
-import { registerOrderRoutes } from './server-lib/orders';
+import { registerOrderRoutes, liveFuturesRow } from './server-lib/orders';
+import { getGlobalQuotes, toLiveQuote, isGlobalSymbol, globalQuoteErrors, CRYPTO_BINANCE } from './server-lib/globalQuotes';
 import * as players from './server-lib/players';
 import { recordAccess, adminLogin, isAdmin, adminConfigured, queryLogs, getBlocklist, setBlocked, isBlocked, clientIp } from './server-lib/access';
 import { getPatternLatest, getPatternBacktest, getRiskLatest, getRiskBacktest, getLearnDoc } from './server-lib/patternStore';
@@ -1219,7 +1220,9 @@ app.get('/api/market/live-quotes', async (req, res) => {
 
     // 盤中：即時快照覆蓋
     const snap = kind === 'tw_stock' ? stockSnaps.get(sym) : undefined;
-    const txSnap = sym === 'TX' ? Array.from(futSnaps.values()).find((f: any) => f.futures_id?.startsWith('TX')) : undefined;
+    let txSnap = sym === 'TX' ? Array.from(futSnaps.values()).find((f: any) => f.futures_id?.startsWith('TX')) : undefined;
+    // 小台、微台：用撮合同一份期貨快照（日盤、夜盤都會跳動）
+    if ((sym === 'MTX' || sym === 'TMF') && session.isFuturesOpen) txSnap = (await liveFuturesRow(sym, q.contractMonth || null).catch(() => null)) || undefined;
     const live = snap && snap.close > 0 ? snap : txSnap && txSnap.close > 0 ? txSnap : null;
     if (live) {
       currentPrice = live.close;
@@ -1302,9 +1305,18 @@ app.get('/api/market/live-quotes', async (req, res) => {
   if (liveData['00981A'] && !liveData['00981']) liveData['00981'] = { ...liveData['00981A'], symbol: '00981' };
   if (liveData['00918'] && !liveData['00918A']) liveData['00918A'] = { ...liveData['00918'], symbol: '00918A' };
 
+  // 國際原物料、加密貨幣：一律用即時來源，舊的本地快取不再回傳
+  const globalSyms = Array.from(new Set([...requested, ...Object.keys(liveData)])).filter(isGlobalSymbol);
+  for (const s of Object.keys(liveData)) if (isGlobalSymbol(s)) delete liveData[s];
+  const gq = await getGlobalQuotes(globalSyms, 5000);
+  for (const [s, gqv] of gq) {
+    const cat = CRYPTO_BINANCE[s] || s === 'USDT' || s === 'TWDT' ? 'crypto' : 'commodities';
+    liveData[s] = { ...toLiveQuote(gqv, authenticQuotesCache[s]?.name || s, cat, session.twTimeStr), date: session.twDateStr, isMarketOpen: session.isOpen, marketStatus: session.statusText, marketPhase: session.marketPhase };
+  }
+
   const unavailable = requested
     .filter(s => !liveData[s])
-    .map(s => ({ symbol: s, reason: refreshFailures.get(s) || '無此商品資料' }));
+    .map(s => ({ symbol: s, reason: globalQuoteErrors.get(s) || refreshFailures.get(s) || '無此商品資料' }));
 
   return res.json({
     success: true,

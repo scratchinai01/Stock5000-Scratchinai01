@@ -496,6 +496,20 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
         : `全球高波動主要加密資產，Binance 官方公開 WebSocket 24/7 即時撮合，平倉收益即時結算持續性累計入已平倉已實現損益。`,
       klineHistory: [],
     };
+    if (isTwStable) {
+      targetInst.description = '教學示範商品：模擬新台幣穩定幣，依定義固定 1 TWDT = NT$1，沒有市場報價。';
+    }
+    // 以伺服器的即時報價成交（Binance）；伺服器還沒給報價前不可交易
+    const live = allInstruments?.find(i => i.symbol === sym);
+    if (live) {
+      Object.assign(targetInst, {
+        price: live.price, prevClose: live.prevClose, change: live.change, changePercent: live.changePercent,
+        fiveBids: live.fiveBids, fiveAsks: live.fiveAsks, fetchTime: live.fetchTime, dataSource: live.dataSource, isMock: live.isMock,
+      });
+    } else {
+      targetInst.isMock = true;
+      targetInst.dataSource = '尚未取得即時報價（不可交易）';
+    }
 
     if (onSelectInstrumentToTrade) {
       onSelectInstrumentToTrade(targetInst, action);

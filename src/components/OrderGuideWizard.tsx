@@ -194,6 +194,15 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
     (step === 0 && market) || (step === 1 && inst) || (step === 2 && action) ||
     (step === 3 && qty > 0 && limitPrice > 0 && !priceError && cost && cost.totalCostOrMargin <= freeCash);
 
+  // 卡片：成交了就是「成交卡片」；預約單、委託中就是「委託卡片」
+  const pendingOrder = !filled && order && (order.status === 'QUEUED' || order.status === 'WORKING') ? order : null;
+  const cardInfo = inst && action ? (filled
+    ? { kind: '成交卡片', at: filled.at, qty: filled.qty, price: filled.price, priceLabel: '成交價', when: '成交', status: null as string | null }
+    : pendingOrder
+    ? { kind: '委託卡片', at: pendingOrder.createdAt, qty: pendingOrder.quantity, price: pendingOrder.limitPrice ?? limitPrice, priceLabel: '委託價', when: '送出委託', status: STATUS_LABEL[pendingOrder.status] }
+    : null) : null;
+  const twTime = (ms: number) => new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ms));
+
   // ───────── 各步驟內容 ─────────
   const body = (() => {
     if (step === 0)
@@ -395,9 +404,9 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
               {(status === 'CANCELLED' || status === 'REJECTED' || status === 'EXPIRED') && <div>{order?.rejectReason || order?.events[order.events.length - 1]?.text || '這筆委託沒有成交。'}</div>}
             </Tip>
           )}
-          {done && (
+          {cardInfo && (
             <button type="button" onClick={() => setShowCard(true)} className="w-full min-h-[60px] rounded-full text-[20px] font-black text-white shadow-lg" style={{ background: INK }}>
-              🪪 下載成交卡片
+              🪪 下載{cardInfo.kind}
             </button>
           )}
           <button type="button" onClick={() => { setStep(0); setMarketId(null); setSymbol(null); setSide(null); setQtyText('1'); setPriceMode('now'); setLimitText(''); setOrderId(null); setInstantFill(null); setSubmitError(null); }}
@@ -408,34 +417,48 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
     return null;
   })();
 
-  const card = showCard && inst && filled && (
-    <StudyCardModal title="成交卡片" filename={`成交卡片_${inst.symbol}_${new Date(filled.at).toISOString().slice(0, 10)}.png`} onClose={() => setShowCard(false)}>
+  const card = showCard && inst && action && cardInfo && (
+    <StudyCardModal title={cardInfo.kind} filename={`${cardInfo.kind}_${inst.symbol}_${new Date(cardInfo.at).toISOString().slice(0, 10)}.png`} onClose={() => setShowCard(false)}>
       <div className="px-6 pt-6 pb-3 space-y-1">
-        <div className="text-[15px] font-bold text-slate-500">5000萬股市大富翁 · 成交卡片</div>
+        <div className="text-[15px] font-bold text-slate-500">5000萬股市大富翁 · {cardInfo.kind}</div>
         <div className="text-[30px] font-black leading-tight" style={{ color: INK }}>
           {profile.studentName} {sideWord} <span style={{ color: side === 'short' ? '#15803d' : '#dc2626' }}>{inst.name}</span>
         </div>
-        <div className="text-[16px] text-slate-600 font-mono">{inst.symbol} · {new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(filled.at))} 成交</div>
+        <div className="text-[16px] text-slate-600 font-mono">{inst.symbol} · {twTime(cardInfo.at)} {cardInfo.when}</div>
+        {cardInfo.status && (
+          <div className="inline-block mt-1 px-3 py-1 rounded-full text-[16px] font-black" style={{ background: '#fef3c7', color: '#92400e' }}>
+            ⏳ {cardInfo.status}{pendingOrder?.status === 'QUEUED' && market ? `：下一盤 ${market.next}` : '：等待成交'}
+          </div>
+        )}
       </div>
       <div className="px-6 pb-4 space-y-4">
-        <CardSection title="成交內容">
+        <CardSection title={cardInfo.status ? '委託內容' : '成交內容'}>
           <div className="grid grid-cols-2 gap-2">
             <CardStat label="方向" value={`${sideWord}（${verb}）`} color={side === 'short' ? '#15803d' : '#dc2626'} />
-            <CardStat label="數量" value={`${filled.qty} ${unit}`} />
-            <CardStat label="成交價" value={fmtPx(filled.price)} />
-            <CardStat label={side === 'short' || inst.category === 'futures' || inst.category === 'commodities' ? '保證金' : '成交金額'}
-              value={`NT$ ${fmt(computeOrderCost(inst, action!, filled.price, filled.qty).totalCostOrMargin)}`} />
+            <CardStat label="數量" value={`${cardInfo.qty} ${unit}`} />
+            <CardStat label={cardInfo.priceLabel} value={`${fmtPx(cardInfo.price)}${inst.category === 'us_stocks' ? ' 美元' : ''}`} />
+            <CardStat label={(side === 'short' || inst.category === 'futures' || inst.category === 'commodities' ? '保證金' : '金額') + (cardInfo.status ? '（預估）' : '')}
+              value={`NT$ ${fmt(computeOrderCost(inst, action, cardInfo.price, cardInfo.qty).totalCostOrMargin)}`} />
           </div>
         </CardSection>
+        {cardInfo.status && (
+          <CardSection title="什麼時候會成交？">
+            <div className="text-[17px] leading-relaxed text-slate-700">
+              {isBuy ? `市場上有人願意用 ${fmtPx(cardInfo.price)} 或更便宜的價格賣出時就會成交。` : `市場上有人願意用 ${fmtPx(cardInfo.price)} 或更高的價格買進時就會成交。`}
+              {pendingOrder?.status === 'QUEUED' ? '預約單會在開盤時用開盤價先試撮合，開盤價比委託價好就直接成交。' : ''}
+              當盤沒有成交，收盤後委託自動失效。
+            </div>
+          </CardSection>
+        )}
         <CardSection title="我的判斷">
           <div className="text-[18px] leading-relaxed" style={{ color: INK }}>
             {(() => {
-              const per = ['stocks', 'etfs', 'bonds', 'futures', 'us_stocks'].includes(inst.category) ? contractMultiplier(inst) * filled.qty : null;
+              const per = ['stocks', 'etfs', 'bonds', 'futures', 'us_stocks'].includes(inst.category) ? contractMultiplier(inst) * cardInfo.qty : null;
               const u = inst.category === 'futures' ? '點' : inst.category === 'us_stocks' ? '美元' : '元';
               const tail = per ? `價格每${side === 'short' ? '跌' : '漲'} 1 ${u}，這筆部位約賺 NT$ ${fmt(per)}；` : '';
               return side === 'short'
-                ? `我認為 ${inst.name} 會下跌，所以先賣出。${tail}如果上漲就會虧損。`
-                : `我認為 ${inst.name} 會上漲，所以先買進。${tail}如果下跌就會虧損。`;
+                ? `我認為 ${inst.name} 會下跌，所以${cardInfo.status ? '掛單' : '先'}賣出。${tail}如果上漲就會虧損。`
+                : `我認為 ${inst.name} 會上漲，所以${cardInfo.status ? '掛單' : '先'}買進。${tail}如果下跌就會虧損。`;
             })()}
           </div>
         </CardSection>
@@ -443,7 +466,7 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
           <div className="text-[17px] leading-relaxed text-slate-700">先想好「錯了要在哪裡停損」，再想要賺多少。這是模擬交易，用來練習判斷，不是投資建議。</div>
         </CardSection>
       </div>
-      <CardFooter note={`成交價來自本系統委託撮合（${book ? '台灣市場委託簿' : '最新報價即時成交'}）。`} />
+      <CardFooter note={cardInfo.status ? '委託由本系統依台灣市場委託簿規則撮合；成交後可再下載成交卡片。' : `成交價來自本系統委託撮合（${book ? '台灣市場委託簿' : '最新報價即時成交'}）。`} />
     </StudyCardModal>
   );
 

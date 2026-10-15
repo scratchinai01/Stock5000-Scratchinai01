@@ -238,6 +238,23 @@ async function quoteFor(o: Pick<SimOrder, 'feedKey' | 'category' | 'symbol'>, fo
   return r ? toQuote(r) : null;
 }
 
+/** 期貨即時快照（報價看板用，與撮合共用同一份快取）；找不到回傳 null */
+export async function liveFuturesRow(symbol: string, contractMonth: string | null): Promise<any | null> {
+  const spec = resolveFeedKey('futures', symbol, contractMonth);
+  if (!spec) return null;
+  const map = await getFeed(spec.kind, spec.dataId);
+  if (!map) return null;
+  const exact = map.get(spec.key);
+  if (exact) return exact;
+  // 沒有合約月份時，取成交量最大的近月合約（排除價差單 /）
+  let best: any = null;
+  for (const [k, r] of map) {
+    if (!k.startsWith(spec.dataId) || k.includes('/')) continue;
+    if (!best || (Number(r.total_volume) || 0) > (Number(best.total_volume) || 0)) best = r;
+  }
+  return best;
+}
+
 // ───────────────────────── 委託生命週期 ─────────────────────────
 let idCounter = 0;
 const newId = (p: string) => `${p}${Date.now().toString(36)}${(idCounter++ % 1296).toString(36).padStart(2, '0')}${Math.random().toString(36).slice(2, 5)}`;

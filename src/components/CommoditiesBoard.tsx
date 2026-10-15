@@ -63,9 +63,18 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
           open: live.open ?? c.open,
           high: live.high ?? c.high,
           low: live.low ?? c.low,
+          isMock: live.isMock,
+          fetchTime: live.fetchTime,
+          dataSource: live.dataSource,
+          marketSession: live.marketSession,
+          sessionName: live.sessionName,
+          nextSessionTime: live.nextSessionTime,
+          fiveBids: live.fiveBids,
+          fiveAsks: live.fiveAsks,
         };
       }
-      return c;
+      // 沒有即時報價：只顯示，不可交易
+      return { ...c, isMock: true, dataSource: '尚未取得即時報價（不可交易）' };
     });
   }, [allInstruments]);
 
@@ -374,10 +383,20 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
 
                               {/* Col 3: Status Badge (🟢 交易中) */}
                               <div className="flex items-center gap-3">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                  🟢 交易中
-                                </span>
+                                {item.isMock ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-500/20 text-slate-300 border border-slate-400/30 shrink-0" title={item.dataSource}>
+                                    ⚪ 無即時報價
+                                  </span>
+                                ) : item.marketSession === 'CLOSED' ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-500/20 text-slate-300 border border-slate-400/30 shrink-0" title={item.fetchTime}>
+                                    ⚪ 休市
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0" title={item.fetchTime}>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    🟢 交易中
+                                  </span>
+                                )}
 
                                 {/* Col 4: Action Buttons */}
                                 <div className="flex items-center gap-1.5 shrink-0">

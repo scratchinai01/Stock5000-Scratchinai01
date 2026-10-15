@@ -29,7 +29,6 @@ import {
   StockQSector,
 } from '../data/stockqData';
 import { InstrumentSpec, OrderAction } from '../types/market';
-import { RAW_COMMODITIES } from '../data/commoditiesData';
 
 interface StockQMarketBoardProps {
   allInstruments?: InstrumentSpec[];
@@ -153,30 +152,7 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
     );
     if (found) return found;
 
-    // 2. Check if it matches raw commodities
-    const foundComm = RAW_COMMODITIES.find(
-      c => c.symbol === quote.symbol || (quote.tradeSymbol && c.symbol === quote.tradeSymbol)
-    );
-    if (foundComm) return foundComm;
-
-    // 3. Synthetic InstrumentSpec fallback
-    if (quote.tradeable) {
-      return {
-        symbol: quote.tradeSymbol || quote.symbol,
-        name: quote.name,
-        category: quote.category === 'commodities' ? 'commodities' : 'futures',
-        price: quote.price,
-        prevClose: quote.prevClose || quote.price - quote.change,
-        change: quote.change,
-        changePercent: quote.changePercent,
-        volume: 50000,
-        unitLabel: quote.unitLabel,
-        multiplier: quote.category === 'commodities' ? 100 : 1,
-        marginRequirement: quote.category === 'commodities' ? 50000 : 0,
-        description: `StockQ 對齊標的：${quote.name} (${quote.englishName})`,
-        klineHistory: [],
-      };
-    }
+    // 只交易有即時報價的商品；StockQ 表上的其他數字只供參考，不能拿來成交
     return null;
   };
 

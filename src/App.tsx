@@ -21,6 +21,7 @@ import { LockedTradingHallGate } from './components/LockedTradingHallGate';
 import { FinmindVerificationModal } from './components/FinmindVerificationModal';
 import { AdminManagementModal } from './components/AdminManagementModal';
 import { AdminAccessModal } from './components/AdminAccessModal';
+import { OrderGuideWizard, guideHiddenFor } from './components/OrderGuideWizard';
 import { logAccess, logVisitOnce } from './utils/accessLog';
 import { readAdminToken, clearAdminToken, isSuperUserName } from './utils/adminAuth';
 import { mustChangeFor, markMustChange, clearPlayerToken } from './services/playerSession';
@@ -1068,6 +1069,20 @@ export default function App() {
     }
   }, [isAuthenticated, currentProfile?.studentName]);
 
+  // 新手下單引導：登入後（改完密碼後）自動跳出；每個分頁每位學員只自動跳一次
+  const [isOrderGuideOpen, setIsOrderGuideOpen] = useState(false);
+  useEffect(() => {
+    if (!isAuthenticated || !currentProfile || forcePasswordChange || isAccessAdminOpen) return;
+    const key = `order_guide_auto_${currentProfile.id}`;
+    try {
+      if (sessionStorage.getItem(key) === '1') return;
+      sessionStorage.setItem(key, '1');
+    } catch {
+      /* ignore */
+    }
+    if (!guideHiddenFor(currentProfile.studentName)) setIsOrderGuideOpen(true);
+  }, [isAuthenticated, currentProfile?.id, forcePasswordChange]);
+
   // Superuser check: Only authenticated superuser (程瑋翔 / superuser / scratchinai01@gmail.com) can see admin controls and secrets/Groq manager
   const isSuperUser = Boolean(
     isAuthenticated &&
@@ -1330,6 +1345,7 @@ export default function App() {
           onOpenProAnalysis={() => openPro('stock')}
           onOpenScan={() => openPro('scan')}
           onSwitchToDesktop={() => setUiMode('desktop')}
+          onOpenGuide={() => (isAuthenticated ? setIsOrderGuideOpen(true) : setIsPlayerSetupOpen(true))}
           lastUpdateTime={lastFinmindUpdateTime}
           orders={orderBook.orders}
           reservedCash={reservedCash}
@@ -1619,6 +1635,7 @@ export default function App() {
                   >
                     {close => (
                       <>
+                        <MenuItem icon="🧭" label="新手下單引導" desc="一步一步：選市場、做多做空、輸入價格、成交卡片" onClick={() => { close(); needLogin(() => setIsOrderGuideOpen(true))(); }} />
                         <MenuItem icon="🏆" label="全班排行" active={activeView === 'leaderboard'} onClick={() => { close(); needLogin(() => setActiveView('leaderboard'))(); }} />
                         <MenuItem icon="🎯" label="標的衍生商品矩陣" desc="同一標的的期貨、選擇權、權證" onClick={() => { close(); handleOpenDerivatives('2317'); }} />
                         <MenuItem icon="📑" label="PPT 報告工作室" desc="簡報大綱、講稿與列印" active={activeView === 'ppt_studio'} onClick={() => { close(); setActiveView('ppt_studio'); }} />
@@ -2040,6 +2057,19 @@ export default function App() {
           );
         }}
       />
+
+      {currentProfile && (
+        <OrderGuideWizard
+          isOpen={isOrderGuideOpen && isAuthenticated}
+          onClose={() => setIsOrderGuideOpen(false)}
+          instruments={instruments}
+          profile={currentProfile}
+          reservedCash={reservedCash}
+          orders={orderBook.orders}
+          onPlaceOrder={placeOrder}
+          onExecuteTrade={handleExecuteTrade}
+        />
+      )}
 
       {/* Change Password Modal (Default: money888, Custom Self-Modification Supported) */}
       <ChangePasswordModal

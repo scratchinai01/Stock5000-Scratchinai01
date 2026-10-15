@@ -41,6 +41,7 @@ interface Props {
   onOpenProAnalysis: () => void;
   onOpenScan?: () => void;
   onSwitchToDesktop: () => void;
+  onOpenGuide?: () => void;
   lastUpdateTime?: string;
   orders: ClientOrder[];
   reservedCash: number;
@@ -211,6 +212,9 @@ function Watchlist(p: Props & { watch: string[]; onOpen: (i: InstrumentSpec) => 
           <div className="text-[22px] font-black tracking-wide">自選</div>
           <div className="flex gap-1">
             <IconButton label="搜尋商品" onClick={() => setSearching(s => !s)}>{Icon.search}</IconButton>
+            {p.onOpenGuide && (
+              <button type="button" onClick={p.onOpenGuide} className="min-h-[40px] px-3 rounded-full text-[14px] font-black" style={{ background: C.accent, color: '#111' }}>🧭 下單引導</button>
+            )}
             <IconButton label="切換電腦版" onClick={p.onSwitchToDesktop}>{Icon.desktop}</IconButton>
           </div>
         </div>

@@ -51,7 +51,7 @@ const MARKETS: MarketGroup[] = [
   { id: 'tw', icon: '🇹🇼', name: '台股（股票、ETF）', hours: '週一～五 09:00～13:30', clockSymbol: '2330', clockCategory: 'stocks', categories: ['stocks', 'etfs', 'bonds'],
     popular: ['2330', '0050', '2317', '2454', '0056', '00878', '2412', '2881', '2882', '2603'], hint: '最適合新手：一張＝1000 股' },
   { id: 'fut', icon: '⚡', name: '台指期貨', hours: '日盤 08:45～13:45／夜盤 15:00～隔天 05:00', clockSymbol: 'TX', clockCategory: 'futures', categories: ['futures'],
-    popular: ['TMF', 'MTX', 'TX'], hint: '有槓桿，做多做空都很方便；新手先用微台 TMF' },
+    popular: ['TMF', 'TX'], hint: '有槓桿，做多做空都很方便；新手先用微台 TMF' },
   { id: 'us', icon: '🇺🇸', name: '美股', hours: '台灣時間 晚上 21:30～隔天 04:00（夏令）', clockSymbol: 'NVDA', clockCategory: 'us_stocks', categories: ['us_stocks'],
     popular: ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'GOOGL'], hint: '1 股就能買，以最新報價立即成交' },
   { id: 'cmd', icon: '🛢️', name: '原物料期貨', hours: '大多為台灣時間 早上 06:00～隔天 05:00', clockSymbol: 'CL', clockCategory: 'commodities', categories: ['commodities'],
@@ -150,8 +150,10 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
   const lim = inst ? priceLimits(inst.category, inst.symbol, inst.prevClose || inst.price) : null;
   const cost = inst && action && qty > 0 && limitPrice > 0 ? computeOrderCost(inst, action, limitPrice, qty) : null;
   const freeCash = profile.availableCash - reservedCash;
+  // 開盤中卻沒有盤中即時報價（例如小台）：只能等收盤價撮合
+  const eodOnly = Boolean(inst && book && marketOpen && !String(inst.fetchTime || '').includes('即時'));
   const willFillNow =
-    !book ? true : counterPrice == null ? null : isBuy ? limitPrice >= counterPrice : limitPrice <= counterPrice;
+    !book ? true : eodOnly || counterPrice == null ? null : isBuy ? limitPrice >= counterPrice : limitPrice <= counterPrice;
 
   const order = orderId ? orders.find(o => o.id === orderId) || null : null;
   const filled = instantFill ?? (order && order.filledQty > 0 ? { price: order.avgPrice, qty: order.filledQty, at: order.fills[order.fills.length - 1]?.at ?? order.updatedAt } : null);
@@ -362,6 +364,8 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
         ? `會以最新報價 ${fmtPx(inst.price)} 立即成交。`
         : !marketOpen
         ? '現在休市，會變成「預約單」，下一次開盤時用開盤價撮合（開盤價比你的價格好才成交）。'
+        : eodOnly
+        ? '這檔商品沒有盤中即時報價，會等今天這一盤收盤後，用收盤價撮合（收盤價比你的價格好才成交）。想馬上成交，請改選有即時報價的商品，例如微台 TMF。'
         : willFillNow === true
         ? '你的價格已經碰到對手價，送出後應該會馬上成交。'
         : willFillNow === false

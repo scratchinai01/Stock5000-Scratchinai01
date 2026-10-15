@@ -433,7 +433,14 @@ export default function App() {
           const local = prev.find(p => p.studentName.trim().toLowerCase() === key);
           // 自己的資料以較新的那份為準（剛下單、尚未同步時以本機為準）
           const mine = local && local.id === currentProfileId;
-          const pick = mine && (local.updatedAt || 0) > (rp.updatedAt || 0) ? local : { ...local, ...rp };
+          const pick: any = mine && (local.updatedAt || 0) > (rp.updatedAt || 0) ? local : { ...local, ...rp };
+          // 伺服器存的是下單當時的價格；同一筆持倉沿用本機每 3 秒更新的即時價，避免損益每 20 秒跳回去
+          if (local?.positions?.length && Array.isArray(pick.positions) && pick !== local) {
+            pick.positions = pick.positions.map((ps: any) => {
+              const lp = local.positions.find(x => x.id === ps.id);
+              return lp ? { ...ps, currentPrice: lp.currentPrice, unrealizedPnL: lp.unrealizedPnL, unrealizedPnLPercent: lp.unrealizedPnLPercent, lastTradeTime: lp.lastTradeTime, dataReceivedTime: lp.dataReceivedTime, marketSession: lp.marketSession } : ps;
+            });
+          }
           mapByName.set(key, { ...pick, id: local?.id || rp.id || `player-${encodeURIComponent(rp.studentName.trim())}` } as StudentProfile);
         });
         const me = prev.find(p => p.id === currentProfileId);

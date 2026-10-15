@@ -1220,9 +1220,9 @@ app.get('/api/market/live-quotes', async (req, res) => {
 
     // 盤中：即時快照覆蓋
     const snap = kind === 'tw_stock' ? stockSnaps.get(sym) : undefined;
-    let txSnap = sym === 'TX' ? Array.from(futSnaps.values()).find((f: any) => f.futures_id?.startsWith('TX')) : undefined;
-    // 小台、微台：用撮合同一份期貨快照（日盤、夜盤都會跳動）
-    if ((sym === 'MTX' || sym === 'TMF') && session.isFuturesOpen) txSnap = (await liveFuturesRow(sym, q.contractMonth || null).catch(() => null)) || undefined;
+    // 台指、小台、微台：用撮合同一份期貨快照（近月合約；日盤、夜盤都會跳動）
+    let txSnap: any = undefined;
+    if ((sym === 'TX' || sym === 'MTX' || sym === 'TMF') && session.isFuturesOpen) txSnap = (await liveFuturesRow(sym, q.contractMonth || null).catch(() => null)) || undefined;
     const live = snap && snap.close > 0 ? snap : txSnap && txSnap.close > 0 ? txSnap : null;
     if (live) {
       currentPrice = live.close;
@@ -1339,6 +1339,19 @@ app.get('/api/market/live-quotes', async (req, res) => {
     unavailable,
     data: liveData,
   });
+});
+
+// 期貨快照代號檢查（只回傳代號與成交價，供檢核用）
+app.get('/api/market/futures-feed-check', async (req, res) => {
+  const id = String(req.query.id || 'TXF').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  if (!currentFinmindToken) return res.json({ id, error: 'no token' });
+  try {
+    const r = await fetch(`https://api.finmindtrade.com/api/v4/taiwan_futures_snapshot?data_id=${id}`, { headers: { Authorization: `Bearer ${currentFinmindToken}` } });
+    const j: any = await r.json();
+    res.json({ id, status: r.status, msg: j?.msg, rows: (j?.data || []).slice(0, 40).map((x: any) => `${x.futures_id} ${x.close} ${x.date} vol ${x.total_volume}`) });
+  } catch (e: any) {
+    res.json({ id, error: e.message });
+  }
 });
 
 // 0.12 API: Precision Trading Clock Diagnostics per Instrument (Direct Real-Time Audit)

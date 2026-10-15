@@ -14,6 +14,7 @@ export const COMMODITY_YAHOO: Record<string, string> = {
   KC: 'KC=F', SB: 'SB=F', CC: 'CC=F', OJ: 'OJ=F', CT: 'CT=F',
   LE: 'LE=F', HE: 'HE=F', GF: 'GF=F',
 };
+const CENTS_TO_USD = new Set(['ZS', 'ZC', 'ZW']);
 export const COMMODITY_NO_SOURCE = new Set(['NI', 'ZN']);
 
 // 系統代號 → Binance 交易對（USDT 以 USDC/USDT 交易對換算成美元）
@@ -67,13 +68,16 @@ async function fetchYahoo(sym: string): Promise<GlobalQuote> {
   // 前一交易日收盤：取日K倒數第二根，沒有再用 meta
   const closes: number[] = (r?.indicators?.quote?.[0]?.close || []).map(Number).filter((x: number) => Number.isFinite(x) && x > 0);
   const prevClose = (closes.length >= 2 ? closes[closes.length - 2] : null) ?? num(m?.previousClose) ?? num(m?.chartPreviousClose) ?? price;
+  // 黃豆、玉米、小麥：Yahoo 以「美分／蒲式耳」報價，系統以美元計
+  const k = CENTS_TO_USD.has(sym) ? 0.01 : 1;
+  const sc = (x: number | null) => (x == null ? null : Number((x * k).toFixed(4)));
   return {
     symbol: sym,
-    price,
-    prevClose,
+    price: sc(price)!,
+    prevClose: sc(prevClose)!,
     open: null,
-    high: num(m?.regularMarketDayHigh),
-    low: num(m?.regularMarketDayLow),
+    high: sc(num(m?.regularMarketDayHigh)),
+    low: sc(num(m?.regularMarketDayLow)),
     volume: Number(m?.regularMarketVolume) || 0,
     bid: null,
     ask: null,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AI_ENABLED } from '../utils/aiFeatures';
 import {
   ExternalLink,
@@ -82,7 +82,7 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rawText: groqRawText,
-          currentQuotes: STOCKQ_DATA.slice(0, 20),
+          currentQuotes: mergedData.filter(q => !q.noLive).slice(0, 20),
         }),
       });
       const data = await res.json();
@@ -102,9 +102,50 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
     }
   };
 
+  const fmtQPrice = (q: { price: number; noLive?: boolean }) =>
+    q.noLive ? '—' : q.price >= 1000 ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : q.price >= 10 ? q.price.toFixed(2) : q.price.toFixed(4);
+
+  // 即時行情：伺服器每 2 分鐘向 Yahoo Finance 更新；抓不到的項目不顯示數字
+  const [live, setLive] = useState<Record<string, any>>({});
+  const [liveAt, setLiveAt] = useState<number | null>(null);
+  useEffect(() => {
+    let stop = false;
+    const load = () =>
+      fetch('/api/market/stockq')
+        .then(r => r.json())
+        .then(j => {
+          if (!stop && j?.success) {
+            setLive(j.data || {});
+            setLiveAt(j.updatedAt || Date.now());
+          }
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 60_000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, []);
+  const mergedData = useMemo(
+    () =>
+      STOCKQ_DATA.map(q => {
+        const inst = allInstruments.find(i => !i.isMock && (i.symbol === q.symbol || (q.tradeSymbol && i.symbol === q.tradeSymbol)));
+        const l = live[q.symbol];
+        if (l && !l.stale) {
+          return { ...q, price: l.price, change: l.change, changePercent: l.changePercent, prevClose: l.prevClose, high: l.high ?? undefined, low: l.low ?? undefined, taipeiTime: String(l.time || '').slice(5, 16), perfWeek: undefined, perfMonth: undefined, perfYtd: undefined, noLive: false };
+        }
+        if (inst && inst.category !== 'stocks') {
+          return { ...q, price: inst.price, change: inst.change, changePercent: inst.changePercent, taipeiTime: inst.lastTradeTime || '', perfWeek: undefined, perfMonth: undefined, perfYtd: undefined, noLive: false };
+        }
+        return { ...q, change: 0, changePercent: 0, taipeiTime: '無即時報價', perfWeek: undefined, perfMonth: undefined, perfYtd: undefined, tradeable: false, noLive: true };
+      }),
+    [live, allInstruments]
+  );
+
   // Filter quotes based on category, sector and search
   const filteredQuotes = useMemo(() => {
-    return STOCKQ_DATA.filter(item => {
+    return mergedData.filter(item => {
       // Category filter
       if (activeCategory !== 'all' && item.category !== activeCategory) {
         return false;
@@ -125,7 +166,7 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
       }
       return true;
     });
-  }, [activeCategory, activeSector, searchQuery]);
+  }, [activeCategory, activeSector, searchQuery, mergedData]);
 
   // Group quotes by sector
   const groupedQuotes = useMemo(() => {
@@ -282,10 +323,10 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
             type="button"
             onClick={handleRefresh}
             className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 border border-white/10 transition cursor-pointer flex items-center gap-1 text-xs"
-            title={`台北時間更新 (${lastRefreshedTime})`}
+            title={`行情更新 (${liveAt ? new Date(liveAt).toLocaleTimeString('zh-TW', { hour12: false }) : '載入中'}) · 來源 Yahoo Finance`}
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span className="font-mono text-[10px] hidden sm:inline">{lastRefreshedTime}</span>
+            <span className="font-mono text-[10px] hidden sm:inline">{liveAt ? new Date(liveAt).toLocaleTimeString('zh-TW', { hour12: false }) : lastRefreshedTime}</span>
           </button>
 
           {/* Collapse Toggle */}
@@ -446,11 +487,7 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
 
                               {/* 2. Price / Index */}
                               <td className="py-2.5 px-3 text-right font-black text-white text-xs sm:text-sm">
-                                {quote.price >= 1000
-                                  ? quote.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                  : quote.price >= 10
-                                  ? quote.price.toFixed(2)
-                                  : quote.price.toFixed(4)}
+                                {fmtQPrice(quote)}
                               </td>
 
                               {/* 3. Change */}
@@ -460,11 +497,7 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
                                 }`}
                               >
                                 {isUp ? '+' : ''}
-                                {quote.change >= 100
-                                  ? quote.change.toFixed(2)
-                                  : quote.change >= 10
-                                  ? quote.change.toFixed(2)
-                                  : quote.change.toFixed(4)}
+                                {quote.noLive ? '—' : Math.abs(quote.change) >= 10 ? quote.change.toFixed(2) : quote.change.toFixed(4)}
                               </td>
 
                               {/* 4. Change Percent */}
@@ -481,7 +514,7 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
                                   ) : null}
                                   <span>
                                     {isUp ? '+' : ''}
-                                    {quote.changePercent.toFixed(2)}%
+                                    {quote.noLive ? '' : `${quote.changePercent.toFixed(2)}%`}
                                   </span>
                                 </div>
                               </td>
@@ -620,11 +653,7 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
                         <div>
                           <span className="text-[10px] text-slate-400 font-sans block">即時價位</span>
                           <span className="font-mono font-black text-lg text-white">
-                            {quote.price >= 1000
-                              ? quote.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                              : quote.price >= 10
-                              ? quote.price.toFixed(2)
-                              : quote.price.toFixed(4)}
+                            {fmtQPrice(quote)}
                           </span>
                         </div>
 
@@ -634,9 +663,7 @@ export const StockQMarketBoard: React.FC<StockQMarketBoardProps> = ({
                               isUp ? getUpColorClass() : isDown ? getDownColorClass() : 'text-slate-400'
                             }`}
                           >
-                            {isUp ? '+' : ''}
-                            {quote.change.toFixed(2)} ({isUp ? '+' : ''}
-                            {quote.changePercent.toFixed(2)}%)
+                            {quote.noLive ? '無即時報價' : `${isUp ? '+' : ''}${quote.change.toFixed(2)} (${isUp ? '+' : ''}${quote.changePercent.toFixed(2)}%)`}
                           </span>
                           <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">
                             {quote.unitLabel}

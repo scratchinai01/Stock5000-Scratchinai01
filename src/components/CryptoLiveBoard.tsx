@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useFx } from '../hooks/useFx';
 import {
   Zap,
   TrendingUp,
@@ -138,18 +139,18 @@ const SUPPORTED_COINS: CoinMetaConfig[] = [
   // 🇹🇼 TWDT - 台灣監理架構下的穩定幣 (新台幣穩定幣)
   {
     symbol: 'TWDT',
-    name: '新台幣穩定幣 (TWDT · 台灣監理)',
+    name: '新台幣穩定幣 (TWDT · 教學示範)',
     short: 'TWDT',
     icon: '🇹🇼',
     defaultPrice: 1.0000,
     sectorType: 'taiwan_stable',
     targetPeg: '≈ NT$1',
-    marketText: '台灣監理架構穩定幣 (100% 銀行信託)',
-    typeText: '台灣本土合規新台幣穩定資產',
-    roleNote: '台灣金管會 (FSC) 監理架構 · 100% 台灣本土商業銀行法定存款信託隔離 · 零匯差',
-    reserveAudit: '台灣四大會計師事務所定期查核 · 本土合規信託查驗',
-    regulatoryJurisdiction: '中華民國金融監督管理委員會 (FSC) 虛擬資產管理專法與銀行法',
-    fxRiskNote: '🛡️ 100% 零匯率風險！1 TWDT 永遠錨定新台幣 NT$ 1，免除任何台美匯差',
+    marketText: '教學示範商品（模擬新台幣穩定幣）',
+    typeText: '教學示範：新台幣計價穩定幣',
+    roleNote: '本系統模擬的教學商品 · 固定 1 TWDT = NT$1 · 非真實發行、沒有市場報價',
+    reserveAudit: '教學示範：沒有實際儲備，也沒有會計師查核',
+    regulatoryJurisdiction: '教學示範（非真實發行商品）',
+    fxRiskNote: '本系統固定 1 TWDT = NT$1，用來示範「以新台幣計價就沒有匯差」',
   },
   // 輔助生態代幣 (可選觀察)
   {
@@ -186,7 +187,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
   const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'fallback'>('connecting');
   const [selectedCoin, setSelectedCoin] = useState<string>('BTCUSDT');
   const [displayCurrency, setDisplayCurrency] = useState<'USDT' | 'TWD'>('USDT');
-  const [usdToTwdRate] = useState<number>(32.5);
+  const usdToTwdRate = useFx().rate;
   const [lastMessageTimestamp, setLastMessageTimestamp] = useState<number>(Date.now());
   const [tradeTapeSymbol, setTradeTapeSymbol] = useState<'ALL' | 'BTCUSDT' | 'ETHUSDT'>('ALL');
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
@@ -472,7 +473,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
     const targetInst: InstrumentSpec = {
       symbol: sym,
       name: isTwStable
-        ? `${activeTicker.name} (台灣監理 · 100% 銀行信託)`
+        ? `${activeTicker.name} (教學示範 · 固定 NT$1)`
         : isGlobalStable
         ? `${activeTicker.name} (全球加密穩定幣 · 目標 ≈ US$1)`
         : `${activeTicker.name} (24/7 高波動資產)`,
@@ -483,14 +484,14 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
       changePercent: activeTicker.priceChangePercent,
       volume: activeTicker.volume,
       unitLabel: isTwStable
-        ? `${sym} (目標價值 ≈ NT$1 · 100% 銀行信託)`
+        ? `${sym} (教學示範 · 固定 NT$1)`
         : isGlobalStable
         ? `${sym} (目標價值 ≈ US$1 · 全球境外發行)`
         : `枚 (1 ${sym} · 24/7)`,
       multiplier: 1,
       marginRequirement: 0,
       description: isTwStable
-        ? `依台灣金管會 (FSC) 虛擬資產專法與銀行法架構設計，100% 台灣特許本土商業銀行存款信託隔離保證，免除台美匯差風險。`
+        ? `教學示範商品：模擬新台幣穩定幣，固定 1 TWDT = NT$1，非真實發行、沒有市場報價。`
         : isGlobalStable
         ? `全球美元穩定幣（目標價值 ≈ US$1），由境外發行，用於全球 Crypto 交易對清算結算與跨市場避險。`
         : `全球高波動主要加密資產，Binance 官方公開 WebSocket 24/7 即時撮合，平倉收益即時結算持續性累計入已平倉已實現損益。`,
@@ -586,7 +587,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
                   displayCurrency === 'TWD' ? 'bg-amber-500 text-slate-950 shadow-xs' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                NT$ (台幣 1:32.5)
+                NT$ (台幣 1:{usdToTwdRate.toFixed(2)})
               </button>
             </div>
 
@@ -659,7 +660,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-sm font-black text-white flex items-center gap-1.5">
               <span>🪙 核心加密市場三大板塊配置</span>
-              <span className="text-xs text-amber-300 font-bold">（高波動資產 ＆ 全球穩定幣 ＆ 台灣監理穩定幣）</span>
+              <span className="text-xs text-amber-300 font-bold">（高波動資產 ＆ 全球穩定幣 ＆ 新台幣穩定幣教學示範）</span>
             </span>
           </div>
           <span className="text-xs text-slate-400">點選標的卡片切換即時盤口與專屬下單匣</span>
@@ -798,15 +799,15 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
             <div>
               <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2">
                 <span className="font-black text-xs text-emerald-300 flex items-center gap-1.5">
-                  <span>🏛️ 台灣監理架構穩定幣</span>
+                  <span>🏛️ 新台幣穩定幣（教學示範）</span>
                   <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-mono font-bold">
                     目標 ≈ NT$1
                   </span>
                 </span>
-                <span className="text-[10px] font-mono text-emerald-400">100% 銀行信託</span>
+                <span className="text-[10px] font-mono text-emerald-400">固定 1:1</span>
               </div>
               <p className="text-[11px] text-emerald-200/80 mb-2 leading-relaxed">
-                台灣金管會 (FSC) 監理架構，本土商業銀行<strong>100% 法定信託隔離</strong>，<strong>零匯差風險</strong>。
+                本系統模擬的教學商品：固定 1 TWDT = NT$1，用來說明<strong>以新台幣計價就沒有匯差</strong>。非真實發行、沒有市場報價。
               </p>
             </div>
 
@@ -832,11 +833,11 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
                         </span>
                         <div>
                           <span className="font-black text-white text-xs block leading-tight">{coin.name}</span>
-                          <span className="text-[9px] text-emerald-400 font-mono font-bold">目標 ≈ NT$1 (零匯差)</span>
+                          <span className="text-[9px] text-emerald-400 font-mono font-bold">固定 NT$1（教學示範）</span>
                         </div>
                       </div>
                       <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                        金管會監理
+                        教學示範
                       </span>
                     </div>
 
@@ -846,7 +847,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
                     </div>
 
                     <div className="text-[9px] text-slate-300 font-mono mt-1 flex justify-between">
-                      <span>本土銀行 100% 信託專戶</span>
+                      <span>固定 1:1 兌換</span>
                       <span className="text-emerald-400 font-bold">本幣安全停泊</span>
                     </div>
                   </div>
@@ -868,7 +869,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
               </h4>
             </div>
             <span className="text-[11px] text-cyan-300 font-mono font-bold">
-              「全球加密穩定幣」 vs 「台灣監理架構下的穩定幣」深度對比
+              「全球加密穩定幣」 vs 「新台幣穩定幣（教學示範）」對比
             </span>
           </div>
 
@@ -882,7 +883,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
                 <p className="text-cyan-300 font-bold">🌐 全球 (USDT/USDC)：</p>
                 <p className="text-slate-300">錨定美元 (USD)。當台幣升值時，換回台幣會產生實質匯損，並非「台幣資產不跌」！</p>
                 <p className="text-emerald-400 font-bold mt-1">🏛️ 台灣 (TWDT)：</p>
-                <p className="text-slate-300">錨定新台幣 (TWD)。1 TWDT 永遠對應 NT$ 1，投資人享有 100% 本幣零匯率風險。</p>
+                <p className="text-slate-300">以新台幣計價。本系統固定 1 TWDT = NT$1，所以沒有匯率風險（教學模擬）。</p>
               </div>
             </div>
 
@@ -895,7 +896,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
                 <p className="text-cyan-300 font-bold">🌐 全球 (USDT/USDC)：</p>
                 <p className="text-slate-300">由境外實體保管短期公債或存款，出具會計師 Attestation 報告，非台灣信託法保障。</p>
                 <p className="text-emerald-400 font-bold mt-1">🏛️ 台灣 (TWDT)：</p>
-                <p className="text-slate-300"><strong>100% 存入台灣本土特許商業銀行法定信託專戶</strong>，發行商破產亦受信託獨立財產保護！</p>
+                <p className="text-slate-300">設計上若把儲備放在台灣銀行的信託專戶，可受信託財產獨立保護（本系統的 TWDT 是教學模擬，沒有實際儲備）。</p>
               </div>
             </div>
 
@@ -908,7 +909,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
                 <p className="text-cyan-300 font-bold">🌐 全球 (USDT/USDC)：</p>
                 <p className="text-slate-300">離岸境外法規（百慕達、英屬維京、美紐約 NYDFS），面臨跨國監理爭端與合規凍結。</p>
                 <p className="text-emerald-400 font-bold mt-1">🏛️ 台灣 (TWDT)：</p>
-                <p className="text-slate-300">遵循<strong>台灣金管會 (FSC) 虛擬資產專法、洗錢防制法及銀行法</strong>，落實實名制 KYC/AML。</p>
+                <p className="text-slate-300">若在台灣發行，須依主管機關規定辦理實名制 KYC／洗錢防制（本系統的 TWDT 是教學模擬）。</p>
               </div>
             </div>
 
@@ -1014,7 +1015,7 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
                 <ShoppingCart className="w-4 h-4 text-amber-400" />
                 <span>
                   {activeTicker.sectorType === 'taiwan_stable'
-                    ? `🇹🇼 台灣監理新台幣穩定幣下單匣【${activeTicker.symbolShort}】`
+                    ? `🇹🇼 新台幣穩定幣下單匣（教學示範）【${activeTicker.symbolShort}】`
                     : activeTicker.sectorType === 'global_stable'
                     ? `💵 全球加密美元穩定幣停泊匣【${activeTicker.symbolShort}】`
                     : `🟠 24/7 高波動資產下單匣【${activeTicker.symbolShort}/USDT】`}
@@ -1031,8 +1032,8 @@ export const CryptoLiveBoard: React.FC<CryptoLiveBoardProps> = ({
                 <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-2.5 flex items-start gap-2">
                   <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                   <div className="text-slate-300 leading-relaxed text-[11px]">
-                    <strong className="text-emerald-300">台灣監理穩定幣特點：</strong>
-                    目標價值 ≈ NT$1。由<strong>台灣金管會監理沙盒／虛擬資產專法</strong>規範，台灣本土商業銀行 <strong>100% 法定存款信託隔離</strong>保管。本幣計價享<strong>零匯差風險</strong>，為大富翁玩家最穩健的資金避風港。
+                    <strong className="text-emerald-300">教學示範：</strong>
+                    本系統模擬的新台幣穩定幣，固定 1 TWDT = NT$1，用來練習「以新台幣計價就沒有匯差」的資金停泊概念。非真實發行商品、沒有市場報價。
                   </div>
                 </div>
 

@@ -831,14 +831,14 @@ export function getGlobalMarketStatusOverview(targetDate: Date = new Date()): {
       id: 'crypto_twdt',
       name: '新台幣穩定幣 (TWDT)',
       category: 'CRYPTO',
-      categoryLabel: '🏛️ 台灣監理穩定幣',
+      categoryLabel: '🏛️ 新台幣穩定幣（教學示範）',
       symbol: 'TWDT',
       icon: '🇹🇼',
       isOpen: true,
       statusBadge: 'OPEN_24_7',
       statusText: '🟢 OPEN 24/7 (隨時資金停泊)',
       tradingHours: '24/7 全年無休 (目標價值 ≈ NT$1)',
-      note: '台灣金管會架構 · 100% 銀行信託隔離 · 零匯差',
+      note: '教學示範商品 · 固定 1 TWDT = NT$1',
     },
   ];
 

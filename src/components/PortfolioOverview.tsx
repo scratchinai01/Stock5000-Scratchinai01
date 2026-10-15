@@ -34,6 +34,8 @@ import {
   Loader2,
   RotateCcw,
 } from 'lucide-react';
+import { getUsdTwd } from '../utils/fx';
+import { actionLabel, ccyOf, unitOfPos } from '../utils/positionLabels';
 
 interface PortfolioOverviewProps {
   currentProfile: StudentProfile;
@@ -206,11 +208,11 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
         change: d.change || 0,
         changePercent: d.changePercent || 0,
         volume: d.volume || 10000,
-        unitLabel: d.unitDescription || (isUs ? '股 (1股起，匯率1:32)' : '張 (1,000股)'),
+        unitLabel: d.unitDescription || (isUs ? '股 (1股起，依即時匯率)' : '張 (1,000股)'),
         multiplier: d.contractMultiplier || (isUs ? 32 : 1000),
         marginRequirement: d.marginRequirement || 0,
         description: isUs
-          ? `🇺🇸 美股複委託標的：${d.name} (${d.symbol})，最新市價 US$ ${d.closePrice} (折合 NT$ ${Math.round(d.closePrice * 32).toLocaleString()})。`
+          ? `🇺🇸 美股複委託標的：${d.name} (${d.symbol})，最新市價 US$ ${d.closePrice} (折合 NT$ ${Math.round(d.closePrice * getUsdTwd()).toLocaleString()})。`
           : `台灣上市/上櫃真實標的：${d.name} (${d.symbol})，撮合報價 NT$ ${d.closePrice}。`,
         klineHistory: d.klineHistory || [],
       };
@@ -222,7 +224,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
       setSearchNotice({
         type: 'success',
         message: isUs
-          ? `✅ 查詢成功！已載入美股【${newInst.name} (${newInst.symbol})】最新價格 US$ ${newInst.price} (折合 NT$ ${Math.round(newInst.price * 32).toLocaleString()})，下方可直接 1 股起委託！`
+          ? `✅ 查詢成功！已載入美股【${newInst.name} (${newInst.symbol})】最新價格 US$ ${newInst.price} (折合 NT$ ${Math.round(newInst.price * getUsdTwd()).toLocaleString()})，下方可直接 1 股起委託！`
           : `✅ 查詢成功！已成功載入【${newInst.name} (${newInst.symbol})】最新價格 NT$ ${newInst.price}，下方已為您自動展開可交易商品！`,
       });
       setSearchQuery('');
@@ -649,13 +651,13 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
 
     // 2.5 If US Stock (e.g. YAHOO, YHOO, YUM, YELP, NVDA, AAPL, TSLA, TSM, MSFT, etc.)
     if (cat === 'us_stocks') {
-      const priceTwd = Math.round(currentFocus.price * 32);
+      const priceTwd = Math.round(currentFocus.price * getUsdTwd());
       const usCoreItem = {
         id: `us_stock_${s}`,
         num: '1',
         title: `${currentFocus.name} (${s})`,
         badge: '美股複委託 (1股起買)',
-        detail: `市價 US$ ${currentFocus.price.toLocaleString()} (折合 NT$ ${priceTwd.toLocaleString()}) · 匯率 1:32 自動圈存台幣`,
+        detail: `市價 US$ ${currentFocus.price.toLocaleString()} (折合 NT$ ${priceTwd.toLocaleString()}) · 依即時匯率自動圈存台幣`,
         instrument: currentFocus,
         actions: [
           {
@@ -1361,7 +1363,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                     <div className="text-sm font-black font-mono text-emerald-300">
                       NT$ {Math.round(twdtVal).toLocaleString()}
                     </div>
-                    <span className="text-[10px] text-emerald-200/80 mt-0.5 block truncate">100% 銀行信託 · 零匯差</span>
+                    <span className="text-[10px] text-emerald-200/80 mt-0.5 block truncate">教學示範 · 固定 NT$1</span>
                   </div>
 
                   {/* 11. 現金 */}
@@ -1385,7 +1387,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                     </span>
                     <span className="text-slate-300 leading-tight">
                       <strong>「全球加密穩定幣 (USDT/USDC)」</strong> 錨定美元（具美元/台幣匯率波動風險）；
-                      <strong>「台灣監理穩定幣 (TWDT)」</strong> 依金管會專法 100% 銀行信託隔離，錨定新台幣享有<strong>完全零匯差</strong>。
+                      <strong>「新台幣穩定幣 (TWDT)」</strong> 是本系統的教學示範商品，固定 1 TWDT = NT$1，所以<strong>沒有匯差</strong>。
                     </span>
                   </div>
                   <span className="text-[11px] text-cyan-400 font-mono font-bold shrink-0 self-end sm:self-center">
@@ -2446,20 +2448,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                                 : 'bg-emerald-100 text-emerald-800 border-emerald-300'
                             }`}
                           >
-                            {pos.orderType === 'BUY_STOCK' && '現股買進'}
-                            {pos.orderType === 'SHORT_SELL_STOCK' && '融券放空'}
-                            {pos.orderType === 'BUY_MARGIN_STOCK' && '融資買進'}
-                            {pos.orderType === 'BUY_BOND' && '債券買進'}
-                            {pos.orderType === 'BUY_ETF' && 'ETF 買進'}
-                            {pos.orderType === 'SHORT_SELL_ETF' && 'ETF 融券放空'}
-                            {pos.orderType === 'BUY_FUTURES_LONG' && '期貨做多'}
-                            {pos.orderType === 'SELL_FUTURES_SHORT' && '期貨放空'}
-                            {pos.orderType === 'BUY_CALL_OPTION' && '買進買權'}
-                            {pos.orderType === 'BUY_PUT_OPTION' && '買進賣權'}
-                            {pos.orderType === 'SELL_CALL_OPTION' && '賣出買權'}
-                            {pos.orderType === 'SELL_PUT_OPTION' && '賣出賣權'}
-                            {pos.orderType === 'BUY_CALL_WARRANT' && '認購權證'}
-                            {pos.orderType === 'BUY_PUT_WARRANT' && '認售權證'}
+                            {actionLabel(pos.orderType)}
                           </span>
                         </div>
 
@@ -2467,13 +2456,13 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                           <div>
                             <span className="text-slate-600 block text-[10px] font-bold">進場基準價</span>
                             <span className="font-mono font-black text-slate-950">
-                              NT$ {pos.entryPrice >= 1000 ? pos.entryPrice.toLocaleString() : pos.entryPrice}
+                              {ccyOf(pos)}{pos.entryPrice >= 1000 ? pos.entryPrice.toLocaleString() : pos.entryPrice}
                             </span>
                           </div>
                           <div>
                             <span className="text-slate-600 block text-[10px] font-bold">持有數量</span>
                             <span className="font-mono font-bold text-slate-800">
-                              {pos.quantity} {pos.category === 'futures' || pos.category === 'options' ? '口' : '張'}
+                              {pos.quantity} {unitOfPos(pos)}
                             </span>
                           </div>
                           <div>
@@ -2570,29 +2559,16 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                                   : 'bg-emerald-100 text-emerald-800 border-emerald-300'
                               }`}
                             >
-                              {pos.orderType === 'BUY_STOCK' && '現股買進 (多)'}
-                              {pos.orderType === 'SHORT_SELL_STOCK' && '融券放空 (空)'}
-                              {pos.orderType === 'BUY_MARGIN_STOCK' && '融資買進 (槓桿)'}
-                              {pos.orderType === 'BUY_BOND' && '債券買進'}
-                              {pos.orderType === 'BUY_ETF' && 'ETF 買進'}
-                              {pos.orderType === 'SHORT_SELL_ETF' && 'ETF 融券放空'}
-                              {pos.orderType === 'BUY_FUTURES_LONG' && '期貨做多 (多單)'}
-                              {pos.orderType === 'SELL_FUTURES_SHORT' && '期貨放空 (空單避險)'}
-                              {pos.orderType === 'BUY_CALL_OPTION' && '買進買權 (Buy Call)'}
-                              {pos.orderType === 'BUY_PUT_OPTION' && '買進賣權 (Buy Put避險)'}
-                              {pos.orderType === 'SELL_CALL_OPTION' && '賣出買權 (Sell Call)'}
-                              {pos.orderType === 'SELL_PUT_OPTION' && '賣出賣權 (Sell Put)'}
-                              {pos.orderType === 'BUY_CALL_WARRANT' && '認購權證 (槓桿做多)'}
-                              {pos.orderType === 'BUY_PUT_WARRANT' && '認售權證 (槓桿做空)'}
+                              {actionLabel(pos.orderType)}
                             </span>
                           </td>
 
                           <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-950">
-                            NT$ {pos.entryPrice >= 1000 ? pos.entryPrice.toLocaleString() : pos.entryPrice}
+                            {ccyOf(pos)}{pos.entryPrice >= 1000 ? pos.entryPrice.toLocaleString() : pos.entryPrice}
                           </td>
 
                           <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-800">
-                            {pos.quantity} {pos.category === 'futures' || pos.category === 'options' ? '口' : '張'}
+                            {pos.quantity} {unitOfPos(pos)}
                           </td>
 
                           <td className="py-3.5 px-4 text-right font-mono font-black text-cyan-900">

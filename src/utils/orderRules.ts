@@ -1,3 +1,4 @@
+import { getUsdTwd } from './fx';
 /**
  * 委託規則（前端與伺服器共用）
  * - 升降單位（跳動點）、漲跌停、買賣方向、損益計算
@@ -45,12 +46,13 @@ export function pnlDirection(orderType: OrderAction): 1 | -1 {
   return orderType.startsWith('BUY') ? 1 : -1;
 }
 function fxFactor(orderType: OrderAction): number {
-  if (orderType === 'BUY_COMMODITY_LONG' || orderType === 'SELL_COMMODITY_SHORT') return 32.0;
-  if (orderType === 'BUY_CRYPTO' || orderType === 'SHORT_SELL_CRYPTO' || orderType === 'BUY_STABLECOIN') return 32.5;
+  if (orderType === 'BUY_COMMODITY_LONG' || orderType === 'SELL_COMMODITY_SHORT') return getUsdTwd();
+  if (orderType === 'BUY_CRYPTO' || orderType === 'SHORT_SELL_CRYPTO' || orderType === 'BUY_STABLECOIN') return getUsdTwd();
   return 1;
 }
 export function positionPnL(orderType: OrderAction, entry: number, price: number, qty: number, multiplier: number): number {
-  const m = orderType === 'BUY_STABLECOIN' ? 1 : multiplier;
+  // 美股的乘數就是匯率：一律用目前的即時匯率
+  const m = orderType === 'BUY_STABLECOIN' ? 1 : orderType === 'BUY_US_STOCK' ? getUsdTwd() : multiplier;
   return (price - entry) * pnlDirection(orderType) * qty * m * fxFactor(orderType);
 }
 

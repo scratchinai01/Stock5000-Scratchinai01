@@ -38,6 +38,8 @@ export interface StockQQuote {
   tradeSymbol?: string;
   currency: 'USD' | 'TWD' | 'POINTS' | '%' | 'RATE';
   isSpot?: boolean;
+  /** 沒有即時報價（只顯示名稱，不顯示數字、不能交易） */
+  noLive?: boolean;
 }
 
 export const STOCKQ_SECTORS: { id: StockQSector; name: string; icon: string; category: StockQCategory }[] = [

@@ -19,6 +19,7 @@ import {
   type OrderIntent,
 } from '../src/utils/orderRules';
 import type { AssetCategory, OrderAction } from '../src/types/market';
+import { fetchMisFutures } from './taifexMis';
 import {
   LiquidityLedger,
   applyFills,
@@ -169,7 +170,9 @@ async function getFeed(kind: FeedKind, dataId: string, force = false): Promise<M
   const ttl = kind === 'stock' ? 9_000 : 25_000;
   const hit = feedCache.get(ck);
   if (hit && !force && Date.now() - hit.at < ttl) return hit.map;
-  const map = await fetchSnapshot(kind, dataId);
+  let map = await fetchSnapshot(kind, dataId);
+  // FinMind 沒有這個期貨（例如小型臺指 MXF）時，改用期交所行情資訊網
+  if (kind === 'fut' && (!map || map.size === 0)) map = (await fetchMisFutures(dataId)) ?? map;
   if (map) feedCache.set(ck, { at: Date.now(), map });
   return map ?? hit?.map ?? null;
 }

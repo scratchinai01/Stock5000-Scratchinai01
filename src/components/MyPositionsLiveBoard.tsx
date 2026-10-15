@@ -29,6 +29,19 @@ import {
   Cpu,
 } from 'lucide-react';
 
+// 報價幣別與單位：美股、原物料、加密貨幣（新台幣穩定幣除外）以美元報價
+const isTwStable = (sym: string) => ['TWDT', 'TWDC'].includes(String(sym).toUpperCase());
+const ccyOf = (p: { category: string; symbol: string }) =>
+  p.category === 'us_stocks' || p.category === 'commodities' || (p.category === 'crypto' && !isTwStable(p.symbol)) ? 'US$ ' : 'NT$ ';
+const unitOfPos = (p: { category: string; symbol: string }) =>
+  p.category === 'futures' || p.category === 'options' || p.category === 'commodities'
+    ? '口'
+    : p.category === 'us_stocks'
+    ? '股'
+    : p.category === 'crypto'
+    ? (['USDT', 'USDC'].includes(String(p.symbol).toUpperCase()) || isTwStable(p.symbol) ? String(p.symbol).toUpperCase() : '枚')
+    : '張';
+
 interface MyPositionsLiveBoardProps {
   positions: Position[];
   allInstruments: InstrumentSpec[];
@@ -343,7 +356,7 @@ export function MyPositionsLiveBoard({
                           <span className="text-slate-400 font-bold">⚪ CLOSED ({clock.sessionName})</span>
                         )}
                       </td>
-                      <td className="py-1 px-2 text-right font-black text-white">NT$ {p.currentPrice.toLocaleString()}</td>
+                      <td className="py-1 px-2 text-right font-black text-white">{ccyOf(p)}{p.currentPrice.toLocaleString()}</td>
                       <td className="py-1 px-2 text-slate-300">{p.lastTradeTime || '13:44:52'}</td>
                       <td className="py-1 px-2 text-slate-300">{p.dataReceivedTime || clock.twTimeStr}</td>
                       <td className="py-1 px-2 text-amber-300 font-semibold">{clock.nextSessionTime}</td>
@@ -433,6 +446,20 @@ export function MyPositionsLiveBoard({
                 text: '原物料期貨 (空單放空)',
                 bg: 'bg-rose-500/20 text-rose-300 border-rose-400/40',
               };
+            } else if (pos.orderType === 'BUY_CRYPTO') {
+              actionBadge = { text: '加密貨幣買進 (做多)', bg: 'bg-amber-500/20 text-amber-300 border-amber-400/40' };
+            } else if (pos.orderType === 'SHORT_SELL_CRYPTO') {
+              actionBadge = { text: '加密貨幣放空', bg: 'bg-rose-500/20 text-rose-300 border-rose-400/40' };
+            } else if (pos.orderType === 'BUY_STABLECOIN') {
+              actionBadge = { text: '美元穩定幣停泊', bg: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40' };
+            } else if (pos.orderType === 'BUY_TW_STABLECOIN') {
+              actionBadge = { text: '新台幣穩定幣（教學示範）', bg: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40' };
+            } else if (pos.orderType === 'BUY_ETF') {
+              actionBadge = { text: 'ETF 買進', bg: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40' };
+            } else if (pos.orderType === 'SHORT_SELL_ETF') {
+              actionBadge = { text: 'ETF 融券放空', bg: 'bg-purple-500/20 text-purple-300 border-purple-400/40' };
+            } else if (pos.orderType === 'BUY_BOND') {
+              actionBadge = { text: '債券 ETF 買進', bg: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40' };
             }
 
             return (
@@ -463,7 +490,7 @@ export function MyPositionsLiveBoard({
                         {actionBadge.text}
                       </span>
                       <span className="text-[11px] text-slate-400 font-mono">
-                        {pos.quantity} {pos.category === 'futures' || pos.category === 'options' || pos.category === 'commodities' ? '口' : pos.category === 'us_stocks' ? '股' : '張'}
+                        {pos.quantity} {unitOfPos(pos)}
                         <span className="text-slate-300 ml-1">
                           (
                           {pos.category === 'futures' && (pos.symbol.endsWith('F') || ['CDF', 'DHF', 'CZF', 'CCF', 'DVF', 'QDF', 'IJF', 'OQF'].includes(pos.symbol))
@@ -476,6 +503,10 @@ export function MyPositionsLiveBoard({
                             ? `${pos.quantity.toLocaleString()} 股 (USD報價/台幣圈存)`
                             : pos.category === 'commodities'
                             ? `${pos.quantity} 口原物料合約 (USD報價/台幣保證金)`
+                            : pos.category === 'crypto'
+                            ? isTwStable(pos.symbol)
+                              ? `等值 NT$ ${pos.quantity.toLocaleString()}（教學示範）`
+                              : `USD 報價 · 依即時匯率折台幣`
                             : `${(pos.quantity * 1000).toLocaleString()} 股`}
                           )
                         </span>
@@ -527,13 +558,13 @@ export function MyPositionsLiveBoard({
                     </span>
                     <div className="flex items-baseline gap-1 mt-0.5">
                       <span className="font-mono font-black text-base sm:text-lg text-white">
-                        {pos.category === 'us_stocks' || pos.category === 'commodities' ? 'US$ ' : 'NT$ '}{livePrice.toLocaleString()}
+                        {ccyOf(pos)}{livePrice.toLocaleString()}
                       </span>
                     </div>
 
                     {/* 今日行情 (基準: 昨收) */}
                     <div className="text-[10px] font-mono mt-1 pt-1 border-t border-white/10">
-                      <span className="text-slate-400 block">今日標的漲跌 (相較昨收 {pos.category === 'us_stocks' || pos.category === 'commodities' ? 'US$ ' : 'NT$ '}{inst?.prevClose || Number((livePrice - liveChange).toFixed(2))}):</span>
+                      <span className="text-slate-400 block">今日標的漲跌 (相較昨收 {ccyOf(pos)}{inst?.prevClose || Number((livePrice - liveChange).toFixed(2))}):</span>
                       <span
                         className={`font-bold flex items-center gap-0.5 ${
                           liveChange >= 0 ? 'text-rose-400' : 'text-emerald-400'
@@ -555,7 +586,7 @@ export function MyPositionsLiveBoard({
                     <span className="text-[10px] text-slate-400 block font-bold">進場建立成本</span>
                     <div className="flex items-baseline gap-1 mt-0.5">
                       <span className="font-mono font-bold text-sm sm:text-base text-slate-200">
-                        {pos.category === 'us_stocks' || pos.category === 'commodities' ? 'US$ ' : 'NT$ '}{pos.entryPrice.toLocaleString()}
+                        {ccyOf(pos)}{pos.entryPrice.toLocaleString()}
                       </span>
                     </div>
                     <span className="text-[10px] text-slate-400 font-mono block">
@@ -701,16 +732,16 @@ export function MyPositionsLiveBoard({
                       </span>
                     </td>
                     <td className="py-3 px-3 text-right text-slate-300">
-                      {pos.category === 'us_stocks' || pos.category === 'commodities' ? 'US$ ' : 'NT$ '}{pos.entryPrice.toLocaleString()}
+                      {ccyOf(pos)}{pos.entryPrice.toLocaleString()}
                     </td>
                     <td className="py-3 px-3 text-right font-black text-white">
-                      {pos.category === 'us_stocks' || pos.category === 'commodities' ? 'US$ ' : 'NT$ '}{livePrice.toLocaleString()}
+                      {ccyOf(pos)}{livePrice.toLocaleString()}
                     </td>
                     <td className="py-3 px-3 text-slate-400 text-[11px]">
                       {pos.lastTradeTime || '13:44:52'}
                     </td>
                     <td className="py-3 px-3 text-right text-slate-300 font-bold">
-                      {pos.quantity} {pos.category === 'futures' || pos.category === 'options' || pos.category === 'commodities' ? '口' : pos.category === 'us_stocks' ? '股' : '張'}
+                      {pos.quantity} {unitOfPos(pos)}
                     </td>
                     <td className="py-3 px-3 text-right text-slate-300">
                       NT$ {Math.round(pos.totalCostOrMargin).toLocaleString()}

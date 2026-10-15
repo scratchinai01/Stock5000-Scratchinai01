@@ -14,6 +14,7 @@ import { CommoditiesBoard } from './CommoditiesBoard';
 import { StockQMarketBoard } from './StockQMarketBoard';
 import { TradingBottomTools } from './TradingBottomTools';
 import { getSystemDateStr } from '../utils/dateUtils';
+import { useFx } from '../hooks/useFx';
 import rawQuotes from '../data/realFinmindQuotes.json';
 
 const quotesMap = rawQuotes as Record<string, any>;
@@ -152,27 +153,27 @@ const CATEGORY_CUSTOM_SUGGESTIONS: Record<MainCategoryTab, CustomSuggestion[]> =
     { symbol: '08303P', name: '聯電凱基43購01', price: 0.85, category: 'warrants', multiplier: 1000, unitLabel: '張 (1,000份)' },
   ],
   us_stocks: [
-    { symbol: 'YAHOO', name: '雅虎 (Yahoo! Inc.)', price: quotesMap['YAHOO']?.close21 || 52.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'YHOO', name: '雅虎 (Yahoo! Inc. 歷史代號)', price: quotesMap['YHOO']?.close21 || 52.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'YUM', name: '百勝餐飲 (Yum! Brands - KFC/必勝客)', price: quotesMap['YUM']?.close21 || 138.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'YELP', name: 'Yelp (美國本地生活點評網)', price: quotesMap['YELP']?.close21 || 36.2, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'NVDA', name: '輝達 (NVIDIA)', price: quotesMap['NVDA']?.close21 || 125.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'AAPL', name: '蘋果 (Apple)', price: quotesMap['AAPL']?.close21 || 230.2, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'TSLA', name: '特斯拉 (Tesla)', price: quotesMap['TSLA']?.close21 || 258.4, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'TSM', name: '台積電 ADR', price: quotesMap['TSM']?.close21 || 185.0, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'MSFT', name: '微軟 (Microsoft)', price: quotesMap['MSFT']?.close21 || 442.1, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'GOOGL', name: 'Alphabet / Google', price: quotesMap['GOOGL']?.close21 || 182.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'AMZN', name: '亞馬遜 (Amazon)', price: quotesMap['AMZN']?.close21 || 192.6, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'META', name: 'Meta Platforms (臉書 Facebook)', price: quotesMap['META']?.close21 || 582.4, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'NFLX', name: '網飛 (Netflix)', price: quotesMap['NFLX']?.close21 || 708.2, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'AMD', name: '超微半導體 (AMD)', price: quotesMap['AMD']?.close21 || 162.8, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'INTC', name: '英特爾 (Intel)', price: quotesMap['INTC']?.close21 || 22.8, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'PLTR', name: '帕蘭提爾 (Palantir)', price: quotesMap['PLTR']?.close21 || 38.6, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'BABA', name: '阿里巴巴 ADR (Alibaba)', price: quotesMap['BABA']?.close21 || 106.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'COIN', name: 'Coinbase Global', price: quotesMap['COIN']?.close21 || 178.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'QQQ', name: '那斯達克100 ETF', price: quotesMap['QQQ']?.close21 || 498.2, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'SPY', name: '標普500 ETF', price: quotesMap['SPY']?.close21 || 575.4, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
-    { symbol: 'SOXX', name: '費城半導體 ETF', price: quotesMap['SOXX']?.close21 || 245.8, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，匯率1:32)' },
+    { symbol: 'YAHOO', name: '雅虎 (Yahoo! Inc.)', price: quotesMap['YAHOO']?.close21 || 52.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'YHOO', name: '雅虎 (Yahoo! Inc. 歷史代號)', price: quotesMap['YHOO']?.close21 || 52.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'YUM', name: '百勝餐飲 (Yum! Brands - KFC/必勝客)', price: quotesMap['YUM']?.close21 || 138.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'YELP', name: 'Yelp (美國本地生活點評網)', price: quotesMap['YELP']?.close21 || 36.2, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'NVDA', name: '輝達 (NVIDIA)', price: quotesMap['NVDA']?.close21 || 125.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'AAPL', name: '蘋果 (Apple)', price: quotesMap['AAPL']?.close21 || 230.2, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'TSLA', name: '特斯拉 (Tesla)', price: quotesMap['TSLA']?.close21 || 258.4, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'TSM', name: '台積電 ADR', price: quotesMap['TSM']?.close21 || 185.0, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'MSFT', name: '微軟 (Microsoft)', price: quotesMap['MSFT']?.close21 || 442.1, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'GOOGL', name: 'Alphabet / Google', price: quotesMap['GOOGL']?.close21 || 182.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'AMZN', name: '亞馬遜 (Amazon)', price: quotesMap['AMZN']?.close21 || 192.6, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'META', name: 'Meta Platforms (臉書 Facebook)', price: quotesMap['META']?.close21 || 582.4, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'NFLX', name: '網飛 (Netflix)', price: quotesMap['NFLX']?.close21 || 708.2, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'AMD', name: '超微半導體 (AMD)', price: quotesMap['AMD']?.close21 || 162.8, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'INTC', name: '英特爾 (Intel)', price: quotesMap['INTC']?.close21 || 22.8, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'PLTR', name: '帕蘭提爾 (Palantir)', price: quotesMap['PLTR']?.close21 || 38.6, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'BABA', name: '阿里巴巴 ADR (Alibaba)', price: quotesMap['BABA']?.close21 || 106.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'COIN', name: 'Coinbase Global', price: quotesMap['COIN']?.close21 || 178.5, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'QQQ', name: '那斯達克100 ETF', price: quotesMap['QQQ']?.close21 || 498.2, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'SPY', name: '標普500 ETF', price: quotesMap['SPY']?.close21 || 575.4, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
+    { symbol: 'SOXX', name: '費城半導體 ETF', price: quotesMap['SOXX']?.close21 || 245.8, category: 'us_stocks', multiplier: 32, unitLabel: '股 (1股起，依即時匯率)' },
   ],
   commodities: [
     { symbol: 'CL', name: 'WTI 原油', price: quotesMap['CL']?.close21 || 91.50, category: 'commodities', multiplier: 100, unitLabel: '口 (100桶 · 1點=100美元)', margin: 65000 },
@@ -440,6 +441,12 @@ export const TradingModal: React.FC<TradingModalProps> = ({
   onExecuteTrade,
   onForceRefresh,
 }) => {
+  const fxNow = useFx();
+  const FX = fxNow.rate;
+  // 美股、原物料、加密貨幣：美元報價、沒有漲跌停（新台幣穩定幣以台幣計價）
+  const isTwStableSel = ['TWDT', 'TWDC'].includes(String(selectedInstrument?.symbol || '').toUpperCase());
+  const noPxLimit = ['commodities', 'us_stocks', 'crypto'].includes(selectedInstrument?.category);
+  const qCcy = noPxLimit && !isTwStableSel ? 'US$ ' : 'NT$ ';
   const [step, setStep] = useState<'select_category' | 'order_form'>(initialStep);
   const [categorySelectMode, setCategorySelectMode] = useState<'smart_search' | 'categories'>('smart_search');
   const [activeToolTab, setActiveToolTab] = useState<TradingToolTab>('smart_search');
@@ -669,11 +676,11 @@ export const TradingModal: React.FC<TradingModalProps> = ({
           unitName: sym,
           unitFull: `${sym} (新台幣穩定幣 · 目標價值 ≈ NT$1)`,
           perUnitShares: 1,
-          specTitle: `${name} · 台灣金管會架構穩定幣 (100% 銀行信託)`,
-          specFormula: `${sym} 目標價值 ≈ NT$1 · 100% 台灣特許商業銀行信託隔離 · 零匯率風險`,
+          specTitle: `${name} · 教學示範商品（模擬新台幣穩定幣）`,
+          specFormula: `${sym} 固定 1 ${sym} = NT$1 · 教學模擬，非真實發行`,
           convertedText: `${quantity.toLocaleString()} ${sym} (等值新台幣 NT$ ${quantity.toLocaleString()})`,
-          tickValueText: '零匯率波動 · 本幣 1:1 錨定 · 金管會虛擬資產管理專法保障',
-          leverageText: '1.0 倍 (本土合規穩定幣，隨時可 1:1 兌回新台幣現金)',
+          tickValueText: '固定 1:1 · 以新台幣計價沒有匯差（教學模擬）',
+          leverageText: '1.0 倍（教學示範，隨時可 1:1 換回新台幣現金）',
           isStockFutures: false,
         };
       }
@@ -684,8 +691,8 @@ export const TradingModal: React.FC<TradingModalProps> = ({
           unitFull: `${sym} (全球加密美元穩定幣 · 目標價值 ≈ US$1)`,
           perUnitShares: 1,
           specTitle: `${name} · 全球加密美元穩定資產 (境外發行)`,
-          specFormula: `${sym} 目標價值 ≈ US$1 · 全球交易對結算與資金停泊 (美元匯率 1:32.5)`,
-          convertedText: `${quantity.toLocaleString()} ${sym} (折合 NT$ ${Math.round(currentPrice * quantity * 32.5).toLocaleString()})`,
+          specFormula: `${sym} 目標價值 ≈ US$1 · 全球交易對結算與資金停泊 (即時匯率 1:${FX.toFixed(2)})`,
+          convertedText: `${quantity.toLocaleString()} ${sym} (折合 NT$ ${Math.round(currentPrice * quantity * FX).toLocaleString()})`,
           tickValueText: '目標維持在 1 美元附近 · ⚠️ 具美元/台幣匯率波動風險',
           leverageText: '1.0 倍 (全球穩定幣，隨時可兌換回新台幣現金)',
           isStockFutures: false,
@@ -696,9 +703,9 @@ export const TradingModal: React.FC<TradingModalProps> = ({
         unitFull: `枚 (1 ${sym} · 24/7 永續市場)`,
         perUnitShares: 1,
         specTitle: `${name} · 24/7 高波動主要加密資產`,
-        specFormula: `${sym}/USDT · Binance 公開 WebSocket 直連 (匯率 1:32.5)`,
-        convertedText: `${quantity} ${sym} = USD $${(currentPrice * quantity).toFixed(2)} (折合 NT$ ${Math.round(currentPrice * quantity * 32.5).toLocaleString()})`,
-        tickValueText: `跳動 1 美元 = NT$ ${(32.5 * quantity).toLocaleString()} 元`,
+        specFormula: `${sym}/USDT · Binance 即時行情 (即時匯率 1:${FX.toFixed(2)})`,
+        convertedText: `${quantity} ${sym} = USD $${(currentPrice * quantity).toFixed(2)} (折合 NT$ ${Math.round(currentPrice * quantity * FX).toLocaleString()})`,
+        tickValueText: `跳動 1 美元 = NT$ ${Math.round(FX * quantity).toLocaleString()} 元`,
         leverageText: '1.0 倍 (24/7 撮合，平倉損益持續性累計入已實現損益)',
         isStockFutures: false,
       };
@@ -710,9 +717,9 @@ export const TradingModal: React.FC<TradingModalProps> = ({
         unitFull: '股 (1股起，美股複委託)',
         perUnitShares: 1,
         specTitle: '美股複委託現貨 (US Stocks)',
-        specFormula: '1 股 = 1 單位 (美元計價，以匯率 32.0 自動台幣圈存交割)',
-        convertedText: `${quantity} 股 = USD $${(currentPrice * quantity).toFixed(2)} (折合 NT$ ${Math.round(currentPrice * quantity * 32).toLocaleString()})`,
-        tickValueText: `跳動 $1 美元 = NT$ ${(32 * quantity).toLocaleString()} 元`,
+        specFormula: `1 股 = 1 單位 (美元計價，以即時匯率 ${FX.toFixed(2)} 自動台幣圈存交割)`,
+        convertedText: `${quantity} 股 = USD $${(currentPrice * quantity).toFixed(2)} (折合 NT$ ${Math.round(currentPrice * quantity * FX).toLocaleString()})`,
+        tickValueText: `跳動 $1 美元 = NT$ ${Math.round(FX * quantity).toLocaleString()} 元`,
         leverageText: '1.0 倍 (無融資槓桿，全額現貨買進)',
         isStockFutures: false,
       };
@@ -725,9 +732,9 @@ export const TradingModal: React.FC<TradingModalProps> = ({
         unitFull: selectedInstrument.unitLabel || '口 (原物料期貨合約)',
         perUnitShares: 1,
         specTitle: '全球大宗原物料商品期貨 (CME/NYMEX/ICE)',
-        specFormula: `${name} (${sym}) · 美元國際報價 · 台灣台幣保證金圈存 (匯率 1:32)`,
+        specFormula: `${name} (${sym}) · 美元國際報價 · 台灣台幣保證金圈存 (即時匯率 1:${FX.toFixed(2)})`,
         convertedText: `${quantity} 口 = 保證金 NT$ ${(marginReq * quantity).toLocaleString()} (契約總值約 USD $${(currentPrice * mult * quantity).toFixed(2)})`,
-        tickValueText: `跳動 1 點 = 約 NT$ ${Math.round(mult * 32 * quantity).toLocaleString()} 元`,
+        tickValueText: `跳動 1 點 = 約 NT$ ${Math.round(mult * FX * quantity).toLocaleString()} 元`,
         leverageText: '約 10~15 倍槓桿 (保證金交易制度)',
         isStockFutures: false,
       };
@@ -901,7 +908,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
       leverageText: '1.0 倍',
       isStockFutures: false,
     };
-  }, [selectedInstrument, quantity, currentPrice, orderAction]);
+  }, [selectedInstrument, quantity, currentPrice, orderAction, FX]);
 
   // 成本拆解計算（供學生學習細算與 PPT 報告使用）
   const costBreakdown = useMemo(() => {
@@ -1872,11 +1879,13 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                             ? '美股複委託'
                             : selectedInstrument.category === 'commodities'
                             ? '大宗原物料'
+                            : selectedInstrument.category === 'crypto'
+                            ? (['USDT', 'USDC', 'TWDT', 'TWDC'].includes(selectedInstrument.symbol.toUpperCase()) ? '穩定幣' : '加密貨幣')
                             : 'ETF'}
                         </span>
                       </div>
                       <span className="text-[11px] text-slate-300 font-mono">
-                        最新成交: NT$ {selectedInstrument.price.toLocaleString()} ({selectedInstrument.change >= 0 ? '+' : ''}{selectedInstrument.change}) · 1{selectedInstrument.unitLabel}
+                        最新成交: {qCcy}{selectedInstrument.price.toLocaleString()} ({selectedInstrument.change >= 0 ? '+' : ''}{selectedInstrument.change}) · 1{selectedInstrument.unitLabel}
                       </span>
                     </div>
                   </div>
@@ -2353,7 +2362,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                                   : 'bg-slate-100 text-slate-800 hover:bg-slate-200 border-slate-300'
                               }`}
                             >
-                              <span>🇹🇼 申購新台幣穩定幣 (100% 銀行信託)</span>
+                              <span>🇹🇼 申購新台幣穩定幣（教學示範）</span>
                             </button>
                             <button
                               type="button"
@@ -2488,6 +2497,8 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                         ? 'CME / NYMEX 國際原物料連續撮合 (無漲跌停限制)'
                         : selectedInstrument.category === 'us_stocks'
                         ? '美股市場無漲跌停限制 (熔斷機制)'
+                        : selectedInstrument.category === 'crypto'
+                        ? '加密貨幣 24 小時交易，無漲跌停限制'
                         : '台股真實 ±10% 價格限制'}
                     </span>
                   </div>
@@ -2505,7 +2516,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                     >
                       <span className="text-[10px] text-slate-500 font-bold block">昨收基準</span>
                       <span className="font-mono font-black text-slate-700 text-xs sm:text-sm">
-                        {selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks' ? 'US$ ' : 'NT$ '}
+                        {qCcy}
                         {prevClose >= 1000 ? prevClose.toLocaleString() : prevClose}
                       </span>
                     </button>
@@ -2521,7 +2532,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                     >
                       <span className="text-[10px] text-amber-900 font-black block">當下成交價（帶入）</span>
                       <span className="font-mono font-black text-amber-950 text-xs sm:text-sm">
-                        {selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks' ? 'US$ ' : 'NT$ '}
+                        {qCcy}
                         {selectedInstrument.price >= 1000 ? selectedInstrument.price.toLocaleString() : selectedInstrument.price}
                       </span>
                     </button>
@@ -2529,21 +2540,21 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        const targetP = (selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks')
+                        const targetP = noPxLimit
                           ? Number((prevClose * 1.05).toFixed(2))
                           : limitUpPrice;
                         setCustomPrice(targetP);
                         setUseCustomPrice(true);
                       }}
                       className="bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-xl p-2 text-center transition cursor-pointer shadow-2xs"
-                      title={selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks' ? '點擊帶入參考高檔 (+5%)' : '點擊帶入漲停價'}
+                      title={noPxLimit ? '點擊帶入參考高檔 (+5%)' : '點擊帶入漲停價'}
                     >
                       <span className="text-[10px] text-rose-800 font-black block">
-                        {selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks' ? '參考高檔 (+5%)' : '漲停價 (+10%)'}
+                        {noPxLimit ? '參考高檔 (+5%)' : '漲停價 (+10%)'}
                       </span>
                       <span className="font-mono font-black text-rose-700 text-xs sm:text-sm">
-                        {selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks' ? 'US$ ' : 'NT$ '}
-                        {(selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks')
+                        {qCcy}
+                        {noPxLimit
                           ? Number((prevClose * 1.05).toFixed(2))
                           : (limitUpPrice >= 1000 ? limitUpPrice.toLocaleString() : limitUpPrice)}
                       </span>
@@ -2552,21 +2563,21 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        const targetP = (selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks')
+                        const targetP = noPxLimit
                           ? Number((prevClose * 0.95).toFixed(2))
                           : limitDownPrice;
                         setCustomPrice(targetP);
                         setUseCustomPrice(true);
                       }}
                       className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl p-2 text-center transition cursor-pointer shadow-2xs"
-                      title={selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks' ? '點擊帶入參考低檔 (-5%)' : '點擊帶入跌停價'}
+                      title={noPxLimit ? '點擊帶入參考低檔 (-5%)' : '點擊帶入跌停價'}
                     >
                       <span className="text-[10px] text-emerald-800 font-black block">
-                        {selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks' ? '參考低檔 (-5%)' : '跌停價 (-10%)'}
+                        {noPxLimit ? '參考低檔 (-5%)' : '跌停價 (-10%)'}
                       </span>
                       <span className="font-mono font-black text-emerald-700 text-xs sm:text-sm">
-                        {selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks' ? 'US$ ' : 'NT$ '}
-                        {(selectedInstrument.category === 'commodities' || selectedInstrument.category === 'us_stocks')
+                        {qCcy}
+                        {noPxLimit
                           ? Number((prevClose * 0.95).toFixed(2))
                           : (limitDownPrice >= 1000 ? limitDownPrice.toLocaleString() : limitDownPrice)}
                       </span>
@@ -2635,7 +2646,9 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                     <div>
                       <span className="text-[10px] text-slate-500 block font-bold">總量</span>
                       <span className="font-mono font-black text-slate-900">
-                        {Math.round(selectedInstrument.volume / (selectedInstrument.category === 'stocks' || selectedInstrument.category === 'etfs' ? 1000 : 1)).toLocaleString()} {selectedInstrument.category === 'stocks' || selectedInstrument.category === 'etfs' ? '張' : '口'}
+                        {selectedInstrument.category === 'crypto'
+                          ? `${Math.round(selectedInstrument.volume).toLocaleString()} ${selectedInstrument.symbol}`
+                          : `${Math.round(selectedInstrument.volume / (selectedInstrument.category === 'stocks' || selectedInstrument.category === 'etfs' ? 1000 : 1)).toLocaleString()} ${selectedInstrument.category === 'stocks' || selectedInstrument.category === 'etfs' ? '張' : selectedInstrument.category === 'us_stocks' ? '股' : '口'}`}
                       </span>
                     </div>
                   </div>
@@ -2746,7 +2759,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-xs font-black text-slate-950">
-                        委託單價 (NT$)：
+                        委託單價 ({qCcy.trim()})：
                       </label>
                       <button
                         type="button"
@@ -2989,12 +3002,12 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                           <span className="text-[10px] text-rose-100 font-normal">
                             {selectedInstrument.category === 'crypto'
                               ? (selectedInstrument.symbol === 'TWDT' || selectedInstrument.symbol === 'TWDC'
-                                ? `${quantity.toLocaleString()} ${contractSpec.unitName} · 錨定 NT$ 1 (零匯差)`
-                                : `${quantity} ${contractSpec.unitName} · 依 USD $${currentPrice} (匯率 1:32.5)`)
+                                ? `${quantity.toLocaleString()} ${contractSpec.unitName} · 固定 NT$ 1（教學示範）`
+                                : `${quantity} ${contractSpec.unitName} · 依 USD $${currentPrice} (匯率 1:${FX.toFixed(2)})`)
                               : selectedInstrument.category === 'commodities'
                               ? `${quantity} 口 · 依 USD $${currentPrice}`
                               : selectedInstrument.category === 'us_stocks'
-                              ? `${quantity} 股 · 依 USD $${currentPrice} (匯率 1:32)`
+                              ? `${quantity} 股 · 依 USD $${currentPrice} (匯率 1:${FX.toFixed(2)})`
                               : `${quantity} ${contractSpec.unitName} · 依 NT$ ${currentPrice}`}
                           </span>
                         </div>
@@ -3014,7 +3027,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
                           <span className="text-base">🇺🇸</span>
                           <span>美股複委託帳戶：依法僅限現股多頭交易 (直接台幣圈存，免繁瑣換匯)</span>
                         </div>
-                        <span className="font-mono text-blue-700 font-black shrink-0">1 USD = 32.0 TWD</span>
+                        <span className="font-mono text-blue-700 font-black shrink-0" title={fxNow.source}>1 USD = {FX.toFixed(3)} TWD{fxNow.live ? '' : '（暫估）'}</span>
                       </div>
                     ) : (
                       <button

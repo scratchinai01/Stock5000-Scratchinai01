@@ -43,6 +43,7 @@ import { useOrderBook, type ClaimedFill, type ClientOrder, type OrderRequest } f
 import { usesOrderBook, roundToTick, positionPnL } from './utils/orderRules';
 import { reservedAmount, pendingCloseQty, describeOrder } from './utils/orderClient';
 import { computeOrderCost } from './utils/orderMath';
+import { setUsdTwd } from './utils/fx';
 import { ResetPortfolioModal } from './components/ResetPortfolioModal';
 import { Term } from './components/Term';
 import { FinancialGlossaryDrawer } from './components/FinancialGlossaryDrawer';
@@ -871,6 +872,7 @@ export default function App() {
           });
         }
         const liveMap = json.data;
+        if (json.fx && json.fx.rate) setUsdTwd(Number(json.fx.rate), String(json.fx.time || ''), String(json.fx.source || ''));
         const unavailableSymbols = new Set<string>(
           (Array.isArray(json.unavailable) ? json.unavailable : []).map((u: any) => String(u.symbol))
         );

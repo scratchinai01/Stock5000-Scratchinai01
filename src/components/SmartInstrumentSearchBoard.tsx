@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import { getUsdTwd } from '../utils/fx';
 
 interface SmartInstrumentSearchBoardProps {
   allInstruments: InstrumentSpec[];
@@ -130,11 +131,11 @@ export const SmartInstrumentSearchBoard: React.FC<SmartInstrumentSearchBoardProp
         change: d.change || 0,
         changePercent: d.changePercent || 0,
         volume: d.volume || 10000,
-        unitLabel: d.unitDescription || (isUs ? '股 (1股起，匯率1:32)' : '張 (1,000股)'),
+        unitLabel: d.unitDescription || (isUs ? '股 (1股起，依即時匯率)' : '張 (1,000股)'),
         multiplier: d.contractMultiplier || (isUs ? 32 : 1000),
         marginRequirement: d.marginRequirement || 0,
         description: isUs
-          ? `🇺🇸 美股複委託標的：${d.name} (${d.symbol})，最新市價 US$ ${d.closePrice} (折合 NT$ ${Math.round(d.closePrice * 32).toLocaleString()})。`
+          ? `🇺🇸 美股複委託標的：${d.name} (${d.symbol})，最新市價 US$ ${d.closePrice} (折合 NT$ ${Math.round(d.closePrice * getUsdTwd()).toLocaleString()})。`
           : `台灣上市/上櫃真實標的：${d.name} (${d.symbol})，撮合報價 NT$ ${d.closePrice}。`,
         klineHistory: d.klineHistory || [],
       };
@@ -146,7 +147,7 @@ export const SmartInstrumentSearchBoard: React.FC<SmartInstrumentSearchBoardProp
       setSearchNotice({
         type: 'success',
         message: isUs
-          ? `✅ 查詢成功！已載入美股【${newInst.name} (${newInst.symbol})】最新價格 US$ ${newInst.price} (折合 NT$ ${Math.round(newInst.price * 32).toLocaleString()})，下方可直接 1 股起委託！`
+          ? `✅ 查詢成功！已載入美股【${newInst.name} (${newInst.symbol})】最新價格 US$ ${newInst.price} (折合 NT$ ${Math.round(newInst.price * getUsdTwd()).toLocaleString()})，下方可直接 1 股起委託！`
           : `✅ 查詢成功！已成功載入【${newInst.name} (${newInst.symbol})】最新價格 NT$ ${newInst.price}，下方已為您自動展開可交易商品！`,
       });
       setSearchQuery('');
@@ -232,14 +233,14 @@ export const SmartInstrumentSearchBoard: React.FC<SmartInstrumentSearchBoardProp
     }
 
     if (cat === 'us_stocks') {
-      const priceTwd = Math.round(currentFocus.price * 32);
+      const priceTwd = Math.round(currentFocus.price * getUsdTwd());
       const items: any[] = [
         {
           id: `us_stock_${s}`,
           num: '1',
           title: `${currentFocus.name} (${s})`,
           badge: '美股複委託 (1股起買)',
-          detail: `市價 US$ ${currentFocus.price.toLocaleString()} (折合 NT$ ${priceTwd.toLocaleString()}) · 匯率 1:32 自動圈存台幣`,
+          detail: `市價 US$ ${currentFocus.price.toLocaleString()} (折合 NT$ ${priceTwd.toLocaleString()}) · 依即時匯率自動圈存台幣`,
           instrument: currentFocus,
           actions: [
             {

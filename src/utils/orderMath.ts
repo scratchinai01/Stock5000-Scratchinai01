@@ -1,10 +1,13 @@
 import { InstrumentSpec, OrderAction } from '../types/market';
+import { getUsdTwd } from './fx';
 
 /**
  * 下單金額與保證金計算（電腦版 TradingModal 與手機版共用同一套規則）
  */
 export function contractMultiplier(inst: InstrumentSpec): number {
-  return inst.multiplier || (inst.category === 'us_stocks' ? 32 : 1000);
+  // 美股：1 股，以即時美元匯率換算台幣
+  if (inst.category === 'us_stocks') return getUsdTwd();
+  return inst.multiplier || 1000;
 }
 
 export function computeOrderCost(
@@ -20,11 +23,11 @@ export function computeOrderCost(
   if (inst.category === 'commodities') {
     const marginPerContract = inst.marginRequirement || 50000;
     totalCostOrMargin = marginPerContract * quantity;
-    notionalValue = price * multiplier * 32.0 * quantity;
+    notionalValue = price * multiplier * getUsdTwd() * quantity;
   } else if (inst.category === 'crypto') {
     const sym = inst.symbol.toUpperCase();
     const isTwStable = sym === 'TWDT' || sym === 'TWDC';
-    const rate = isTwStable ? 1.0 : 32.5;
+    const rate = isTwStable ? 1.0 : getUsdTwd();
     notionalValue = price * (multiplier || 1) * rate * quantity;
     totalCostOrMargin = action === 'SHORT_SELL_CRYPTO' ? notionalValue * 0.5 : notionalValue;
   } else if (inst.category === 'us_stocks') {

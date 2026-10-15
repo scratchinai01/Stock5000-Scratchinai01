@@ -415,7 +415,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
             </div>
             <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-200">
               <span className="text-[10px] text-slate-500 font-bold block">🇺🇸 美股複委託功能：</span>
-              <span className="font-black text-emerald-900 block mt-0.5">1 股起買 · 匯率 1:32 折算</span>
+              <span className="font-black text-emerald-900 block mt-0.5">1 股起買 · 依即時匯率折算</span>
               <span className="text-[10px] text-slate-600">NVDA, AAPL, TSLA, TSM, MSFT 等 10 檔</span>
             </div>
           </div>

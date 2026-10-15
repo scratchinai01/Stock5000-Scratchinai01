@@ -18,7 +18,8 @@ import {
 } from './src/utils/twHolidays';
 import { getHistory, historyCacheStats } from './server-lib/history';
 import { registerOrderRoutes, liveFuturesRow } from './server-lib/orders';
-import { getGlobalQuotes, toLiveQuote, isGlobalSymbol, globalQuoteErrors, CRYPTO_BINANCE } from './server-lib/globalQuotes';
+import { fetchMisFutures, lastMisDebug } from './server-lib/taifexMis';
+import { getGlobalQuotes, toLiveQuote, isGlobalSymbol, globalQuoteErrors, CRYPTO_BINANCE, getUsdTwd, getStockqQuotes } from './server-lib/globalQuotes';
 import * as players from './server-lib/players';
 import { recordAccess, adminLogin, isAdmin, adminConfigured, queryLogs, getBlocklist, setBlocked, isBlocked, clientIp } from './server-lib/access';
 import { getPatternLatest, getPatternBacktest, getRiskLatest, getRiskBacktest, getLearnDoc } from './server-lib/patternStore';
@@ -1314,6 +1315,8 @@ app.get('/api/market/live-quotes', async (req, res) => {
     liveData[s] = { ...toLiveQuote(gqv, authenticQuotesCache[s]?.name || s, cat, session.twTimeStr), date: session.twDateStr, isMarketOpen: session.isOpen, marketStatus: session.statusText, marketPhase: session.marketPhase };
   }
 
+  const fx = await Promise.race([getUsdTwd(), new Promise<null>(r => setTimeout(() => r(null), 3000))]);
+
   const unavailable = requested
     .filter(s => !liveData[s])
     .map(s => ({ symbol: s, reason: globalQuoteErrors.get(s) || refreshFailures.get(s) || '無此商品資料' }));
@@ -1337,8 +1340,19 @@ app.get('/api/market/live-quotes', async (req, res) => {
     tokenTail: currentFinmindToken ? currentFinmindToken.slice(-6) : null,
     totalSymbols: Object.keys(liveData).length,
     unavailable,
+    fx,
     data: liveData,
   });
+});
+
+// StockQ 國際行情中心：指數、匯率、殖利率、原物料即時報價（抓不到的不回傳）
+app.get('/api/market/stockq', async (_req, res) => {
+  try {
+    const r = await getStockqQuotes();
+    res.json({ success: true, updatedAt: r.at, data: r.data });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // 期貨快照代號檢查（只回傳代號與成交價，供檢核用）
@@ -1348,7 +1362,8 @@ app.get('/api/market/futures-feed-check', async (req, res) => {
   try {
     const r = await fetch(`https://api.finmindtrade.com/api/v4/taiwan_futures_snapshot?data_id=${id}`, { headers: { Authorization: `Bearer ${currentFinmindToken}` } });
     const j: any = await r.json();
-    res.json({ id, status: r.status, msg: j?.msg, rows: (j?.data || []).slice(0, 40).map((x: any) => `${x.futures_id} ${x.close} ${x.date} vol ${x.total_volume}`) });
+    const mis = req.query.mis ? await fetchMisFutures(id) : null;
+    res.json({ id, status: r.status, msg: j?.msg, rows: (j?.data || []).slice(0, 40).map((x: any) => `${x.futures_id} ${x.close} ${x.date} vol ${x.total_volume}`), mis: mis ? [...mis.values()].map((x: any) => `${x.futures_id} ${x.close} bid ${x.buy_price} ask ${x.sell_price} ${x.date} vol ${x.total_volume}`) : null, misDebug: req.query.mis ? lastMisDebug : undefined });
   } catch (e: any) {
     res.json({ id, error: e.message });
   }
@@ -2624,10 +2639,10 @@ app.post('/api/gemini/quote-assistant', async (req, res) => {
         changePercent: changePct,
         volume: q.volume ?? 0,
         dataDate: q.date ?? null,
-        unitDescription: '股 (1股起，美股複委託以1:32匯率折算台幣圈存)',
+        unitDescription: '股 (1股起，美股複委託依即時匯率折算台幣圈存)',
         marginRequirement: 0,
         contractMultiplier: 32,
-        valuationReasoning: `美股複委託市場行情：${resolvedName} 最新市價 US$ ${price} (以匯率 1:32 折合 NT$ ${Math.round(price * 32).toLocaleString()})。`,
+        valuationReasoning: `美股複委託市場行情：${resolvedName} 最新市價 US$ ${price} （依即時美元匯率折算台幣）。`,
         klineHistory: q.history || [],
       },
       source: 'us_stock_catalog',

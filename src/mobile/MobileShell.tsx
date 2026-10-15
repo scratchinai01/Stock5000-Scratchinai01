@@ -112,7 +112,7 @@ export const MobileShell: React.FC<Props> = props => {
   const needLogin = !props.isAuthenticated && (tab === 'order' || tab === 'portfolio' || tab === 'rank');
 
   return (
-    <div className="min-h-[100dvh] flex flex-col" style={{ background: C.bg, color: C.text, fontFamily: "'Noto Sans TC', system-ui, sans-serif" }}>
+    <div className="min-h-[100dvh] flex flex-col w-full max-w-[720px] mx-auto" style={{ background: C.bg, color: C.text, fontFamily: "'Noto Sans TC', system-ui, sans-serif" }}>
       <div className="flex-1 flex flex-col pb-[76px]">
         {needLogin ? (
           <LoginGate onLogin={props.onLogin} />
@@ -141,7 +141,7 @@ export const MobileShell: React.FC<Props> = props => {
         )}
       </div>
 
-      <nav aria-label="主選單" className="fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 px-1 pt-1.5" style={{ background: C.bar, borderTop: `1px solid ${C.line}`, paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
+      <nav aria-label="主選單" className="fixed bottom-0 inset-x-0 mx-auto max-w-[720px] z-40 grid grid-cols-5 px-1 pt-1.5" style={{ background: C.bar, borderTop: `1px solid ${C.line}`, paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
         {([
           ['watch', '自選', Icon.star(tab === 'watch')],
           ['quote', '行情', Icon.chart],
@@ -358,7 +358,7 @@ function Quote(p: Props & { inst: InstrumentSpec; watched: boolean; onToggleWatc
         <TermCard inst={inst} />
       </div>
 
-      <div className="fixed inset-x-0 z-30 grid grid-cols-2 gap-2.5 px-4 py-2.5" style={{ bottom: 'calc(60px + max(10px, env(safe-area-inset-bottom)))', background: C.bar, borderTop: `1px solid ${C.line}` }}>
+      <div className="fixed inset-x-0 mx-auto max-w-[720px] z-30 grid grid-cols-2 gap-2.5 px-4 py-2.5" style={{ bottom: 'calc(60px + max(10px, env(safe-area-inset-bottom)))', background: C.bar, borderTop: `1px solid ${C.line}` }}>
         <button type="button" onClick={p.onTrade} className="min-h-[50px] rounded-2xl text-white text-[18px] font-black" style={{ background: C.downFill }}>賣出</button>
         <button type="button" onClick={p.onTrade} className="min-h-[50px] rounded-2xl text-white text-[18px] font-black" style={{ background: C.upFill }}>買進</button>
       </div>
@@ -542,8 +542,8 @@ function Portfolio(p: Props & { onOpen: (i: InstrumentSpec, to?: Tab) => void; o
       </div>
 
       {closing && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setClosing(null)}>
-          <div role="dialog" aria-modal="true" aria-label="確認平倉" className="w-full rounded-t-3xl p-5 flex flex-col gap-3" style={{ background: C.card, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setClosing(null)}>
+          <div role="dialog" aria-modal="true" aria-label="確認平倉" className="w-full max-w-[720px] rounded-t-3xl p-5 flex flex-col gap-3" style={{ background: C.card, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
             <div className="text-[18px] font-black">確認平倉</div>
             <div className="text-[15px] leading-relaxed" style={{ color: C.sub }}>
               以現價 <b style={mono}>{fmtPrice(closing.currentPrice)}</b> 平倉 <b style={{ color: C.text }}>{closing.name}</b> 全部 {closing.quantity}，預估損益

@@ -44,6 +44,7 @@ import { usesOrderBook, roundToTick, positionPnL } from './utils/orderRules';
 import { reservedAmount, pendingCloseQty, describeOrder } from './utils/orderClient';
 import { computeOrderCost } from './utils/orderMath';
 import { setUsdTwd } from './utils/fx';
+import { detectDevice, applyDeviceAttributes, type DeviceInfo } from './utils/device';
 import { ResetPortfolioModal } from './components/ResetPortfolioModal';
 import { Term } from './components/Term';
 import { FinancialGlossaryDrawer } from './components/FinancialGlossaryDrawer';
@@ -218,26 +219,48 @@ export default function App() {
   const [proMode, setProMode] = useState<'stock' | 'scan'>('stock');
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const openPro = (m: 'stock' | 'scan') => { setProMode(m); setIsProAnalysisOpen(true); };
-  // 手機版介面：寬度 < 768px 自動啟用；使用者可手動切換（記在 localStorage）
+  // 介面自動判斷：手機（直、橫向）用手機版；平板、電腦用完整版（視窗太窄時改手機版）。
+  // 使用者手動切換會記住，但只套用在同一種裝置上；切回系統建議的版本就恢復自動。
+  const [device, setDevice] = useState<DeviceInfo>(() => detectDevice());
+  useEffect(() => {
+    let t: any;
+    const update = () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        const d = detectDevice();
+        applyDeviceAttributes(d);
+        setDevice(prev => (prev.kind === d.kind && prev.ui === d.ui && prev.landscape === d.landscape && prev.touch === d.touch ? prev : d));
+      }, 120);
+    };
+    applyDeviceAttributes(detectDevice());
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
   const [uiOverride, setUiOverride] = useState<'mobile' | 'desktop' | null>(() => {
     try {
-      const v = localStorage.getItem('ui_mode_v1');
-      return v === 'mobile' || v === 'desktop' ? v : null;
+      const v = JSON.parse(localStorage.getItem('ui_mode_v2') || 'null');
+      return v && v.kind === detectDevice().kind && (v.mode === 'mobile' || v.mode === 'desktop') ? v.mode : null;
     } catch {
       return null;
     }
   });
-  const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const isMobileUI = (uiOverride ?? device.ui) === 'mobile';
   useEffect(() => {
-    const onResize = () => setIsNarrow(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-  const isMobileUI = uiOverride ? uiOverride === 'mobile' : isNarrow;
+    document.documentElement.dataset.ui = isMobileUI ? 'mobile' : 'desktop';
+  }, [isMobileUI]);
   const setUiMode = (mode: 'mobile' | 'desktop') => {
-    setUiOverride(mode);
+    const auto = detectDevice();
+    const next = mode === auto.ui ? null : mode;
+    setUiOverride(next);
     try {
-      localStorage.setItem('ui_mode_v1', mode);
+      if (next) localStorage.setItem('ui_mode_v2', JSON.stringify({ mode: next, kind: auto.kind }));
+      else localStorage.removeItem('ui_mode_v2');
+      localStorage.removeItem('ui_mode_v1');
     } catch {
       /* ignore */
     }

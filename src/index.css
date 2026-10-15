@@ -51,3 +51,50 @@ html, body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
+
+/* ───────── 裝置自動調整（html 上的 data-device / data-touch / data-ui 由程式設定） ───────── */
+
+/* 手機版介面：寬螢幕（手機橫向）兩側用深色底，中間是手機版內容 */
+html[data-ui="mobile"], html[data-ui="mobile"] body {
+  background-color: #070a0e;
+}
+
+/* 觸控裝置：輸入框至少 16px，避免 iPhone／iPad 點輸入框時整個畫面被自動放大 */
+html[data-touch="1"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-touch="1"] select,
+html[data-touch="1"] textarea {
+  font-size: max(16px, 1em);
+}
+
+/* 平板完整版：較小的按鈕放大觸控範圍，捲動更順 */
+html[data-device="tablet"][data-ui="desktop"] button,
+html[data-device="tablet"][data-ui="desktop"] [role="button"] {
+  min-height: 36px;
+}
+html[data-touch="1"] .overflow-x-auto,
+html[data-touch="1"] .overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 觸控裝置沒有滑鼠，hover 效果容易「黏住」：只在真的有滑鼠時才顯示 hover 陰影放大 */
+@media (hover: none) {
+  .hover\:scale-105:hover,
+  .hover\:scale-\[1\.02\]:hover {
+    transform: none;
+  }
+}
+
+/* iPhone 瀏海、圓角：完整版頂端與兩側留安全距離 */
+html[data-ui="desktop"] body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* 完整版主選單：寬度不夠時自動換行，不再藏在右邊看不到（平板直向、筆電小視窗） */
+@media (max-width: 1180px) {
+  nav[aria-label="主要功能"] {
+    flex-wrap: wrap;
+    overflow: visible;
+    row-gap: 0.5rem;
+  }
+}

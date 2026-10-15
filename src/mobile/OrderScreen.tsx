@@ -337,7 +337,7 @@ function Ticket(p: Props & { onSent: () => void }) {
         )}
       </div>
 
-      <div className="fixed inset-x-0 z-30 px-4 py-2.5" style={{ bottom: 'calc(60px + max(10px, env(safe-area-inset-bottom)))', background: C.bar, borderTop: `1px solid ${C.line}` }}>
+      <div className="fixed inset-x-0 mx-auto max-w-[720px] z-30 px-4 py-2.5" style={{ bottom: 'calc(60px + max(10px, env(safe-area-inset-bottom)))', background: C.bar, borderTop: `1px solid ${C.line}` }}>
         <button type="button" disabled={!!blockReason} onClick={() => setConfirming(true)}
           className="w-full min-h-[52px] rounded-2xl text-white text-[16px] font-black disabled:opacity-40" style={{ background: sideColor }}>
           {blockReason || `${side === 'BUY' ? '買進' : '賣出'} ${qty} ${unit}・${priceDesc}・${tif}`}
@@ -346,8 +346,8 @@ function Ticket(p: Props & { onSent: () => void }) {
       <div className="h-[80px]" />
 
       {confirming && action && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => !sending && setConfirming(false)}>
-          <div role="dialog" aria-modal="true" aria-label="確認委託" className="w-full rounded-t-3xl p-5 flex flex-col gap-3" style={{ background: C.card, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => !sending && setConfirming(false)}>
+          <div role="dialog" aria-modal="true" aria-label="確認委託" className="w-full max-w-[720px] rounded-t-3xl p-5 flex flex-col gap-3" style={{ background: C.card, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
             <div className="text-[18px] font-black">確認委託</div>
             <div className="text-[15px] leading-relaxed" style={{ color: C.sub }}>
               <b style={{ color: side === 'BUY' ? C.up : C.down }}>{actionText}</b> <b style={{ color: C.text }}>{inst.name}</b> {qty} {unit}，
@@ -467,8 +467,8 @@ function EditSheet({ order, mode, onClose, onSubmit }: { order: ClientOrder; mod
   const [busy, setBusy] = useState(false);
   const minQty = order.filledQty + 1;
   return (
-    <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => !busy && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label="改單" className="w-full rounded-t-3xl p-5 flex flex-col gap-3" style={{ background: C.card, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => !busy && onClose()}>
+      <div role="dialog" aria-modal="true" aria-label="改單" className="w-full max-w-[720px] rounded-t-3xl p-5 flex flex-col gap-3" style={{ background: C.card, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
         <div className="text-[18px] font-black">{mode === 'price' ? '改價' : '減量'}・{order.name}</div>
         {mode === 'price' ? (
           <>

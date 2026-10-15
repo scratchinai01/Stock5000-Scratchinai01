@@ -1,0 +1,26 @@
+# GitHub 推送到 main 時自動部署（Cloud Build 觸發器使用）
+# 1. 建置 Docker 映像  2. 部署 Cloud Run 服務 stock5000-claude  3. 五個排程工作改用同一個映像
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_IMAGE}:${SHORT_SHA}', '-t', '${_IMAGE}:latest', '.']
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '--all-tags', '${_IMAGE}']
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        gcloud run deploy stock5000-claude --image "${_IMAGE}:${SHORT_SHA}" --region asia-east1 --no-cpu-throttling --max-instances 1 --quiet
+        for J in stock-history-daily pattern-scan risk-scan learn-study learn-discover; do
+          gcloud run jobs update "$$J" --image "${_IMAGE}:${SHORT_SHA}" --region asia-east1 --quiet && echo "job $$J ok"
+        done
+substitutions:
+  _IMAGE: asia-east1-docker.pkg.dev/payfirebase/cloud-run-source-deploy/stock5000-claude
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+timeout: 1800s

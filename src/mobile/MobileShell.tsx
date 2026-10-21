@@ -24,6 +24,19 @@ export interface TradeRequest {
   rationale: string;
 }
 
+export interface MobileMenuItem {
+  icon: string;
+  label: string;
+  desc?: string;
+  onClick: () => void;
+  tone?: 'danger' | 'accent';
+  badge?: string;
+}
+export interface MobileMenuSection {
+  title: string;
+  items: MobileMenuItem[];
+}
+
 interface Props {
   instruments: InstrumentSpec[];
   selectedInstrument: InstrumentSpec;
@@ -42,6 +55,8 @@ interface Props {
   onOpenScan?: () => void;
   onSwitchToDesktop: () => void;
   onOpenGuide?: () => void;
+  /** 「更多」頁的功能清單（與電腦版選單相同的功能） */
+  menu?: MobileMenuSection[];
   lastUpdateTime?: string;
   orders: ClientOrder[];
   reservedCash: number;
@@ -50,7 +65,7 @@ interface Props {
   onModifyOrder: (id: string, patch: { limitPrice?: number; quantity?: number }) => Promise<{ order?: ClientOrder; error?: string }>;
 }
 
-type Tab = 'watch' | 'quote' | 'order' | 'portfolio' | 'rank';
+type Tab = 'watch' | 'quote' | 'order' | 'portfolio' | 'rank' | 'more';
 
 const WATCH_KEY = 'm_watchlist_v1';
 const DEFAULT_WATCH = ['TX', 'MTX', 'TMF', '2330', '2317', '2454', '0050', 'CDF', '00679B', 'NVDA'];
@@ -136,18 +151,21 @@ export const MobileShell: React.FC<Props> = props => {
           />
         ) : tab === 'portfolio' ? (
           <Portfolio {...props} onOpen={open} onStartClose={startClose} />
+        ) : tab === 'more' ? (
+          <MoreScreen sections={props.menu || []} />
         ) : (
           <Rank {...props} />
         )}
       </div>
 
-      <nav aria-label="主選單" className="fixed bottom-0 inset-x-0 mx-auto max-w-[720px] z-40 grid grid-cols-5 px-1 pt-1.5" style={{ background: C.bar, borderTop: `1px solid ${C.line}`, paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
+      <nav aria-label="主選單" className="fixed bottom-0 inset-x-0 mx-auto max-w-[720px] z-40 grid grid-cols-6 px-1 pt-1.5" style={{ background: C.bar, borderTop: `1px solid ${C.line}`, paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
         {([
           ['watch', '自選', Icon.star(tab === 'watch')],
           ['quote', '行情', Icon.chart],
           ['order', '下單', Icon.bolt],
           ['portfolio', '庫存', Icon.wallet],
           ['rank', '排行', Icon.trophy],
+          ['more', '更多', MENU_ICON],
         ] as [Tab, string, React.ReactNode][]).map(([id, label, icon]) => (
           <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}
             className="flex flex-col items-center justify-center gap-0.5 min-h-[50px] text-[11px] font-bold"
@@ -165,6 +183,46 @@ export const MobileShell: React.FC<Props> = props => {
     </div>
   );
 };
+
+// ───────────────────────── 更多（與電腦版相同的功能） ─────────────────────────
+const MENU_ICON = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <path d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+);
+
+function MoreScreen({ sections }: { sections: MobileMenuSection[] }) {
+  return (
+    <>
+      <div className="sticky top-0 z-30 px-4 pt-3 pb-2.5" style={{ background: C.bar, borderBottom: `1px solid ${C.line}` }}>
+        <div className="text-[22px] font-black tracking-wide">更多功能</div>
+        <div className="text-[13px]" style={{ color: C.muted }}>和電腦版相同的功能都在這裡</div>
+      </div>
+      <div className="px-4 py-3 flex flex-col gap-4">
+        {sections.map(sec => (
+          <section key={sec.title} className="flex flex-col gap-1.5">
+            <div className="text-[13px] font-black px-1" style={{ color: C.muted }}>{sec.title}</div>
+            <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+              {sec.items.map((it, i) => (
+                <button key={it.label} type="button" onClick={it.onClick}
+                  className="w-full flex items-center gap-3 px-4 min-h-[58px] py-2.5 text-left active:opacity-70"
+                  style={{ borderTop: i ? `1px solid ${C.line}` : undefined }}>
+                  <span className="text-[22px] w-7 text-center shrink-0" aria-hidden="true">{it.icon}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[16px] font-black" style={{ color: it.tone === 'danger' ? C.up : it.tone === 'accent' ? C.accent : C.text }}>{it.label}</span>
+                    {it.desc && <span className="block text-[12.5px] leading-snug" style={{ color: C.muted }}>{it.desc}</span>}
+                  </span>
+                  {it.badge && <span className="shrink-0 px-2 py-0.5 rounded-full text-[12px] font-black" style={{ background: C.accentBg, color: C.accent }}>{it.badge}</span>}
+                  <span className="shrink-0 text-[18px]" style={{ color: C.muted }}>›</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────
 function MarketChip({ inst }: { inst?: InstrumentSpec }) {
@@ -186,6 +244,7 @@ function LoginGate({ onLogin }: { onLogin: () => void }) {
       <button type="button" onClick={onLogin} className="min-h-[48px] px-8 rounded-2xl font-black text-[16px]" style={{ background: C.accent, color: C.bg }}>
         操盤手登入
       </button>
+      <div className="text-[13px] leading-relaxed" style={{ color: C.muted }}>忘記密碼？按「操盤手登入」，輸入姓名後點「🔑 忘記密碼？看密碼提示」。</div>
     </div>
   );
 }

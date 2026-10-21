@@ -35,7 +35,7 @@ import { CommoditiesBoard } from './components/CommoditiesBoard';
 import { CryptoLiveBoard } from './components/CryptoLiveBoard';
 import { GlobalMarketRadarModal } from './components/GlobalMarketRadarModal';
 import { ProAnalysisModal } from './components/ProAnalysisModal';
-import { MobileShell } from './mobile/MobileShell';
+import { MobileShell, type MobileMenuSection } from './mobile/MobileShell';
 import { OrdersView } from './mobile/OrderScreen';
 import { TermDetailSheet, type TryTarget } from './components/glossary/TermDetailSheet';
 import { PositionLessonSheet } from './components/glossary/PositionLessonSheet';
@@ -251,6 +251,8 @@ export default function App() {
     }
   });
   const isMobileUI = (uiOverride ?? device.ui) === 'mobile';
+  // 手機版：從「更多」打開電腦版的功能頁（全頁顯示，左上角返回）
+  const [mobilePage, setMobilePage] = useState(false);
   useEffect(() => {
     document.documentElement.dataset.ui = isMobileUI ? 'mobile' : 'desktop';
   }, [isMobileUI]);
@@ -1362,6 +1364,214 @@ export default function App() {
     setSelectedInstrument(inst);
   };
 
+  // ───────── 手機版「更多」：和電腦版選單相同的功能 ─────────
+  const VIEW_TITLE: Record<string, string> = { overview: '資產儀表板', trading: '行情分析', ppt_studio: 'PPT 報告工作室', leaderboard: '全班排行', commodities: '原物料 / StockQ', crypto: '24/7 Crypto & 穩定幣' };
+  const openMobileView = (v: typeof activeView, needAuth = true) => {
+    if (needAuth && !isAuthenticated) return setIsPlayerSetupOpen(true);
+    setActiveView(v);
+    setMobilePage(true);
+    window.scrollTo(0, 0);
+  };
+  const authOnly = (fn: () => void) => () => (isAuthenticated ? fn() : setIsPlayerSetupOpen(true));
+  const mobileMenu: MobileMenuSection[] = [
+    {
+      title: isAuthenticated && currentProfile ? `帳戶・${currentProfile.studentName}` : '帳戶',
+      items: isAuthenticated && currentProfile
+        ? [
+            { icon: '🔑', label: '修改密碼', desc: '設定新的登入密碼', onClick: () => setIsChangePasswordOpen(true) },
+            { icon: '🛡️', label: '帳號安全中心', desc: '登入紀錄與安全設定', onClick: () => setIsSecurityCenterOpen(true) },
+            { icon: '🚪', label: '登出', onClick: handleLogout, tone: 'danger' as const },
+          ]
+        : [
+            { icon: '🔐', label: '登入／註冊', desc: '輸入姓名與密碼進入交易室', onClick: () => setIsPlayerSetupOpen(true), tone: 'accent' as const },
+            { icon: '❓', label: '忘記密碼？', desc: '輸入姓名後點「🔑 忘記密碼？看密碼提示」，會顯示密碼的第一個字和最後一個字', onClick: () => setIsPlayerSetupOpen(true) },
+          ],
+    },
+    {
+      title: '交易',
+      items: [
+        { icon: '🧭', label: '新手下單引導', desc: '選市場、做多做空、輸入價格、成交卡片', onClick: authOnly(() => setIsOrderGuideOpen(true)) },
+        { icon: '🛒', label: '下單交易（完整版）', desc: '股票、ETF、債券、期貨、選擇權、權證、美股、原物料、加密貨幣', onClick: authOnly(handleOpenGeneralTrading) },
+        { icon: '📊', label: '資產儀表板', desc: '總資產、配置比例、持倉看板', onClick: () => openMobileView('overview') },
+        { icon: '📄', label: '持倉與交易紀錄', desc: '對帳單、成交明細、下載', onClick: authOnly(() => setIsTradeStatementOpen(true)) },
+      ],
+    },
+    {
+      title: '行情與分析',
+      items: [
+        { icon: '📈', label: '行情分析', desc: '即時 K 線與個股報價', onClick: () => openMobileView('trading') },
+        { icon: '🌍', label: '原物料 / StockQ', desc: '能源、金屬、農產品與全球指數', onClick: () => openMobileView('commodities') },
+        { icon: '🪙', label: '24/7 Crypto & 穩定幣', desc: 'BTC、ETH、USDT、USDC、TWDT', onClick: () => openMobileView('crypto') },
+        { icon: '🛰️', label: '7大市場時鐘', desc: '全球市場營業時間與接力', onClick: () => setIsGlobalRadarOpen(true) },
+        { icon: '🔬', label: '個股分析', desc: '長期走勢、績效、策略回測、下跌預警', onClick: () => openPro('stock') },
+        { icon: '🔎', label: '全市場海搜', desc: '三角收斂突破、下跌預警排行', onClick: () => openPro('scan') },
+        { icon: '🎯', label: '標的衍生商品矩陣', desc: '同一標的的期貨、選擇權、權證', onClick: () => handleOpenDerivatives('2317') },
+      ],
+    },
+    {
+      title: '學習與報告',
+      items: [
+        { icon: '📖', label: '名詞小學堂', desc: '300 筆金融名詞', badge: `${totalLearnedCount}/300`, onClick: () => openDrawer() },
+        { icon: '📑', label: 'PPT 報告工作室', desc: '簡報大綱、講稿與列印', onClick: () => openMobileView('ppt_studio') },
+        { icon: '🏆', label: '全班排行（完整版）', desc: '排名、報酬率與資產', onClick: () => openMobileView('leaderboard') },
+      ],
+    },
+    {
+      title: '其他',
+      items: [
+        ...(isAuthenticated
+          ? [
+              { icon: '🎓', label: '5,000萬純現金還原', onClick: handleResetToAutonomousCash },
+              { icon: '🔄', label: '清空部位重來', desc: '需要密碼確認', onClick: () => setIsResetModalOpen(true), tone: 'danger' as const },
+            ]
+          : []),
+        { icon: 'ℹ️', label: '關於本系統', desc: '版權、聯絡方式、用途聲明', onClick: () => setIsAboutOpen(true) },
+        { icon: '🛡️', label: '版主後台', desc: '需版主密碼', onClick: () => setIsAccessAdminOpen(true) },
+        ...(isSuperUser ? [{ icon: '👑', label: '管理系統', desc: '最高管理者', onClick: () => setIsAdminModalOpen(true) }] : []),
+        { icon: '⚙️', label: '系統工程資訊', desc: '資料連線與檢驗', onClick: () => setIsFinmindVerificationOpen(true) },
+        { icon: '🖥️', label: '切換電腦版', desc: '改用完整的電腦版畫面', onClick: () => setUiMode('desktop') },
+      ],
+    },
+  ];
+
+  // 各功能頁（電腦版主畫面；手機版從「更多」以全頁打開，功能與電腦版相同）
+  const mainViews = currentProfile ? (
+    <>
+            {/* VIEW 1: Portfolio Overview */}
+            {activeView === 'overview' && (
+              <PortfolioOverview
+                currentProfile={currentProfile}
+                onOpenTrading={handleOpenGeneralTrading}
+                onClosePosition={handleCloseRequest}
+                onViewInstrumentKLine={inst => setViewingKLineInst(inst)}
+                allInstruments={instruments}
+                onEditPlayer={() => setIsPlayerSetupOpen(true)}
+                onSelectInstrumentToTrade={handleSelectInstrumentToTrade}
+                onResetToAutonomousCash={handleResetToAutonomousCash}
+                onOpenResetPortfolio={() => setIsResetModalOpen(true)}
+                isAutoRefresh={isAutoRefreshLive}
+                lastUpdatedTime={lastFinmindUpdateTime}
+                countdownSeconds={countdown}
+                tokenInfo={tokenInfo}
+                onOpenFinmindVerification={() => setIsFinmindVerificationOpen(true)}
+                onForceRefreshAll={() => fetchLiveQuotes(true)}
+                marketStatus={marketStatus}
+                onOpenStatement={() => setIsTradeStatementOpen(true)}
+                onSeedSamplePortfolio={handleSeedSamplePortfolio}
+                onOpenDerivativesModal={handleOpenDerivatives}
+                onOpenSecurityCenter={() => setIsSecurityCenterOpen(true)}
+                onOpenChangePassword={() => setIsChangePasswordOpen(true)}
+                onAddInstrument={handleAddCustomInstrument}
+                onOpenGlobalRadar={() => setIsGlobalRadarOpen(true)}
+                onOpenCryptoLiveBoard={() => setActiveView('crypto')}
+              />
+            )}
+
+            {/* VIEW 2: Trading Terminal & K-Line Studio */}
+            {activeView === 'trading' && (
+              <div className="space-y-6">
+                <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-950">
+                      行情檢視與 當下即時價 K 線存證中心
+                    </h2>
+                    <p className="text-xs text-slate-600 font-medium">
+                      點擊切換上方商品以檢視 當下即時行情、價量走勢與均線支撐，並直接進行下單或截圖保存於 PPT 簡報中。
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleOpenGeneralTrading}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-sm border border-amber-400 cursor-pointer"
+                    >
+                      + 建立新下單 (選擇5大類別)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Selected Instrument K-Line Showcase */}
+                <div className="space-y-4">
+                  <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar scrollbar-none">
+                    {instruments.map(inst => (
+                      <button
+                        key={inst.symbol}
+                        onClick={() => setSelectedInstrument(inst)}
+                        className={`px-3 py-2 rounded-xl border text-xs font-black shrink-0 transition cursor-pointer ${
+                          selectedInstrument.symbol === inst.symbol
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="font-mono text-amber-500 mr-1.5">{inst.symbol}</span>
+                        <span>{inst.name}</span>
+                        <span className="ml-2 font-mono text-slate-300">
+                          NT$ {inst.price >= 1000 ? inst.price.toLocaleString() : inst.price}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <KLineChart
+                    instrument={selectedInstrument}
+                    benchmarkDate={getSystemDateStr()}
+                    orderRationale={`依據系統即時撮合行情建立 ${selectedInstrument.name} 之部位，配合總經與產業題材進行資產配置。`}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* VIEW 3: PPT Studio */}
+            {activeView === 'ppt_studio' && (
+              <PPTReportStudio
+                currentProfile={currentProfile}
+                allInstruments={instruments}
+                onOpenTrading={handleOpenGeneralTrading}
+              />
+            )}
+
+            {/* VIEW 4: Leaderboard */}
+            {activeView === 'leaderboard' && (
+              <Leaderboard
+                profiles={profiles}
+                currentProfileId={currentProfileId}
+                onSelectProfile={id => {
+                  setCurrentProfileId(id);
+                  setActiveView('overview');
+                }}
+                onAddNewStudent={handleAddNewStudent}
+                onDeleteProfile={handleDeleteStudentProfile}
+                isSuperUser={isSuperUser}
+              />
+            )}
+
+            {/* VIEW 5: Commodities & StockQ Board */}
+            {activeView === 'commodities' && (
+              <div className="space-y-4">
+                <CommoditiesBoard
+                  allInstruments={instruments}
+                  onSelectInstrumentToTrade={handleSelectInstrumentToTrade}
+                  onOpenTrading={handleOpenGeneralTrading}
+                  onViewInstrumentKLine={inst => setViewingKLineInst(inst)}
+                  isSuperUser={isSuperUser}
+                />
+              </div>
+            )}
+
+            {/* VIEW 6: 🌐 24/7 Crypto & 穩定幣 (BTC/ETH/USDT/USDC/TWDT) */}
+            {activeView === 'crypto' && (
+              <div className="space-y-4">
+                <CryptoLiveBoard
+                  allInstruments={instruments}
+                  onSelectInstrumentToTrade={handleSelectInstrumentToTrade}
+                  onOpenTrading={handleOpenGeneralTrading}
+                  onOpenGlobalRadar={() => setIsGlobalRadarOpen(true)}
+                />
+              </div>
+            )}
+    </>
+  ) : null;
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-amber-200">
       {isMobileUI && (
@@ -1383,6 +1593,7 @@ export default function App() {
           onOpenScan={() => openPro('scan')}
           onSwitchToDesktop={() => setUiMode('desktop')}
           onOpenGuide={() => (isAuthenticated ? setIsOrderGuideOpen(true) : setIsPlayerSetupOpen(true))}
+          menu={mobileMenu}
           lastUpdateTime={lastFinmindUpdateTime}
           orders={orderBook.orders}
           reservedCash={reservedCash}
@@ -1390,6 +1601,22 @@ export default function App() {
           onCancelOrder={async id => { const r = await orderBook.cancel(id); setOrderToast(r.error ? { text: `刪單失敗：${r.error}`, tone: 'warn' } : { text: '已刪單', tone: 'info' }); return r; }}
           onModifyOrder={orderBook.modify}
         />
+      )}
+      {isMobileUI && mobilePage && (
+        <div className="fixed inset-0 z-[45] overflow-y-auto overscroll-contain bg-slate-100 text-slate-900">
+          <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 bg-white/95 backdrop-blur border-b border-slate-200" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+            <button type="button" onClick={() => setMobilePage(false)} className="min-h-[44px] px-3 rounded-xl bg-slate-900 text-white text-[15px] font-black">← 返回</button>
+            <div className="flex-1 min-w-0 truncate text-[17px] font-black">{VIEW_TITLE[activeView] || ''}</div>
+          </div>
+          <div className="p-3 pb-10">
+            {isAuthenticated && currentProfile ? mainViews : (
+              <div className="py-16 text-center space-y-3">
+                <div className="text-[18px] font-black">請先登入</div>
+                <button type="button" onClick={() => setIsPlayerSetupOpen(true)} className="min-h-[48px] px-6 rounded-2xl bg-amber-500 text-white font-black">登入／註冊</button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
       <UpdateBanner />
       {orderToast && (
@@ -1754,138 +1981,7 @@ export default function App() {
           />
         ) : (
           <>
-            {/* VIEW 1: Portfolio Overview */}
-            {activeView === 'overview' && (
-              <PortfolioOverview
-                currentProfile={currentProfile}
-                onOpenTrading={handleOpenGeneralTrading}
-                onClosePosition={handleCloseRequest}
-                onViewInstrumentKLine={inst => setViewingKLineInst(inst)}
-                allInstruments={instruments}
-                onEditPlayer={() => setIsPlayerSetupOpen(true)}
-                onSelectInstrumentToTrade={handleSelectInstrumentToTrade}
-                onResetToAutonomousCash={handleResetToAutonomousCash}
-                onOpenResetPortfolio={() => setIsResetModalOpen(true)}
-                isAutoRefresh={isAutoRefreshLive}
-                lastUpdatedTime={lastFinmindUpdateTime}
-                countdownSeconds={countdown}
-                tokenInfo={tokenInfo}
-                onOpenFinmindVerification={() => setIsFinmindVerificationOpen(true)}
-                onForceRefreshAll={() => fetchLiveQuotes(true)}
-                marketStatus={marketStatus}
-                onOpenStatement={() => setIsTradeStatementOpen(true)}
-                onSeedSamplePortfolio={handleSeedSamplePortfolio}
-                onOpenDerivativesModal={handleOpenDerivatives}
-                onOpenSecurityCenter={() => setIsSecurityCenterOpen(true)}
-                onOpenChangePassword={() => setIsChangePasswordOpen(true)}
-                onAddInstrument={handleAddCustomInstrument}
-                onOpenGlobalRadar={() => setIsGlobalRadarOpen(true)}
-                onOpenCryptoLiveBoard={() => setActiveView('crypto')}
-              />
-            )}
-
-            {/* VIEW 2: Trading Terminal & K-Line Studio */}
-            {activeView === 'trading' && (
-              <div className="space-y-6">
-                <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-black text-slate-950">
-                      行情檢視與 當下即時價 K 線存證中心
-                    </h2>
-                    <p className="text-xs text-slate-600 font-medium">
-                      點擊切換上方商品以檢視 當下即時行情、價量走勢與均線支撐，並直接進行下單或截圖保存於 PPT 簡報中。
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleOpenGeneralTrading}
-                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-sm border border-amber-400 cursor-pointer"
-                    >
-                      + 建立新下單 (選擇5大類別)
-                    </button>
-                  </div>
-                </div>
-
-                {/* Selected Instrument K-Line Showcase */}
-                <div className="space-y-4">
-                  <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar scrollbar-none">
-                    {instruments.map(inst => (
-                      <button
-                        key={inst.symbol}
-                        onClick={() => setSelectedInstrument(inst)}
-                        className={`px-3 py-2 rounded-xl border text-xs font-black shrink-0 transition cursor-pointer ${
-                          selectedInstrument.symbol === inst.symbol
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className="font-mono text-amber-500 mr-1.5">{inst.symbol}</span>
-                        <span>{inst.name}</span>
-                        <span className="ml-2 font-mono text-slate-300">
-                          NT$ {inst.price >= 1000 ? inst.price.toLocaleString() : inst.price}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <KLineChart
-                    instrument={selectedInstrument}
-                    benchmarkDate={getSystemDateStr()}
-                    orderRationale={`依據系統即時撮合行情建立 ${selectedInstrument.name} 之部位，配合總經與產業題材進行資產配置。`}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* VIEW 3: PPT Studio */}
-            {activeView === 'ppt_studio' && (
-              <PPTReportStudio
-                currentProfile={currentProfile}
-                allInstruments={instruments}
-                onOpenTrading={handleOpenGeneralTrading}
-              />
-            )}
-
-            {/* VIEW 4: Leaderboard */}
-            {activeView === 'leaderboard' && (
-              <Leaderboard
-                profiles={profiles}
-                currentProfileId={currentProfileId}
-                onSelectProfile={id => {
-                  setCurrentProfileId(id);
-                  setActiveView('overview');
-                }}
-                onAddNewStudent={handleAddNewStudent}
-                onDeleteProfile={handleDeleteStudentProfile}
-                isSuperUser={isSuperUser}
-              />
-            )}
-
-            {/* VIEW 5: Commodities & StockQ Board */}
-            {activeView === 'commodities' && (
-              <div className="space-y-4">
-                <CommoditiesBoard
-                  allInstruments={instruments}
-                  onSelectInstrumentToTrade={handleSelectInstrumentToTrade}
-                  onOpenTrading={handleOpenGeneralTrading}
-                  onViewInstrumentKLine={inst => setViewingKLineInst(inst)}
-                  isSuperUser={isSuperUser}
-                />
-              </div>
-            )}
-
-            {/* VIEW 6: 🌐 24/7 Crypto & 穩定幣 (BTC/ETH/USDT/USDC/TWDT) */}
-            {activeView === 'crypto' && (
-              <div className="space-y-4">
-                <CryptoLiveBoard
-                  allInstruments={instruments}
-                  onSelectInstrumentToTrade={handleSelectInstrumentToTrade}
-                  onOpenTrading={handleOpenGeneralTrading}
-                  onOpenGlobalRadar={() => setIsGlobalRadarOpen(true)}
-                />
-              </div>
-            )}
+            {mainViews}
           </>
         )}
       </main>

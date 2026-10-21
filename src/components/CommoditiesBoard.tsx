@@ -354,11 +354,7 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
                                   <div className="flex items-baseline gap-1">
                                     <span className="text-amber-400 font-bold">💵</span>
                                     <span className="font-mono font-black text-base text-white">
-                                      {item.price >= 100
-                                        ? item.price.toLocaleString(undefined, { minimumFractionDigits: 1 })
-                                        : item.price >= 10
-                                        ? item.price.toFixed(2)
-                                        : item.price.toFixed(3)}
+                                      {item.isMock ? '—' : item.price >= 100 ? item.price.toLocaleString(undefined, { minimumFractionDigits: 1 }) : item.price >= 10 ? item.price.toFixed(2) : item.price.toFixed(3)}
                                     </span>
                                   </div>
                                 </div>
@@ -369,11 +365,7 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
                                       isUp ? 'text-rose-400' : 'text-emerald-400'
                                     }`}
                                   >
-                                    {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                    {isUp ? '+' : ''}
-                                    {item.change >= 10 ? item.change.toFixed(1) : item.change.toFixed(2)} (
-                                    {isUp ? '+' : ''}
-                                    {item.changePercent.toFixed(2)}%)
+                                    {item.isMock ? <span className="text-slate-400">無即時報價</span> : <>{isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{isUp ? '+' : ''}{item.change >= 10 ? item.change.toFixed(1) : item.change.toFixed(2)} ({isUp ? '+' : ''}{item.changePercent.toFixed(2)}%)</>}
                                   </span>
                                   <span className="text-[10px] text-slate-400 block mt-0.5">
                                     保證金 NT$ {item.marginRequirement.toLocaleString()}
@@ -511,11 +503,7 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
                                     <div className="flex items-baseline gap-1">
                                       <span className="text-amber-400 text-xs">💵</span>
                                       <span className="font-mono font-black text-base sm:text-lg text-white">
-                                        {item.price >= 100
-                                          ? item.price.toLocaleString(undefined, { minimumFractionDigits: 1 })
-                                          : item.price >= 10
-                                          ? item.price.toFixed(2)
-                                          : item.price.toFixed(3)}
+                                        {item.isMock ? '—' : item.price >= 100 ? item.price.toLocaleString(undefined, { minimumFractionDigits: 1 }) : item.price >= 10 ? item.price.toFixed(2) : item.price.toFixed(3)}
                                       </span>
                                     </div>
                                   </div>
@@ -526,11 +514,7 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
                                         isUp ? 'text-rose-400' : 'text-emerald-400'
                                       }`}
                                     >
-                                      {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                      {isUp ? '+' : ''}
-                                      {item.change >= 10 ? item.change.toFixed(1) : item.change.toFixed(2)} (
-                                      {isUp ? '+' : ''}
-                                      {item.changePercent.toFixed(2)}%)
+                                      {item.isMock ? <span className="text-slate-400">無即時報價</span> : <>{isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{isUp ? '+' : ''}{item.change >= 10 ? item.change.toFixed(1) : item.change.toFixed(2)} ({isUp ? '+' : ''}{item.changePercent.toFixed(2)}%)</>}
                                     </span>
                                     <span className="text-[10px] text-slate-400 block mt-0.5">
                                       保證金 NT$ {item.marginRequirement.toLocaleString()}

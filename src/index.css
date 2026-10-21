@@ -6,6 +6,8 @@ html {
 
 /* Mobile scroll & viewport touch optimization - Default Daytime Mode (白天模式) */
 html, body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   min-height: 100%;
   min-height: 100dvh;
   overscroll-behavior-y: none;

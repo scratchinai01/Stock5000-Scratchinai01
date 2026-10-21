@@ -3354,8 +3354,19 @@ async function startServer() {
   } else {
     // Production Mode: Serve built SPA from dist
     if (hasDist) {
-      app.use(express.static(distPath));
+      // 有雜湊檔名的 /assets 可以長期快取；index.html 一律重新確認，部署後手機才會拿到新版
+      const noCacheIndex = (res: express.Response) => res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      app.use(
+        express.static(distPath, {
+          index: false,
+          setHeaders: (res, filePath) => {
+            if (/[\\/]assets[\\/]/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            else if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          },
+        })
+      );
       app.get('*', (_req, res) => {
+        noCacheIndex(res);
         res.sendFile(path.join(distPath, 'index.html'));
       });
     } else {

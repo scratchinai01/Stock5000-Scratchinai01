@@ -982,11 +982,18 @@ let realTimeFuturesCache: { timestamp: number; data: Map<string, any> } = {
   data: new Map(),
 };
 
+let lastCloseSnapTry = 0;
 async function getLiveStockSnapshots(): Promise<Map<string, any>> {
   const session = getTaiwanMarketSession();
-  // 💡 現貨收盤或非交易時段：100% 使用本地已下載資料庫，0 外部 API 消耗
+  // 💡 現貨收盤或非交易時段：用最後一次的盤中快照，不再呼叫外部 API。
+  //    例外：收盤後（13:31 起）若還沒有今天收盤後的快照（例如伺服器剛啟動），補抓一次今天的收盤快照，
+  //    避免 FinMind 日資料（約 17:30 才更新）出來之前，畫面退回昨天的價格。
   if (!session.isTwseOpen) {
-    return realTimeSnapshotCache.data;
+    const tn = Number(session.twTimeStr.slice(0, 2)) * 100 + Number(session.twTimeStr.slice(3, 5));
+    const todayClose = Date.parse(`${session.twDateStr}T13:31:00+08:00`);
+    const needCloseSnap = tn >= 1331 && realTimeSnapshotCache.timestamp < todayClose && Date.now() - lastCloseSnapTry > 10 * 60 * 1000;
+    if (!needCloseSnap) return realTimeSnapshotCache.data;
+    lastCloseSnapTry = Date.now();
   }
 
   const now = Date.now();
@@ -1239,7 +1246,7 @@ app.get('/api/market/live-quotes', async (req, res) => {
     await withTimeout(refreshAllQuotes('manual'), 8000);
   }
 
-  const stockSnaps = session.isTwseOpen ? await getLiveStockSnapshots() : new Map<string, any>();
+  const stockSnaps = await getLiveStockSnapshots();
   const futSnaps = session.isFuturesOpen ? await getLiveFuturesSnapshots() : new Map<string, any>();
 
   // 只回傳有真實資料的商品；沒有資料的代號列在 unavailable，前端不得自行補數字
@@ -1264,7 +1271,9 @@ app.get('/api/market/live-quotes', async (req, res) => {
     let bestBidAsk: { fiveBids?: any[]; fiveAsks?: any[] } = {};
 
     // 盤中：即時快照覆蓋
-    const snap = kind === 'tw_stock' ? stockSnaps.get(sym) : undefined;
+    // 盤中一律用即時快照；收盤後只有在快照比日資料新（今天的收盤快照 vs. 還沒更新的昨天日資料）時才用
+    const snapRaw = kind === 'tw_stock' ? stockSnaps.get(sym) : undefined;
+    const snap = snapRaw && (session.isTwseOpen || String(snapRaw.date || '').slice(0, 10) > String(q.date || '')) ? snapRaw : undefined;
     // 台指、小台、微台：用撮合同一份期貨快照（近月合約；日盤、夜盤都會跳動）
     let txSnap: any = undefined;
     if ((sym === 'TX' || sym === 'MTX' || sym === 'TMF') && session.isFuturesOpen) txSnap = (await liveFuturesRow(sym, q.contractMonth || null).catch(() => null)) || undefined;
@@ -1280,7 +1289,7 @@ app.get('/api/market/live-quotes', async (req, res) => {
       low = live.low ?? low;
       marketDate = String(live.date).slice(0, 10);
       lastTradeTime = String(live.date).slice(11, 19);
-      fetchTime = `${String(live.date).slice(0, 19)} (盤中即時)`;
+      fetchTime = `${String(live.date).slice(0, 19)} (${live === snap && !session.isTwseOpen ? '收盤快照，官方日資料約 17:30 後更新' : '盤中即時'})`;
       dataset = snap ? 'taiwan_stock_tick_snapshot' : 'taiwan_futures_snapshot';
       dataSource = '市場行情';
       if (live.buy_price > 0 || live.sell_price > 0) {

@@ -10,6 +10,7 @@ import { FINANCIAL_TERMS } from '../data/financialTerms';
 import { OrderScreen, type OrderPreset } from './OrderScreen';
 import type { ClientOrder, OrderRequest } from '../hooks/useOrderBook';
 import { usesOrderBook, closeSide, isActiveStatus } from '../utils/orderRules';
+import { computeNav, positionEquity } from '../utils/nav';
 
 export interface TradeRequest {
   symbol: string;
@@ -490,8 +491,7 @@ const CAT_GROUP: { key: string; label: string; color: string; match: (c: AssetCa
 ];
 
 function positionValue(pos: Position) {
-  const marginBased = pos.category === 'futures' || pos.category === 'commodities' || pos.orderType.startsWith('SHORT') || pos.orderType.startsWith('SELL_');
-  return marginBased ? pos.totalCostOrMargin + (pos.unrealizedPnL || 0) : pos.notionalValue;
+  return positionEquity(pos);
 }
 
 function Portfolio(p: Props & { onOpen: (i: InstrumentSpec, to?: Tab) => void; onStartClose: (pos: Position) => void }) {
@@ -630,14 +630,9 @@ const Kpi: React.FC<{ label: string; value: string; color?: string }> = ({ label
 function rankProfiles(profiles: StudentProfile[]) {
   return profiles
     .map(p => {
-      let sec = 0, fut = 0, pnl = 0;
-      (p.positions || []).forEach(pos => {
-        pnl += pos.unrealizedPnL || 0;
-        if (pos.category === 'futures') fut += pos.totalCostOrMargin || 0;
-        else sec += pos.notionalValue || 0;
-      });
-      const nav = (p.availableCash ?? 50000000) + sec + fut + pnl;
-      const init = p.initialCapital || 50000000;
+      const nv = computeNav(p);
+      const nav = nv.netAssetValue;
+      const init = nv.initialCapital;
       const cats = new Set((p.positions || []).map(x => (x.category === 'warrants' ? 'options' : x.category)));
       return { id: p.id, name: p.teamName ? `${p.studentName}（${p.teamName}）` : p.studentName, nav, ret: ((nav - init) / init) * 100, classes: cats.size, trades: (p.tradeHistory || []).length };
     })

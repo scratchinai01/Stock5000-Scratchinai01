@@ -31,6 +31,7 @@ import { logAccess, isNameBlocked, BLOCKED_MESSAGE } from '../utils/accessLog';
 import { isSuperUserName, verifyAdminPassword } from '../utils/adminAuth';
 import { authenticatePlayer, serverRegister, markMustChange } from '../services/playerSession';
 import { getSystemDateStr } from '../utils/dateUtils';
+import { computeNav } from '../utils/nav';
 
 export interface CharacterRoleConfig {
   id: string;
@@ -199,21 +200,9 @@ export const PlayerSetupModal: React.FC<PlayerSetupModalProps> = ({
   const rankedPlayers = useMemo(() => {
     return [...enteredPlayers]
       .map(p => {
-        let totalSecuritiesVal = 0;
-        let totalMargin = 0;
-        let totalUnrealized = 0;
-        (p.positions || []).forEach(pos => {
-          totalUnrealized += pos.unrealizedPnL || 0;
-          if (pos.category === 'futures') {
-            totalMargin += pos.totalCostOrMargin || 0;
-          } else {
-            totalSecuritiesVal += pos.notionalValue || 0;
-          }
-        });
-        const cash = typeof p.availableCash === 'number' ? p.availableCash : 50000000;
-        const initial = p.initialCapital || 50000000;
-        const nav = p.netAssetValue || cash + totalSecuritiesVal + totalMargin + totalUnrealized;
-        const retPct = p.totalReturnPct ?? ((nav - initial) / initial) * 100;
+        const nv = computeNav(p);
+        const nav = nv.netAssetValue;
+        const retPct = nv.totalReturnPct;
         return {
           ...p,
           calculatedNav: nav,

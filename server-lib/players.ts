@@ -1,3 +1,4 @@
+import { computeNav } from '../src/utils/nav';
 /**
  * 學員帳號與資產資料（伺服器保存）
  *
@@ -138,7 +139,16 @@ export async function listPlayers() {
   if (listCache && Date.now() - listCache.at < 5000) return listCache.data;
   const db = await getDb();
   const snap = await db.collection(COLLECTION).limit(1000).get();
-  const data = snap.docs.map((d: any) => publicProfile(d.data()));
+  const data = snap.docs.map((d: any) => {
+    const pp = publicProfile(d.data());
+    // 淨值一律用統一算法重算（舊版網頁存的淨值把名目市值當資產，可能算錯）
+    if (Array.isArray(pp.positions)) {
+      const nv = computeNav(pp);
+      pp.netAssetValue = nv.netAssetValue;
+      pp.totalReturnPct = nv.totalReturnPct;
+    }
+    return pp;
+  });
   data.sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0));
   listCache = { at: Date.now(), data };
   return data;

@@ -19,6 +19,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { deletePlayerFromFirebase } from '../services/firebase';
+import { computeNav } from '../utils/nav';
 
 interface LeaderboardProps {
   profiles: StudentProfile[];
@@ -56,22 +57,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
   // Calculate NAV, Compliance and Rank
   const ranked = [...profiles].map(p => {
-    let securitiesVal = 0;
-    let futuresMargin = 0;
-    let unrealizedPnL = 0;
-
-    (p.positions || []).forEach(pos => {
-      unrealizedPnL += pos.unrealizedPnL || 0;
-      if (pos.category === 'futures') {
-        futuresMargin += pos.totalCostOrMargin || 0;
-      } else {
-        securitiesVal += pos.notionalValue || 0;
-      }
-    });
-
-    const netAsset = (p.availableCash ?? 50000000) + securitiesVal + futuresMargin + unrealizedPnL;
-    const initialCapital = p.initialCapital || 50000000;
-    const returnPct = ((netAsset - initialCapital) / initialCapital) * 100;
+    const nv = computeNav(p);
+    const netAsset = nv.netAssetValue;
+    const initialCapital = nv.initialCapital;
+    const returnPct = nv.totalReturnPct;
 
     const coveredCategories = new Set((p.positions || []).map(pos => pos.category));
     const isOptionsCovered = coveredCategories.has('options') || coveredCategories.has('warrants');
@@ -86,9 +75,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
       ...p,
       calculatedNAV: netAsset,
       calculatedReturnPct: returnPct,
-      securitiesVal,
-      futuresMargin,
-      unrealizedPnL,
+      securitiesVal: nv.invested,
+      futuresMargin: 0,
+      unrealizedPnL: nv.unrealized,
       toolsCount,
       isFullyCompliant: toolsCount === 5,
     };

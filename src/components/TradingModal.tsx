@@ -6,7 +6,7 @@ import {
   StudentProfile,
 } from '../types/market';
 import { KLineChart } from './KLineChart';
-import { computeOrderCost } from '../utils/orderMath';
+import { computeOrderCost, contractMultiplier } from '../utils/orderMath';
 import { usesOrderBook, roundToTick } from '../utils/orderRules';
 import { LimitUpAlternativeModal } from './LimitUpAlternativeModal';
 import { SmartInstrumentSearchBoard } from './SmartInstrumentSearchBoard';
@@ -596,7 +596,7 @@ export const TradingModal: React.FC<TradingModalProps> = ({
   }, [selectedInstrument, initialAction]);
 
   const currentPrice = useCustomPrice ? customPrice : selectedInstrument.price;
-  const multiplier = selectedInstrument.multiplier || (selectedInstrument.category === 'us_stocks' ? 32 : 1000);
+  const multiplier = contractMultiplier(selectedInstrument);
 
   const prevClose = selectedInstrument.prevClose || selectedInstrument.price;
   const limitUpPrice = selectedInstrument.limitUpPrice || calcTwseLimit(prevClose, true);
@@ -947,7 +947,9 @@ export const TradingModal: React.FC<TradingModalProps> = ({
 
   const handleExecuteWithAction = (action: OrderAction) => {
     setOrderAction(action);
-    if (!hasEnoughCash || quantity <= 0) return;
+    // 金額要用「這次按下的動作」重新計算（例如放空加密貨幣只需 50% 保證金，不能沿用買進的全額）
+    const cost = computeOrderCost(selectedInstrument, action, currentPrice, quantity);
+    if (availableCash < cost.totalCostOrMargin || quantity <= 0) return;
     if (selectedInstrument.isMock) {
       setFairTradeWarning(`🚫 ${selectedInstrument.name}（${selectedInstrument.symbol}）目前查無 真實報價，無法下單。`);
       return;
@@ -983,8 +985,8 @@ export const TradingModal: React.FC<TradingModalProps> = ({
       price: currentPrice,
       quantity,
       unitMultiplier: multiplier,
-      totalAmountOrMargin: totalCostOrMargin,
-      notionalValue,
+      totalAmountOrMargin: cost.totalCostOrMargin,
+      notionalValue: cost.notionalValue,
       rationale:
         rationale.trim() ||
         `依據當下即時撮合價 ${currentPrice} 建立 ${quantity} ${contractSpec.unitName} 部位 (${contractSpec.specFormula})。`,

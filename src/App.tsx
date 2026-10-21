@@ -46,6 +46,7 @@ import { usesOrderBook, roundToTick, positionPnL } from './utils/orderRules';
 import { reservedAmount, pendingCloseQty, describeOrder } from './utils/orderClient';
 import { computeOrderCost } from './utils/orderMath';
 import { setUsdTwd } from './utils/fx';
+import { computeNav, twdNotional } from './utils/nav';
 import { detectDevice, applyDeviceAttributes, type DeviceInfo } from './utils/device';
 import { ResetPortfolioModal } from './components/ResetPortfolioModal';
 import { Term } from './components/Term';
@@ -1013,7 +1014,7 @@ export default function App() {
                 ex.quantity = mQty;
                 ex.totalCostOrMargin = mCost;
                 ex.entryPrice = mQty > 0 ? Number((totalVal / mQty).toFixed(2)) : ex.entryPrice;
-                ex.notionalValue = ex.currentPrice * mQty * pos.unitMultiplier;
+                ex.notionalValue = twdNotional({ ...ex, quantity: mQty }, ex.currentPrice);
               }
             }
             const dedupedPositions = Array.from(dedupedMap.values());
@@ -1029,7 +1030,7 @@ export default function App() {
 
               if (!live) return pos;
               const currentPrice = live.currentPrice;
-              const notionalValue = currentPrice * pos.quantity * pos.unitMultiplier;
+              const notionalValue = twdNotional(pos, currentPrice);
               // 統一損益公式（含選擇權賣方，原本漏算為 0）
               const unrealizedPnL = positionPnL(pos.orderType, pos.entryPrice, currentPrice, pos.quantity, pos.unitMultiplier);
 
@@ -1153,9 +1154,8 @@ export default function App() {
     });
   }
 
-  const netAssetValue = currentProfile
-    ? currentProfile.availableCash + totalSecuritiesVal + (totalFuturesMargin + totalFuturesPnL)
-    : 50000000;
+  // 淨值：可用現金 + 每個部位（投入的錢 + 未實現損益），與排行榜、伺服器存檔用同一個算法
+  const netAssetValue = currentProfile ? computeNav(currentProfile).netAssetValue : 50000000;
   const totalReturn = currentProfile ? netAssetValue - currentProfile.initialCapital : 0;
   const totalReturnPct = currentProfile ? ((netAssetValue - currentProfile.initialCapital) / currentProfile.initialCapital) * 100 : 0;
 

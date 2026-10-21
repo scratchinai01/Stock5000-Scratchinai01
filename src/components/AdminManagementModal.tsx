@@ -169,7 +169,7 @@ export const AdminManagementModal: React.FC<AdminManagementModalProps> = ({
       const cleanName = editName.trim();
       const cleanCash = Number(editCash) || 0;
       const totalSecurities = (editingStudent.positions || []).reduce(
-        (sum, pos) => sum + (pos.notionalValue || pos.totalCostOrMargin || 0),
+        (sum, pos) => sum + (pos.totalCostOrMargin || 0),
         0
       );
       const totalUnrealized = (editingStudent.positions || []).reduce(

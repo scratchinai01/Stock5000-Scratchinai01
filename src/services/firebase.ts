@@ -1,3 +1,4 @@
+import { computeNav } from '../utils/nav';
 /**
  * 學員資料服務
  *
@@ -78,16 +79,8 @@ export async function getPlayerProfileFromFirebase(studentName: string): Promise
 }
 
 function summarize(profile: StudentProfile) {
-  let sec = 0, margin = 0, unreal = 0;
-  (profile.positions || []).forEach(pos => {
-    unreal += pos.unrealizedPnL || 0;
-    if (pos.category === 'futures') margin += pos.totalCostOrMargin || 0;
-    else sec += pos.notionalValue || 0;
-  });
-  const initialCapital = profile.initialCapital || 50000000;
-  const availableCash = typeof profile.availableCash === 'number' ? profile.availableCash : 50000000;
-  const netAssetValue = availableCash + sec + margin + unreal;
-  return { initialCapital, availableCash, netAssetValue, totalReturnPct: ((netAssetValue - initialCapital) / initialCapital) * 100 };
+  const n = computeNav(profile);
+  return { initialCapital: n.initialCapital, availableCash: n.cash, netAssetValue: n.netAssetValue, totalReturnPct: n.totalReturnPct };
 }
 
 /** 儲存資產資料到伺服器：只有本人（學員權杖）或版主可以寫入；密碼欄位一律不送 */

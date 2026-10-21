@@ -35,6 +35,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { getUsdTwd } from '../utils/fx';
+import { computeNav, positionEquity } from '../utils/nav';
 import { actionLabel, ccyOf, unitOfPos } from '../utils/positionLabels';
 
 interface PortfolioOverviewProps {
@@ -275,15 +276,15 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
     const name = pos.name || '';
 
     if (pos.category === 'stocks') {
-      totalEquityStockVal += pos.notionalValue;
-      twStockVal += pos.notionalValue;
+      totalEquityStockVal += positionEquity(pos);
+      twStockVal += positionEquity(pos);
     } else if (pos.category === 'us_stocks') {
-      totalUsStockVal += pos.notionalValue;
-      usStockVal += pos.notionalValue;
+      totalUsStockVal += positionEquity(pos);
+      usStockVal += positionEquity(pos);
     } else if (pos.category === 'bonds') {
-      totalBondVal += pos.notionalValue;
+      totalBondVal += positionEquity(pos);
     } else if (pos.category === 'etfs') {
-      totalEtfVal += pos.notionalValue;
+      totalEtfVal += positionEquity(pos);
     } else if (pos.category === 'futures') {
       totalFuturesMargin += pos.totalCostOrMargin;
       totalFuturesPnL += (pos.unrealizedPnL || 0);
@@ -309,33 +310,27 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
         else if (sym.includes('ETH') || name.includes('以太幣')) ethVal += shortEquity;
         else otherCryptoVal += shortEquity;
       } else {
-        totalCryptoVal += pos.notionalValue;
-        if (sym.includes('BTC') || name.includes('比特幣')) btcVal += pos.notionalValue;
-        else if (sym.includes('ETH') || name.includes('以太幣')) ethVal += pos.notionalValue;
-        else if (sym.includes('TWDT') || sym.includes('TWDC') || name.includes('新台幣穩定幣')) twdtVal += pos.notionalValue;
-        else if (sym.includes('USDT') || name.includes('泰達幣')) usdtVal += pos.notionalValue;
-        else if (sym.includes('USDC') || name.includes('USD COIN') || name.includes('數位美元')) usdcVal += pos.notionalValue;
-        else otherCryptoVal += pos.notionalValue;
+        totalCryptoVal += positionEquity(pos);
+        if (sym.includes('BTC') || name.includes('比特幣')) btcVal += positionEquity(pos);
+        else if (sym.includes('ETH') || name.includes('以太幣')) ethVal += positionEquity(pos);
+        else if (sym.includes('TWDT') || sym.includes('TWDC') || name.includes('新台幣穩定幣')) twdtVal += positionEquity(pos);
+        else if (sym.includes('USDT') || name.includes('泰達幣')) usdtVal += positionEquity(pos);
+        else if (sym.includes('USDC') || name.includes('USD COIN') || name.includes('數位美元')) usdcVal += positionEquity(pos);
+        else otherCryptoVal += positionEquity(pos);
       }
     } else if (pos.category === 'options') {
-      totalOptionsVal += pos.notionalValue;
+      totalOptionsVal += positionEquity(pos);
     } else if (pos.category === 'warrants') {
-      totalWarrantsVal += pos.notionalValue;
+      totalWarrantsVal += positionEquity(pos);
     }
   });
 
   // Total Market Value of held positions: 證券部位現值 + 加密貨幣 + 美股 + 期貨/大宗商品權益 (保證金 + 浮動盈虧)
-  const totalPositionsValue =
-    totalEquityStockVal +
-    totalUsStockVal +
-    totalBondVal +
-    totalEtfVal +
-    totalOptionsVal +
-    totalWarrantsVal +
-    totalCryptoVal +
-    (totalFuturesMargin + totalFuturesPnL);
+  // 持倉市值（權益）＝每個部位投入的錢 + 未實現損益
+  const totalPositionsValue = computeNav(currentProfile).invested + computeNav(currentProfile).unrealized;
 
-  const netAssetValue = currentProfile.availableCash + totalPositionsValue;
+  // 淨值與排行榜、伺服器存檔同一個算法：可用現金 + 每個部位（投入的錢 + 未實現損益）
+  const netAssetValue = computeNav(currentProfile).netAssetValue;
   const initialCapital = currentProfile.initialCapital || 50000000;
   const totalReturn = netAssetValue - initialCapital;
   const totalReturnPct = (totalReturn / initialCapital) * 100;

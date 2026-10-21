@@ -17,7 +17,7 @@ import {
   formatTradingDay,
 } from './src/utils/twHolidays';
 import { getHistory, historyCacheStats } from './server-lib/history';
-import { registerOrderRoutes, liveFuturesRow } from './server-lib/orders';
+import { registerOrderRoutes, liveFuturesRow, cancelAllForReset } from './server-lib/orders';
 import { fetchMisFutures, lastMisDebug } from './server-lib/taifexMis';
 import { getGlobalQuotes, toLiveQuote, isGlobalSymbol, globalQuoteErrors, CRYPTO_BINANCE, getUsdTwd, getStockqQuotes } from './server-lib/globalQuotes';
 import * as players from './server-lib/players';
@@ -41,6 +41,50 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '2mb' }));
+
+// ───────── 排定的全體還原（測試期結束 → 正式競賽開始） ─────────
+// 時間一到，第一個進來的請求（或每 30 秒的檢查）會先把所有人的資產還原成 5,000 萬、取消所有未成交委託，只做一次。
+const SEASON_RESETS = [
+  { id: '2026-10-21-official', at: Date.parse('2026-10-21T18:00:00+08:00'), label: '測試期結束，正式競賽開始' },
+  // 本機測試用：SEASON_TEST_AT=毫秒時間
+  ...(process.env.SEASON_TEST_AT ? [{ id: 'local-test', at: Number(process.env.SEASON_TEST_AT), label: '本機測試還原' }] : []),
+];
+const seasonDone = new Set<string>();
+let seasonRunning: Promise<void> | null = null;
+let seasonCheckedAt = 0;
+async function maybeSeasonReset() {
+  const due = SEASON_RESETS.filter(r => Date.now() >= r.at && !seasonDone.has(r.id));
+  if (!due.length) return;
+  if (seasonRunning) return seasonRunning;
+  if (Date.now() - seasonCheckedAt < 5_000) return;
+  seasonCheckedAt = Date.now();
+  seasonRunning = (async () => {
+    for (const r of due) {
+      if (await players.seasonResetDone(r.id)) {
+        seasonDone.add(r.id);
+        continue;
+      }
+      const o = await cancelAllForReset(r.label);
+      const p = await players.seasonResetAll(r.label);
+      await players.markSeasonResetDone(r.id, { at: p.at, players: p.count, cancelledOrders: o.cancelled, voidedFills: o.voided, label: r.label });
+      seasonDone.add(r.id);
+      console.log(`[Season] ${r.label}：還原 ${p.count} 位學員、取消 ${o.cancelled} 筆委託、作廢 ${o.voided} 筆未記帳成交`);
+    }
+  })()
+    .catch(e => console.error('[Season] 全體還原失敗，稍後重試：', e.message))
+    .finally(() => {
+      seasonRunning = null;
+    });
+  return seasonRunning;
+}
+app.use('/api', (req, res, next) => {
+  maybeSeasonReset().then(() => next(), () => next());
+});
+setInterval(() => maybeSeasonReset().catch(() => {}), 30_000);
+app.get('/api/season', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ now: Date.now(), resets: SEASON_RESETS.map(r => ({ ...r, done: seasonDone.has(r.id) })) });
+});
 
 // ── AI 功能全站關閉（Groq / Gemini 每次呼叫都會產生費用）──
 // 需要時在 Cloud Run 設定 ENABLE_AI=1 才會放行

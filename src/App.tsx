@@ -24,6 +24,7 @@ import { AdminManagementModal } from './components/AdminManagementModal';
 import { AdminAccessModal } from './components/AdminAccessModal';
 import { OrderGuideWizard, guideHiddenFor } from './components/OrderGuideWizard';
 import { UpdateBanner } from './components/UpdateBanner';
+import { SeasonBanner } from './components/SeasonBanner';
 import { logAccess, logVisitOnce } from './utils/accessLog';
 import { readAdminToken, clearAdminToken, isSuperUserName } from './utils/adminAuth';
 import { mustChangeFor, markMustChange, clearPlayerToken } from './services/playerSession';
@@ -1619,6 +1620,7 @@ export default function App() {
         </div>
       )}
       <UpdateBanner />
+      <SeasonBanner />
       {orderToast && (
         <div role="status" aria-live="polite" className="fixed left-1/2 -translate-x-1/2 top-3 z-[100] max-w-[92vw] w-[420px] px-4 py-3 rounded-2xl shadow-2xl text-[14px] font-bold whitespace-pre-line"
           style={{ background: orderToast.tone === 'warn' ? '#3a1015' : orderToast.tone === 'ok' ? '#0d2a18' : '#1d2632', color: orderToast.tone === 'warn' ? '#ff8a93' : orderToast.tone === 'ok' ? '#5ef08f' : '#e6edf3', border: '1px solid rgba(255,255,255,0.12)' }}

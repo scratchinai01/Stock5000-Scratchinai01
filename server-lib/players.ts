@@ -19,7 +19,8 @@ let firestore: any = null;
 
 /** 本機測試用的記憶體版資料庫（PLAYERS_MEMORY=1），正式環境不會用到 */
 function memoryDb() {
-  const store = new Map<string, any>();
+  const stores = new Map<string, Map<string, any>>();
+  const makeCol = (store: Map<string, any>) => {
   const docRef = (id: string) => ({
     id,
     async get() { const d = store.get(id); return { exists: d !== undefined, id, data: () => (d ? JSON.parse(JSON.stringify(d)) : undefined) }; },
@@ -27,12 +28,17 @@ function memoryDb() {
     async update(v: any) { if (!store.has(id)) throw new Error('not found'); store.set(id, { ...store.get(id), ...v }); },
     async delete() { store.delete(id); },
   });
-  const col = {
+  return {
     doc: docRef,
     limit: () => ({ async get() { return { docs: [...store.entries()].map(([id, d]) => ({ id, data: () => JSON.parse(JSON.stringify(d)) })) }; } }),
   };
+  };
+  const cols = new Map<string, any>();
   return {
-    collection: () => col,
+    collection: (name: string) => {
+      if (!cols.has(name)) { const st = new Map<string, any>(); stores.set(name, st); cols.set(name, makeCol(st)); }
+      return cols.get(name);
+    },
     async runTransaction(fn: any) {
       return fn({ get: (r: any) => r.get(), set: (r: any, v: any) => r.set(v) });
     },
@@ -252,7 +258,12 @@ export async function saveProfile(actor: { player: string | null; admin: boolean
     invalidate();
     return { status: 200, body: { ok: true, created: true } };
   }
-  await ref.set({ ...sanitizeProfile(profile, cur.data().studentName || n), updatedAt: Date.now() }, { merge: true });
+  // 版主統一還原（例如正式競賽開始）之後，網頁上還留著的舊資料不能再寫回來
+  const serverReset = Number(cur.data().resetAt || 0);
+  if (!actor.admin && serverReset > Number(profile?.resetAt || 0)) {
+    return { status: 409, body: { ok: false, stale: true, resetAt: serverReset, error: '資料已由版主統一還原，請重新整理頁面' } };
+  }
+  await ref.set({ ...sanitizeProfile(profile, cur.data().studentName || n), ...(serverReset ? { resetAt: serverReset } : {}), updatedAt: Date.now() }, { merge: true });
   invalidate();
   return { status: 200, body: { ok: true } };
 }
@@ -303,4 +314,37 @@ export async function adminResetAll() {
   const list = await listPlayers();
   for (const p of list) await adminReset(p.studentName);
   return { status: 200, body: { ok: true, count: list.length } };
+}
+
+// ───────── 全體還原（正式競賽開始） ─────────
+/** 所有學員資產還原成初始資金：清空持倉與交易紀錄，帳號與密碼保留 */
+export async function seasonResetAll(label: string, initialCapital = 50_000_000) {
+  const db = await getDb();
+  const snap = await db.collection(COLLECTION).limit(2000).get();
+  const now = Date.now();
+  let count = 0;
+  for (const d of snap.docs) {
+    await db.collection(COLLECTION).doc(d.id).set(
+      {
+        initialCapital, availableCash: initialCapital, marginDeposits: 0, netAssetValue: initialCapital, totalReturnPct: 0,
+        realizedPnL: 0, cumulativeRealizedPnL: 0, positions: [], tradeHistory: [], immutableTransactions: [],
+        resetAt: now, seasonLabel: label, updatedAt: now,
+      },
+      { merge: true }
+    );
+    count++;
+  }
+  invalidate();
+  return { count, at: now };
+}
+
+/** 排定的全體還原只做一次：完成紀錄存在 access_control/season_resets */
+export async function seasonResetDone(id: string): Promise<boolean> {
+  const db = await getDb();
+  const doc = await db.collection('access_control').doc('season_resets').get();
+  return Boolean(doc.exists && doc.data()?.[id]);
+}
+export async function markSeasonResetDone(id: string, info: any) {
+  const db = await getDb();
+  await db.collection('access_control').doc('season_resets').set({ [id]: info }, { merge: true });
 }

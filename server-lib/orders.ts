@@ -519,6 +519,27 @@ export async function modifyOrder(id: string, profileId: string, body: { limitPr
   return { order: save(n) };
 }
 
+/** 全體還原用：取消所有未成交委託，並作廢還沒記帳的成交回報 */
+export async function cancelAllForReset(reason: string) {
+  await loadOrders();
+  let cancelled = 0;
+  let voided = 0;
+  for (const o of [...orders.values()]) {
+    let n = o;
+    if (isActiveStatus(n.status)) {
+      n = event({ ...n, status: 'CANCELLED' }, `${reason}：取消未成交 ${remainingQty(n)}`);
+      cancelled++;
+    }
+    if (n.fills.some(f => !f.claimed)) {
+      voided += n.fills.filter(f => !f.claimed).length;
+      n = { ...n, fills: n.fills.map(f => ({ ...f, claimed: true })) };
+    }
+    if (n !== o) save(n);
+  }
+  await Promise.all([...writeChains.values()]);
+  return { cancelled, voided };
+}
+
 /** 領取尚未記帳的成交回報（每筆只會給出一次） */
 export function claimFills(profileId: string) {
   const out: any[] = [];

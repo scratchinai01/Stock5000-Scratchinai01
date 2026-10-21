@@ -107,6 +107,11 @@ export async function savePlayerProfileToFirebase(profile: StudentProfile): Prom
       createdAt: profile.createdAt || Date.now(),
     };
     const r = await fetch('/api/players/me', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ profile: body }) });
+    if (r.status === 409) {
+      // 版主已統一還原（例如正式競賽開始）：這台裝置上的舊資料作廢，重新載入拿伺服器的新資料
+      window.dispatchEvent(new CustomEvent('season-reset'));
+      return false;
+    }
     return r.ok;
   } catch (err: any) {
     console.warn('學員資料同步失敗（已先存在本機）:', err?.message || err);

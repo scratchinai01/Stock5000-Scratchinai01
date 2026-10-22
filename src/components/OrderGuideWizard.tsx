@@ -4,7 +4,7 @@ import type { ClientOrder, OrderRequest } from '../hooks/useOrderBook';
 import { getInstrumentTradingClock } from '../utils/tradingClock';
 import { computeOrderCost, contractMultiplier } from '../utils/orderMath';
 import { usesOrderBook, roundToTick, validateLimitPrice, priceLimits, STATUS_LABEL } from '../utils/orderRules';
-import { lookupInstrument } from '../utils/instrumentLookup';
+import { lookupInstrument, suggestInstruments } from '../utils/instrumentLookup';
 import { StudyCardModal, CardSection, CardStat, CardFooter, INK } from './StudyCardModal';
 
 /**
@@ -39,17 +39,18 @@ interface Props {
 }
 
 // ───────── 全市場查詢（清單裡沒有的台股、ETF、債券 ETF、美股） ─────────
-type LookupState = { q: string; busy: boolean; error: string | null } | null;
+type LookupState = { q: string; busy: boolean; error: string | null; sugg?: { symbol: string; name: string }[] } | null;
 function MarketLookup({ query, state, setState, onFound }: { query: string; state: LookupState; setState: (s: LookupState) => void; onFound: (i: InstrumentSpec) => void }) {
-  const run = async () => {
-    if (!query) return;
+  const run = async (target = query) => {
+    if (!target) return;
     setState({ q: query, busy: true, error: null });
     try {
-      const found = await lookupInstrument(query);
+      const found = await lookupInstrument(target);
       setState(null);
       onFound(found);
     } catch (e: any) {
-      setState({ q: query, busy: false, error: e?.message || '查詢失敗' });
+      const sugg = await suggestInstruments(target);
+      setState({ q: query, busy: false, error: sugg.length ? `查無「${target}」這個代號。` : e?.message || '查詢失敗', sugg });
     }
   };
   // 輸入完整代號（例如 00719B、00681L、6542）時自動查詢
@@ -65,7 +66,18 @@ function MarketLookup({ query, state, setState, onFound }: { query: string; stat
   return (
     <div className="space-y-2">
       {mine?.error ? <Tip tone="rose">❌ {mine.error}</Tip> : <Tip tone="sky">目前清單裡沒有「{query}」，可以到全市場查詢真實報價。</Tip>}
-      <button type="button" disabled={mine?.busy} onClick={run}
+      {mine?.sugg && mine.sugg.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-[15px] font-black text-slate-700">你是不是要找：</div>
+          {mine.sugg.map(x => (
+            <button key={x.symbol} type="button" disabled={mine.busy} onClick={() => run(x.symbol)}
+              className="w-full text-left rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 hover:bg-slate-50">
+              <b className="font-mono">{x.symbol}</b> <span className="text-slate-700">{x.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <button type="button" disabled={mine?.busy} onClick={() => run()}
         className="w-full min-h-[52px] rounded-2xl text-[16px] sm:text-[17px] font-black text-white disabled:opacity-60" style={{ background: INK }}>
         {mine?.busy ? '查詢中…' : `🔎 到全市場查詢「${query}」`}
       </button>

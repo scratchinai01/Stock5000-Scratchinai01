@@ -36,3 +36,19 @@ export async function lookupInstrument(query: string): Promise<InstrumentSpec> {
     klineHistory: d.klineHistory || [],
   } as InstrumentSpec;
 }
+
+/** 查不到時給「你是不是要找」：用代號前綴或名稱找相近的商品 */
+export async function suggestInstruments(query: string): Promise<{ symbol: string; name: string }[]> {
+  const q = query.trim();
+  const tries = [q, q.replace(/[A-Z]+$/i, ''), q.slice(0, 4)].filter((x, i, a) => x.length >= 2 && a.indexOf(x) === i);
+  for (const t of tries) {
+    try {
+      const j = await fetch(`/api/market/search-stocks?q=${encodeURIComponent(t)}`).then(r => r.json());
+      const list = (j.results || []).filter((r: any) => r.symbol.toUpperCase() !== q.toUpperCase()).slice(0, 6).map((r: any) => ({ symbol: r.symbol, name: r.name }));
+      if (list.length) return list;
+    } catch {
+      /* 略過 */
+    }
+  }
+  return [];
+}

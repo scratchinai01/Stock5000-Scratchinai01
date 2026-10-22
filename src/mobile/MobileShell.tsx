@@ -1,4 +1,4 @@
-import { lookupInstrument } from '../utils/instrumentLookup';
+import { lookupInstrument, suggestInstruments } from '../utils/instrumentLookup';
 import React, { useEffect, useMemo, useState } from 'react';
 import { InstrumentSpec, StudentProfile, OrderAction, AssetCategory, Position } from '../types/market';
 import { C, mono, fmtPrice, fmtMoney, fmtSigned, dirColor, arrow, instrumentChange, Icon, Chip, Segmented, TopBar, IconButton } from './ui';
@@ -260,18 +260,19 @@ function Watchlist(p: Props & { watch: string[]; onOpen: (i: InstrumentSpec) => 
   const [searching, setSearching] = useState(false);
   const g = GROUPS.find(x => x.name === group)!;
   // 全市場查詢：清單裡沒有的台股、ETF、債券 ETF、美股（和電腦版「下單交易」的搜尋相同）
-  const [look, setLook] = useState<{ q: string; busy: boolean; error: string | null }>({ q: '', busy: false, error: null });
-  const runLookup = async (query: string) => {
-    setLook({ q: query, busy: true, error: null });
+  const [look, setLook] = useState<{ q: string; busy: boolean; error: string | null; sugg?: { symbol: string; name: string }[] }>({ q: '', busy: false, error: null });
+  const runLookup = async (query: string, typed = query) => {
+    setLook({ q: typed, busy: true, error: null });
     try {
       const found = await lookupInstrument(query);
       p.onAddInstrument?.(found);
-      setLook({ q: query, busy: false, error: null });
+      setLook({ q: typed, busy: false, error: null });
       setQ('');
       setSearching(false);
       p.onOpen(found);
     } catch (e: any) {
-      setLook({ q: query, busy: false, error: e?.message || '查詢失敗' });
+      const sugg = await suggestInstruments(query);
+      setLook({ q: typed, busy: false, error: sugg.length ? `查無「${query}」這個代號。` : e?.message || '查詢失敗', sugg });
     }
   };
   // 輸入完整代號（例如 00681L、00719B）而清單裡沒有時，自動查詢
@@ -329,7 +330,18 @@ function Watchlist(p: Props & { watch: string[]; onOpen: (i: InstrumentSpec) => 
               {look.busy ? '查詢中…' : `🔎 到全市場查詢「${q.trim()}」`}
             </button>
           )}
-          {look.error && <div className="mt-2 text-[13px] font-bold" style={{ color: C.up }}>❌ {look.error}</div>}
+          {look.error && look.q === q.trim() && <div className="mt-2 text-[13px] font-bold" style={{ color: C.up }}>❌ {look.error}</div>}
+          {look.q === q.trim() && look.sugg && look.sugg.length > 0 && (
+            <div className="mt-3 flex flex-col gap-1.5 text-left">
+              <div className="text-[13px] font-bold" style={{ color: C.sub }}>你是不是要找：</div>
+              {look.sugg.map(x => (
+                <button key={x.symbol} type="button" disabled={look.busy} onClick={() => runLookup(x.symbol, q.trim())}
+                  className="min-h-[44px] px-3 rounded-xl text-[15px] text-left" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.text }}>
+                  <b style={mono}>{x.symbol}</b> {x.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {rows.map(i => {

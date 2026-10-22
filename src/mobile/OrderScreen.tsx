@@ -26,7 +26,7 @@ interface Props {
   preset: OrderPreset | null;
   onPlaceOrder: (req: OrderRequest) => Promise<{ order?: ClientOrder; error?: string }>;
   onCancelOrder: (id: string) => Promise<{ order?: ClientOrder; error?: string }>;
-  onModifyOrder: (id: string, patch: { limitPrice?: number; quantity?: number }) => Promise<{ order?: ClientOrder; error?: string }>;
+  onModifyOrder: (id: string, patch: { limitPrice?: number; quantity?: number; toMarket?: boolean }) => Promise<{ order?: ClientOrder; error?: string }>;
   onOpenAdvancedTrade: (inst: InstrumentSpec) => void;
   onBack: () => void;
   onOpenSymbol: (symbol: string) => void;
@@ -186,6 +186,10 @@ function Ticket(p: Props & { onSent: () => void }) {
   else if (intent === 'OPEN' && cost && cost.totalCostOrMargin > free) blockReason = '可用額度不足';
   else if (intent === 'CLOSE' && qty > maxClose) blockReason = `最多可平倉 ${maxClose} ${unit}`;
 
+  // 立即成交價：買進用委賣價（賣方最低要價），賣出用委買價（買方最高出價）
+  const bestAsk = inst.fiveAsks?.find(x => x.price > 0)?.price ?? null;
+  const bestBid = inst.fiveBids?.find(x => x.price > 0)?.price ?? null;
+  const counterPx = trading ? (side === 'BUY' ? bestAsk : bestBid) : null;
   const setPx = (v: number) => { const r = Number(v.toFixed(4)); setPrice(r); setPriceText(String(r)); };
   const sideColor = side === 'BUY' ? C.upFill : C.downFill;
   const actionText = action ? (intent === 'CLOSE' && closePos ? closeLabel(closePos) : OPEN_LABEL[action] ?? action) : '';
@@ -280,11 +284,17 @@ function Ticket(p: Props & { onSent: () => void }) {
                 className="flex-1 min-w-0 h-12 rounded-xl text-center text-[20px] font-bold bg-transparent" style={{ ...mono, border: `1px solid ${priceErr ? C.up : C.line2}`, color: C.text }} />
               <button type="button" aria-label="升一檔" onClick={() => setPx(stepTick(inst.category, inst.symbol, price, 1))} className="w-12 h-12 rounded-xl text-[22px]" style={{ background: C.card, border: `1px solid ${C.line2}` }}>+</button>
             </div>
+            {counterPx != null && (
+              <button type="button" onClick={() => setPx(counterPx)} className="min-h-[44px] rounded-xl text-[14px] font-black"
+                style={{ background: price === counterPx ? C.accent : C.card, color: price === counterPx ? C.bg : C.accent, border: `1px solid ${C.accent}` }}>
+                ⚡ 現價{side === 'BUY' ? '買進' : '賣出'} {fmtPrice(counterPx)}（{side === 'BUY' ? '委賣價' : '委買價'}，送出可立即成交）
+              </button>
+            )}
             <div className="flex gap-1.5">
               {[
                 lim && { k: '跌停', v: lim.down },
                 { k: '平盤', v: roundToTick(inst.category, inst.symbol, ref) },
-                { k: '現價', v: roundToTick(inst.category, inst.symbol, inst.price) },
+                { k: '成交價', v: roundToTick(inst.category, inst.symbol, inst.price) },
                 lim && { k: '漲停', v: lim.up },
               ].filter(Boolean).map((b: any) => (
                 <button key={b.k} type="button" onClick={() => setPx(b.v)} className="flex-1 min-h-[34px] rounded-lg text-[12px] font-bold"
@@ -390,6 +400,7 @@ export function OrdersView(p: OrdersViewProps) {
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ o: ClientOrder; mode: 'price' | 'qty' } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const list = useMemo(() => p.orders.filter(o => (filter === 'active' ? isActiveStatus(o.status) : true)), [p.orders, filter]);
 
   return (
@@ -400,13 +411,15 @@ export function OrdersView(p: OrdersViewProps) {
       {list.map(o => {
         const unit = unitOf(o);
         const active = isActiveStatus(o.status);
+        // 部分成交後收盤失效或刪單：已成交的部分照樣算成交（已放進持倉）
+        const partialDone = !active && o.filledQty > 0 && o.status !== 'FILLED';
         return (
           <div key={o.id} className="rounded-xl p-3 flex flex-col gap-1.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between gap-2">
               <button type="button" onClick={() => p.onOpenSymbol(o.symbol)} className="text-left min-w-0">
                 <span className="text-[15px] font-bold">{o.name}</span> <span className="text-[11px]" style={{ color: C.muted }}>{o.symbol}</span>
               </button>
-              <span className="flex-none px-2 py-0.5 rounded-full text-[12px] font-black" style={{ background: '#0b0f14', color: STATUS_COLOR[o.status] }}>{STATUS_LABEL[o.status]}</span>
+              <span className="flex-none px-2 py-0.5 rounded-full text-[12px] font-black" style={{ background: '#0b0f14', color: partialDone ? STATUS_COLOR.FILLED : STATUS_COLOR[o.status] }}>{partialDone ? `部分成交 ${o.filledQty}${unit}` : STATUS_LABEL[o.status]}</span>
             </div>
             <div className="text-[13px] flex flex-wrap gap-x-2" style={{ color: C.sub }}>
               <b style={{ color: o.side === 'BUY' ? C.up : C.down }}>{o.side === 'BUY' ? '買' : '賣'}{o.intent === 'CLOSE' ? '・平倉' : '・新倉'}</b>
@@ -416,12 +429,39 @@ export function OrdersView(p: OrdersViewProps) {
               {o.filledQty > 0 && <span style={mono}>均價 {o.avgPrice}</span>}
               {o.feed === 'eod' && <span style={{ color: C.accent }}>收盤價撮合</span>}
             </div>
+            {o.filledQty > 0 && (
+              <div className="text-[12px] font-bold" style={{ color: STATUS_COLOR.FILLED }}>
+                ✅ 已成交 {o.filledQty} {unit}，均價 {o.avgPrice}，已放進持倉{partialDone ? `；剩下 ${o.quantity - o.filledQty} ${unit}${o.status === 'CANCELLED' ? '已刪單' : '收盤未成交已失效'}` : ''}
+              </div>
+            )}
+            {active && o.hint && (
+              <div className="text-[12.5px] leading-relaxed rounded-lg px-2.5 py-2" style={{ background: C.card2, color: C.sub }}>
+                <b style={{ color: C.accent }}>為什麼還沒成交？</b> {o.hint.text}
+                {(o.hint.bid != null || o.hint.ask != null) && (
+                  <div className="mt-1" style={{ ...mono, color: C.muted }}>
+                    委買 {o.hint.bid ?? '—'}　委賣 {o.hint.ask ?? '—'}　成交 {o.hint.last ?? '—'}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2">
               <button type="button" onClick={() => setOpen(open === o.id ? null : o.id)} className="text-[12px] underline" style={{ color: C.muted }}>
                 {hhmmss(o.createdAt)} · {open === o.id ? '收合回報' : `回報 ${o.events.length} 則`}
               </button>
               {active && (
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 flex-wrap justify-end">
+                  {o.priceType === 'LIMIT' && o.tif === 'ROD' && o.hint?.canMarket && (
+                    <button type="button" disabled={busyId === o.id}
+                      onClick={async () => {
+                        setBusyId(o.id);
+                        const r = await p.onModifyOrder(o.id, { toMarket: true });
+                        setBusyId(null);
+                        setMsg(r.error ? `現價${o.side === 'BUY' ? '買進' : '賣出'}失敗：${r.error}` : `已改用現價：${describeOrder(r.order!)}`);
+                      }}
+                      className="min-h-[34px] px-3 rounded-lg text-[13px] font-black disabled:opacity-50" style={{ background: C.accent, color: C.bg }}>
+                      {busyId === o.id ? '送出中…' : `⚡ 現價${o.side === 'BUY' ? '買進' : '賣出'} ${(o.side === 'BUY' ? o.hint.ask : o.hint.bid) ?? ''}`}
+                    </button>
+                  )}
                   {o.priceType === 'LIMIT' && o.tif === 'ROD' && (
                     <>
                       <SmallBtn onClick={() => setEditing({ o, mode: 'price' })}>改價</SmallBtn>

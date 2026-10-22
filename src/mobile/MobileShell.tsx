@@ -63,7 +63,7 @@ interface Props {
   reservedCash: number;
   onPlaceOrder: (req: OrderRequest) => Promise<{ order?: ClientOrder; error?: string }>;
   onCancelOrder: (id: string) => Promise<{ order?: ClientOrder; error?: string }>;
-  onModifyOrder: (id: string, patch: { limitPrice?: number; quantity?: number }) => Promise<{ order?: ClientOrder; error?: string }>;
+  onModifyOrder: (id: string, patch: { limitPrice?: number; quantity?: number; toMarket?: boolean }) => Promise<{ order?: ClientOrder; error?: string }>;
 }
 
 type Tab = 'watch' | 'quote' | 'order' | 'portfolio' | 'rank' | 'more';

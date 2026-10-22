@@ -29,9 +29,11 @@ export function pendingCloseQty(orders: ClientOrder[], positionId: string): numb
 export function describeOrder(o: ClientOrder): string {
   const unit = o.category === 'futures' || o.category === 'options' ? '口' : '張';
   if (o.status === 'FILLED') return `已成交 ${o.filledQty} ${unit}，均價 ${o.avgPrice}`;
-  if (o.status === 'PARTIAL') return `部分成交 ${o.filledQty}／${o.quantity} ${unit}，其餘委託中`;
+  if (o.status === 'PARTIAL') return `部分成交 ${o.filledQty}／${o.quantity} ${unit}（已放進持倉），其餘委託中`;
   if (o.status === 'WORKING') return `委託成功，等待成交（${o.priceType === 'MARKET' ? '市價' : `限價 ${o.limitPrice}`} ${o.tif}）`;
   if (o.status === 'QUEUED') return '非交易時段，已轉為預約單，下一盤開盤生效';
+  if ((o.status === 'EXPIRED' || o.status === 'CANCELLED') && o.filledQty > 0)
+    return `部分成交 ${o.filledQty}／${o.quantity} ${unit}，均價 ${o.avgPrice}（已放進持倉）；剩餘 ${o.quantity - o.filledQty} ${unit}${o.status === 'CANCELLED' ? '已刪單' : '未成交已失效'}`;
   const last = o.events[o.events.length - 1]?.text;
   return `${STATUS_LABEL[o.status]}${last ? `：${last}` : ''}`;
 }

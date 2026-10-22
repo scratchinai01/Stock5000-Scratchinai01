@@ -119,7 +119,7 @@ export function useOrderBook(profileId: string | null, studentName: string, onFi
   );
 
   const modify = useCallback(
-    async (id: string, patch: { limitPrice?: number; quantity?: number }): Promise<{ order?: ClientOrder; error?: string }> => {
+    async (id: string, patch: { limitPrice?: number; quantity?: number; toMarket?: boolean }): Promise<{ order?: ClientOrder; error?: string }> => {
       try {
         const j = await postJson(`/api/orders/${id}/modify`, { profileId, ...patch });
         await sync();

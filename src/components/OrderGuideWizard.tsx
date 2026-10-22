@@ -396,7 +396,9 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
           {done ? (
             <Tip tone="emerald">
               <div className="text-[17px] sm:text-[19px]"><b>{sideWord} {inst.name}</b> 成交 <b className="font-mono">{filled!.qty}</b> {unit}，成交價 <b className="font-mono">{fmtPx(filled!.price)}</b></div>
-              {order && order.status === 'PARTIAL' && <div>還有 {order.quantity - order.filledQty} {unit} 在委託中。</div>}
+              {order && order.filledQty < order.quantity && (
+                <div>委託 {order.quantity} {unit}，先成交 {order.filledQty} {unit}（成交的部分已算數）。{order.status === 'PARTIAL' ? `還有 ${order.quantity - order.filledQty} ${unit} 在委託中${order.hint ? `：${order.hint.text}` : '。'}` : `剩下 ${order.quantity - order.filledQty} ${unit} ${order.status === 'CANCELLED' ? '已刪單' : '收盤未成交，已失效'}。`}</div>
+              )}
               <div className="mt-1">部位已放進「我的持倉」。{side === 'short' ? '之後價格下跌你就賺錢；想結束時按「平倉」買回。' : '之後價格上漲你就賺錢；想結束時按「平倉」賣出。'}</div>
             </Tip>
           ) : (
@@ -404,6 +406,7 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
               <div className="text-[16px] sm:text-[18px] font-black">目前狀態：{status ? STATUS_LABEL[status] : '處理中'}</div>
               {status === 'QUEUED' && <div>現在休市，下一次開盤（{market?.next}）會自動撮合。成交後這裡和「委託／成交回報」都會通知你。</div>}
               {status === 'WORKING' && <div>正在排隊等成交。可以先關掉這個視窗；成交時畫面上方會跳出「成交回報」。想改價或刪單，請到「委託」清單。</div>}
+              {order?.hint && <div className="mt-1"><b>為什麼還沒成交？</b>{order.hint.text}</div>}
               {(status === 'CANCELLED' || status === 'REJECTED' || status === 'EXPIRED') && <div>{order?.rejectReason || order?.events[order.events.length - 1]?.text || '這筆委託沒有成交。'}</div>}
             </Tip>
           )}
@@ -445,11 +448,12 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
           </div>
         </CardSection>
         {cardInfo.status && (
-          <CardSection title="什麼時候會成交？">
+          <CardSection title="為什麼還沒成交？什麼時候會成交？">
             <div className="text-[17px] leading-relaxed text-slate-700">
               {isBuy ? `市場上有人願意用 ${fmtPx(cardInfo.price)} 或更便宜的價格賣出時就會成交。` : `市場上有人願意用 ${fmtPx(cardInfo.price)} 或更高的價格買進時就會成交。`}
               {pendingOrder?.status === 'QUEUED' ? '預約單會在開盤時用開盤價先試撮合，開盤價比委託價好就直接成交。' : ''}
               當盤沒有成交，收盤後委託自動失效。
+              {pendingOrder?.hint && <div className="mt-2 font-bold text-amber-800">目前還沒成交的原因：{pendingOrder.hint.text}</div>}
             </div>
           </CardSection>
         )}

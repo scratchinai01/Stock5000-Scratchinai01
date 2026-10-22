@@ -60,6 +60,8 @@ export interface SimOrder {
   contractMonth: string | null;
   rationale: string;
   rejectReason?: string;
+  /** 未完成委託的「為什麼還沒成交」說明（伺服器列表時即時計算，不存檔） */
+  hint?: { text: string; bid: number | null; ask: number | null; last: number | null; canMarket: boolean } | null;
   events: { at: number; text: string }[];
   createdAt: number;
   updatedAt: number;

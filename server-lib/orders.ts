@@ -480,13 +480,28 @@ export function cancelOrder(id: string, profileId: string): { order?: SimOrder; 
   return { order: save(event({ ...o, status: 'CANCELLED' }, `刪單：取消未成交 ${left}`)) };
 }
 
-export async function modifyOrder(id: string, profileId: string, body: { limitPrice?: number; quantity?: number }) {
+export async function modifyOrder(id: string, profileId: string, body: { limitPrice?: number; quantity?: number; toMarket?: boolean }) {
   const o = orders.get(id);
   if (!o || o.profileId !== profileId) return { error: '找不到這筆委託' };
   if (!isActiveStatus(o.status)) return { error: '這筆委託已結束，不能改單' };
   if (o.priceType !== 'LIMIT' || o.tif !== 'ROD') return { error: '只有限價 ROD 委託可以改單' };
   let n: SimOrder = { ...o };
   const notes: string[] = [];
+  let marketNote: string | null = null;
+  // 現價成交：把委託價改成對手價（買單＝委賣價、賣單＝委買價）
+  if (body.toMarket) {
+    if (o.status === 'QUEUED') return { error: '預約單還沒開盤，等開盤後才能用現價成交' };
+    if (o.feed !== 'snapshot') return { error: '這檔沒有盤中即時報價，無法現價成交，只能等收盤價撮合' };
+    const sess = sessionFor(o.category, o.symbol);
+    if (!sess.open || sess.key !== o.sessionKey) return { error: '現在不是這筆委託的交易時段' };
+    const q = await quoteFor(o, true);
+    if (!q || !inWindow(q.tickAt, o.sessionKey!)) return { error: '目前拿不到即時報價，請稍後再試' };
+    const px = o.side === 'BUY' ? q.ask : q.bid;
+    if (!px) return { error: o.side === 'BUY' ? '目前沒有人掛賣，無法現價買進' : '目前沒有人掛買，無法現價賣出' };
+    if (px === o.limitPrice) return { error: `委託價已經是現價 ${px}，正在等對手掛單量，請稍候` };
+    body = { ...body, limitPrice: px };
+    marketNote = `改用現價 ${px}（${o.side === 'BUY' ? '委賣價' : '委買價'}）成交`;
+  }
   if (body.quantity != null) {
     const q = Number(body.quantity);
     if (!Number.isInteger(q) || q >= o.quantity || q <= o.filledQty) return { error: `改量只能減少，且須大於已成交 ${o.filledQty}` };
@@ -505,7 +520,7 @@ export async function modifyOrder(id: string, profileId: string, body: { limitPr
     if (q && n.sessionKey && inWindow(q.tickAt, n.sessionKey)) {
       n.baseline = { low: q.low, high: q.high, totalVolume: q.totalVolume, lastTickAt: q.tickAt };
     }
-    notes.push(`改價為 ${p}（重新排隊）`);
+    notes.push(marketNote ?? `改價為 ${p}（重新排隊）`);
   }
   if (notes.length === 0) return { error: '沒有要修改的內容' };
   n = event(n, `改單：${notes.join('、')}`);
@@ -571,11 +586,58 @@ export function claimFills(profileId: string) {
   return out.sort((a, b) => a.at - b.at);
 }
 
+/** 只讀快取中的報價（不連網），給「為什麼還沒成交」用 */
+function cachedQuote(o: SimOrder): Quote | null {
+  const spec = feedSpec(o);
+  if (!spec) return null;
+  const r = feedCache.get(`${spec.kind}:${spec.dataId}`)?.map.get(spec.key);
+  return r ? toQuote(r) : null;
+}
+
+/** 未完成委託：用白話說明為什麼還沒成交 */
+export function waitHint(o: SimOrder, q: Quote | null): { text: string; bid: number | null; ask: number | null; last: number | null; canMarket: boolean } | null {
+  if (!isActiveStatus(o.status)) return null;
+  const unit = isCash(o.category) ? '張' : '口';
+  const buy = o.side === 'BUY';
+  const L = o.limitPrice;
+  const left = remainingQty(o);
+  const head = o.filledQty > 0 ? `已成交 ${o.filledQty} ${unit}（已放進持倉），剩下 ${left} ${unit}：` : '';
+  const none = { bid: null, ask: null, last: null, canMarket: false };
+  if (o.status === 'QUEUED') {
+    return { ...none, text: `${head}現在休市，這是預約單。下一盤開盤才開始撮合：開盤價${buy ? '小於或等於' : '大於或等於'} ${L} 就會用開盤價成交。` };
+  }
+  if (o.feed === 'eod') {
+    return { ...none, text: `${head}這檔沒有盤中即時報價，要等收盤後用收盤價判定：收盤價${buy ? '小於或等於' : '大於或等於'} ${L} 才成交，否則收盤後失效。` };
+  }
+  if (!q || !o.sessionKey || !inWindow(q.tickAt, o.sessionKey)) {
+    return { ...none, text: `${head}還在等這一盤的即時報價（系統每 10 秒檢查一次）。` };
+  }
+  const fmt = (v: number) => Number(v.toFixed(4));
+  const counter = buy ? q.ask : q.bid;
+  const base = { bid: q.bid, ask: q.ask, last: q.last, canMarket: counter != null && counter !== L };
+  if (L == null) return { ...base, text: `${head}市價委託等待對手掛單。` };
+  if (counter == null) {
+    return { ...base, text: `${head}目前沒有人掛${buy ? '賣' : '買'}，等有人${buy ? '願意賣' : '願意買'}才會成交。` };
+  }
+  if (buy ? L >= counter : L <= counter) {
+    return { ...base, text: `${head}你的價格已經達到${buy ? '委賣價' : '委買價'} ${counter}，但這一檔的掛單量已經被先成交完了（其他同學也在搶），等下一筆報價會再撮合。` };
+  }
+  const diff = fmt(Math.abs(counter - L));
+  const touch = q.last != null && q.last === L
+    ? `最近成交價剛好等於 ${L}，但只是「碰到」不算成交：同價位排在你前面的人會先成交，要${buy ? '跌破' : '漲破'} ${L} 才輪得到你。`
+    : '';
+  const why = buy
+    ? `你出價買 ${L}，但目前賣方最便宜要 ${counter}（委賣價），差 ${diff}。沒有人願意用 ${L} 賣給你，要等市場成交價跌到 ${L} 以下才會成交。`
+    : `你出價賣 ${L}，但目前買方最高只出 ${counter}（委買價），差 ${diff}。沒有人願意用 ${L} 跟你買，要等市場成交價漲到 ${L} 以上才會成交。`;
+  return { ...base, text: `${head}${why}${touch}想馬上成交，可以按「⚡ 現價${buy ? '買進' : '賣出'}」改用 ${counter}。` };
+}
+
 export function listOrders(profileId: string) {
   return [...orders.values()]
     .filter(o => o.profileId === profileId)
     .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 150);
+    .slice(0, 150)
+    .map(o => (isActiveStatus(o.status) ? { ...o, hint: waitHint(o, o.feed === 'snapshot' ? cachedQuote(o) : null) } : o));
 }
 
 let loop: NodeJS.Timeout | null = null;

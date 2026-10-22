@@ -4,6 +4,7 @@ import type { ClientOrder, OrderRequest } from '../hooks/useOrderBook';
 import { getInstrumentTradingClock } from '../utils/tradingClock';
 import { computeOrderCost, contractMultiplier } from '../utils/orderMath';
 import { usesOrderBook, roundToTick, validateLimitPrice, priceLimits, STATUS_LABEL } from '../utils/orderRules';
+import { lookupInstrument } from '../utils/instrumentLookup';
 import { StudyCardModal, CardSection, CardStat, CardFooter, INK } from './StudyCardModal';
 
 /**
@@ -33,6 +34,43 @@ interface Props {
   orders: ClientOrder[];
   onPlaceOrder: (req: OrderRequest) => Promise<{ order?: ClientOrder; error?: string }>;
   onExecuteTrade: (t: GuideTrade) => void | Promise<void>;
+  /** 全市場查到的新商品加入清單 */
+  onAddInstrument?: (inst: InstrumentSpec) => void;
+}
+
+// ───────── 全市場查詢（清單裡沒有的台股、ETF、債券 ETF、美股） ─────────
+type LookupState = { q: string; busy: boolean; error: string | null } | null;
+function MarketLookup({ query, state, setState, onFound }: { query: string; state: LookupState; setState: (s: LookupState) => void; onFound: (i: InstrumentSpec) => void }) {
+  const run = async () => {
+    if (!query) return;
+    setState({ q: query, busy: true, error: null });
+    try {
+      const found = await lookupInstrument(query);
+      setState(null);
+      onFound(found);
+    } catch (e: any) {
+      setState({ q: query, busy: false, error: e?.message || '查詢失敗' });
+    }
+  };
+  // 輸入完整代號（例如 00719B、00681L、6542）時自動查詢
+  useEffect(() => {
+    if (!/^(\d{4,6}[A-Z]?|[A-Z]{1,5})$/i.test(query)) return;
+    if (state?.q === query) return;
+    const t = setTimeout(run, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+  if (!query) return null;
+  const mine = state && state.q === query ? state : null;
+  return (
+    <div className="space-y-2">
+      {mine?.error ? <Tip tone="rose">❌ {mine.error}</Tip> : <Tip tone="sky">目前清單裡沒有「{query}」，可以到全市場查詢真實報價。</Tip>}
+      <button type="button" disabled={mine?.busy} onClick={run}
+        className="w-full min-h-[52px] rounded-2xl text-[16px] sm:text-[17px] font-black text-white disabled:opacity-60" style={{ background: INK }}>
+        {mine?.busy ? '查詢中…' : `🔎 到全市場查詢「${query}」`}
+      </button>
+    </div>
+  );
 }
 
 // ───────── 市場分組 ─────────
@@ -92,7 +130,7 @@ const Tip = ({ children, tone = 'amber' }: { children: React.ReactNode; tone?: '
   return <div className={`border rounded-2xl px-4 py-3 text-[16px] leading-relaxed ${c}`}>{children}</div>;
 };
 
-export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reservedCash, orders, onPlaceOrder, onExecuteTrade }: Props) {
+export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reservedCash, orders, onPlaceOrder, onExecuteTrade, onAddInstrument }: Props) {
   const [step, setStep] = useState(0);
   const [marketId, setMarketId] = useState<string | null>(null);
   const [symbol, setSymbol] = useState<string | null>(null);
@@ -101,6 +139,7 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
   const [priceMode, setPriceMode] = useState<'now' | 'limit'>('now');
   const [limitText, setLimitText] = useState('');
   const [search, setSearch] = useState('');
+  const [lookup, setLookup] = useState<{ q: string; busy: boolean; error: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -258,7 +297,16 @@ export function OrderGuideWizard({ isOpen, onClose, instruments, profile, reserv
                 </div>
               </button>
             ))}
-            {rows.length === 0 && <Tip tone="rose">找不到符合的商品。</Tip>}
+            {rows.length === 0 && (
+              <MarketLookup query={search.trim()} state={lookup} setState={setLookup}
+                onFound={found => {
+                  onAddInstrument?.(found);
+                  const m = MARKETS.find(x => x.categories.includes(found.category));
+                  if (m) setMarketId(m.id);
+                  setSearch('');
+                  setSymbol(found.symbol); setSide(null); setStep(2);
+                }} />
+            )}
           </div>
         </div>
       );

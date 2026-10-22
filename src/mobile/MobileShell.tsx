@@ -1,3 +1,4 @@
+import { lookupInstrument } from '../utils/instrumentLookup';
 import React, { useEffect, useMemo, useState } from 'react';
 import { InstrumentSpec, StudentProfile, OrderAction, AssetCategory, Position } from '../types/market';
 import { C, mono, fmtPrice, fmtMoney, fmtSigned, dirColor, arrow, instrumentChange, Icon, Chip, Segmented, TopBar, IconButton } from './ui';
@@ -40,6 +41,8 @@ export interface MobileMenuSection {
 
 interface Props {
   instruments: InstrumentSpec[];
+  /** 全市場查到的新商品加入清單 */
+  onAddInstrument?: (inst: InstrumentSpec) => void;
   selectedInstrument: InstrumentSpec;
   onSelectInstrument: (inst: InstrumentSpec) => void;
   isAuthenticated: boolean;
@@ -256,6 +259,30 @@ function Watchlist(p: Props & { watch: string[]; onOpen: (i: InstrumentSpec) => 
   const [q, setQ] = useState('');
   const [searching, setSearching] = useState(false);
   const g = GROUPS.find(x => x.name === group)!;
+  // 全市場查詢：清單裡沒有的台股、ETF、債券 ETF、美股（和電腦版「下單交易」的搜尋相同）
+  const [look, setLook] = useState<{ q: string; busy: boolean; error: string | null }>({ q: '', busy: false, error: null });
+  const runLookup = async (query: string) => {
+    setLook({ q: query, busy: true, error: null });
+    try {
+      const found = await lookupInstrument(query);
+      p.onAddInstrument?.(found);
+      setLook({ q: query, busy: false, error: null });
+      setQ('');
+      setSearching(false);
+      p.onOpen(found);
+    } catch (e: any) {
+      setLook({ q: query, busy: false, error: e?.message || '查詢失敗' });
+    }
+  };
+  // 輸入完整代號（例如 00681L、00719B）而清單裡沒有時，自動查詢
+  useEffect(() => {
+    const t0 = q.trim();
+    if (!/^(\d{4,6}[A-Z]?|[A-Z]{1,5})$/i.test(t0) || look.q === t0) return;
+    if (p.instruments.some(i => i.symbol.toLowerCase().includes(t0.toLowerCase()))) return;
+    const t = setTimeout(() => runLookup(t0), 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = needle
@@ -295,7 +322,14 @@ function Watchlist(p: Props & { watch: string[]; onOpen: (i: InstrumentSpec) => 
 
       {rows.length === 0 && (
         <div className="px-6 py-10 text-center text-[14px] leading-relaxed" style={{ color: C.muted }}>
-          {group === '我的自選' && !q ? '還沒有自選商品。到「行情」按右上角星號就能加入。' : '找不到符合的商品。'}
+          {group === '我的自選' && !q ? '還沒有自選商品。到「行情」按右上角星號就能加入。' : `目前清單裡沒有「${q.trim()}」。`}
+          {q.trim() && (
+            <button type="button" disabled={look.busy} onClick={() => runLookup(q.trim())}
+              className="mt-3 w-full min-h-[48px] rounded-xl font-black text-[15px] disabled:opacity-60" style={{ background: C.accent, color: C.bg }}>
+              {look.busy ? '查詢中…' : `🔎 到全市場查詢「${q.trim()}」`}
+            </button>
+          )}
+          {look.error && <div className="mt-2 text-[13px] font-bold" style={{ color: C.up }}>❌ {look.error}</div>}
         </div>
       )}
       {rows.map(i => {

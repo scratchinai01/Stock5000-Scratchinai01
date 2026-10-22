@@ -1593,6 +1593,7 @@ export default function App() {
           onOpenProAnalysis={() => openPro('stock')}
           onOpenScan={() => openPro('scan')}
           onSwitchToDesktop={() => setUiMode('desktop')}
+          onAddInstrument={handleAddCustomInstrument}
           onOpenGuide={() => (isAuthenticated ? setIsOrderGuideOpen(true) : setIsPlayerSetupOpen(true))}
           menu={mobileMenu}
           lastUpdateTime={lastFinmindUpdateTime}
@@ -2204,6 +2205,7 @@ export default function App() {
           orders={orderBook.orders}
           onPlaceOrder={placeOrder}
           onExecuteTrade={handleExecuteTrade}
+          onAddInstrument={inst => setInstruments(prev => (prev.some(i => i.symbol === inst.symbol) ? prev.map(i => (i.symbol === inst.symbol ? inst : i)) : [inst, ...prev]))}
         />
       )}
 

@@ -1,3 +1,4 @@
+import { TechAlertRadar } from '../components/TechAlertRadar';
 import { lookupInstrument, suggestInstruments } from '../utils/instrumentLookup';
 import React, { useEffect, useMemo, useState } from 'react';
 import { InstrumentSpec, StudentProfile, OrderAction, AssetCategory, Position } from '../types/market';
@@ -599,6 +600,8 @@ function Portfolio(p: Props & { onOpen: (i: InstrumentSpec, to?: Tab) => void; o
             </div>
           </div>
         </div>
+
+        <TechAlertRadar dark positions={positions} instruments={p.instruments} onOpenSymbol={sym => { const i = p.instruments.find(x => x.symbol === sym); if (i) p.onOpen(i); }} />
 
         <div className="rounded-xl p-3.5 flex flex-col gap-2" style={{ background: C.card2, border: `1px solid ${C.line2}` }}>
           <div className="flex items-center gap-1.5 text-[14px] font-black"><span style={{ color: C.accent }}>{Icon.warn}</span>壓力測試</div>

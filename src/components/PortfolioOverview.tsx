@@ -1,3 +1,4 @@
+import { TechAlertRadar } from './TechAlertRadar';
 import React, { useState, useMemo } from 'react';
 import { StudentProfile, Position, InstrumentSpec, AssetCategory, OrderAction } from '../types/market';
 import { getSystemDateStr } from '../utils/dateUtils';
@@ -1445,6 +1446,9 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
           </>
         )}
       </div>
+
+      {/* 📡 技術面警訊雷達：持股轉弱、異常或背離時提醒 */}
+      <TechAlertRadar positions={positions} instruments={allInstruments} onOpenSymbol={sym => { const i = allInstruments.find(x => x.symbol === sym); if (i) onViewInstrumentKLine?.(i); }} />
 
       {/* 🔥【核心首要：我的持倉即時盯盤看板】(0 雜訊 · 實戰核心：專門即時追蹤自己買的個股、期貨、權證、融資、融券) */}
       <MyPositionsLiveBoard

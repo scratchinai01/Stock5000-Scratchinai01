@@ -1,3 +1,4 @@
+import { TechAlertRadar } from './TechAlertRadar';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
@@ -646,6 +647,12 @@ export const TradeStatementModal: React.FC<TradeStatementModalProps> = ({
           {/* TAB 1: POSITIONS (存倉部位明細) */}
           {activeTab === 'positions' && (
             <>
+              {positions.length > 0 && (
+                <div className="mb-4">
+                  <TechAlertRadar positions={positions} instruments={allInstruments}
+                    onOpenSymbol={sym => { const i = allInstruments.find(x => x.symbol === sym); if (i && onViewInstrumentKLine) onViewInstrumentKLine(i); }} />
+                </div>
+              )}
               {filteredPositions.length === 0 ? (
                 <div className="p-10 text-center space-y-4 bg-slate-50 border-2 border-dashed border-amber-300 rounded-3xl m-2">
                   <div className="w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-3xl mx-auto shadow-xs">

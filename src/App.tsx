@@ -210,6 +210,9 @@ export default function App() {
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   // 版主後台（進站紀錄）：網址加上 #admin 也可以直接開啟
   const [isAccessAdminOpen, setIsAccessAdminOpen] = useState(() => typeof window !== 'undefined' && window.location.hash === '#admin');
+  // 版主是否已在這個分頁登入「版主後台」：還原帳戶、系統工程資訊等危險功能只給版主
+  const [adminActive, setAdminActive] = useState(() => Boolean(readAdminToken()));
+  useEffect(() => { setAdminActive(Boolean(readAdminToken())); }, [isAccessAdminOpen]);
   useEffect(() => { logVisitOnce(); }, []);
   const [adminEmail, setAdminEmail] = useState<string | null>(SUPERUSER_NAME);
   // 最高管理者狀態只認伺服器發的版主權杖（12 小時有效）
@@ -1427,17 +1430,17 @@ export default function App() {
     {
       title: '其他',
       items: [
-        ...(isAuthenticated
+        ...(isAuthenticated && adminActive
           ? [
-              { icon: '🎓', label: '5,000萬純現金還原', onClick: handleResetToAutonomousCash },
-              { icon: '🔄', label: '清空部位重來', desc: '需要密碼確認', onClick: () => setIsResetModalOpen(true), tone: 'danger' as const },
+              { icon: '🎓', label: '5,000萬純現金還原（版主）', onClick: handleResetToAutonomousCash },
+              { icon: '🔄', label: '清空部位重來（版主）', desc: '需要密碼確認', onClick: () => setIsResetModalOpen(true), tone: 'danger' as const },
             ]
           : []),
         { icon: '🐞', label: '問題回報', desc: '寫下遇到的問題、附上截圖，版主會回覆', onClick: () => setIsFeedbackOpen(true), tone: 'accent' as const },
         { icon: 'ℹ️', label: '關於本系統', desc: '版權、聯絡方式、用途聲明', onClick: () => setIsAboutOpen(true) },
         { icon: '🛡️', label: '版主後台', desc: '需版主密碼', onClick: () => setIsAccessAdminOpen(true) },
         ...(isSuperUser ? [{ icon: '👑', label: '管理系統', desc: '最高管理者', onClick: () => setIsAdminModalOpen(true) }] : []),
-        { icon: '⚙️', label: '系統工程資訊', desc: '資料連線與檢驗', onClick: () => setIsFinmindVerificationOpen(true) },
+        ...(adminActive ? [{ icon: '⚙️', label: '系統工程資訊（版主）', desc: '資料連線與檢驗', onClick: () => setIsFinmindVerificationOpen(true) }] : []),
         { icon: '🖥️', label: '切換電腦版', desc: '改用完整的電腦版畫面', onClick: () => setUiMode('desktop') },
       ],
     },
@@ -1456,17 +1459,17 @@ export default function App() {
                 allInstruments={instruments}
                 onEditPlayer={() => setIsPlayerSetupOpen(true)}
                 onSelectInstrumentToTrade={handleSelectInstrumentToTrade}
-                onResetToAutonomousCash={handleResetToAutonomousCash}
-                onOpenResetPortfolio={() => setIsResetModalOpen(true)}
+                onResetToAutonomousCash={adminActive ? handleResetToAutonomousCash : undefined}
+                onOpenResetPortfolio={adminActive ? () => setIsResetModalOpen(true) : undefined}
                 isAutoRefresh={isAutoRefreshLive}
                 lastUpdatedTime={lastFinmindUpdateTime}
                 countdownSeconds={countdown}
                 tokenInfo={tokenInfo}
-                onOpenFinmindVerification={() => setIsFinmindVerificationOpen(true)}
+                onOpenFinmindVerification={adminActive ? () => setIsFinmindVerificationOpen(true) : undefined}
                 onForceRefreshAll={() => fetchLiveQuotes(true)}
                 marketStatus={marketStatus}
                 onOpenStatement={() => setIsTradeStatementOpen(true)}
-                onSeedSamplePortfolio={handleSeedSamplePortfolio}
+                onSeedSamplePortfolio={adminActive ? handleSeedSamplePortfolio : undefined}
                 onOpenDerivativesModal={handleOpenDerivatives}
                 onOpenSecurityCenter={() => setIsSecurityCenterOpen(true)}
                 onOpenChangePassword={() => setIsChangePasswordOpen(true)}
@@ -1925,10 +1928,10 @@ export default function App() {
                             <MenuItem icon="👑" label="管理系統" desc="Superuser（程瑋翔）" tone="amber" onClick={() => { close(); setIsAdminModalOpen(true); }} />
                           </>
                         )}
-                        {isAuthenticated && (
+                        {isAuthenticated && adminActive && (
                           <>
                             <MenuDivider />
-                            <MenuLabel>帳戶工具</MenuLabel>
+                            <MenuLabel>版主工具（學員看不到）</MenuLabel>
                             <MenuItem icon="🎓" label="博士班 5,000萬純現金還原" onClick={() => { close(); handleResetToAutonomousCash(); }} />
                             <MenuItem icon="🔄" label="清空部位重來" desc="需要密碼確認" tone="danger" onClick={() => { close(); setIsResetModalOpen(true); }} />
                             <MenuItem icon="⚙️" label="系統工程資訊" desc="資料連線與檢驗" onClick={() => { close(); setIsFinmindVerificationOpen(true); }} />
@@ -2175,7 +2178,7 @@ export default function App() {
           if (inst) setSelectedInstrument(inst);
           setIsTradingModalOpen(true);
         }}
-        onSeedSamplePortfolio={handleSeedSamplePortfolio}
+        onSeedSamplePortfolio={adminActive ? handleSeedSamplePortfolio : undefined}
       />
 
       {/* Underlying Derivatives Matrix & 50,000,000 Capital Allocation Simulator */}

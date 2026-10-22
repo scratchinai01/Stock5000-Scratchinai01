@@ -1,3 +1,4 @@
+import { adminHeaders } from '../services/playerSession';
 import React, { useState, useEffect } from 'react';
 import {
   Zap,
@@ -182,7 +183,7 @@ export const GroqKeyManagerModal: React.FC<GroqKeyManagerModalProps> = ({
     try {
       const res = await fetch('/api/groq/keys', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(adminHeaders() || {}) },
         body: JSON.stringify({ keys: inputKeys }),
       });
 

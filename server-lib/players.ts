@@ -273,6 +273,19 @@ export async function saveProfile(actor: { player: string | null; admin: boolean
   if (!actor.admin && serverReset > Number(profile?.resetAt || 0)) {
     return { status: 409, body: { ok: false, stale: true, resetAt: serverReset, error: '資料已由版主統一還原，請重新整理頁面' } };
   }
+  // 競賽期間學員不能自行把帳戶還原成 5,000 萬（只有版主可以）
+  if (!actor.admin) {
+    const old = cur.data();
+    const oldInit = Number(old.initialCapital) || 50_000_000;
+    if (profile?.initialCapital != null && Number(profile.initialCapital) !== oldInit) {
+      return { status: 403, body: { ok: false, error: '起始資金只有版主可以調整' } };
+    }
+    const wasFresh = (old.positions || []).length === 0 && Math.abs((Number(old.availableCash) || 0) - oldInit) < 1;
+    const isFresh = Array.isArray(profile?.positions) && profile.positions.length === 0 && Math.abs((Number(profile?.availableCash) || 0) - oldInit) < 1;
+    if (isFresh && !wasFresh) {
+      return { status: 403, body: { ok: false, selfReset: true, error: '正式競賽期間不能自行還原帳戶，如有需要請洽版主' } };
+    }
+  }
   await ref.set({ ...sanitizeProfile(profile, cur.data().studentName || n), ...(serverReset ? { resetAt: serverReset } : {}), updatedAt: Date.now() }, { merge: true });
   invalidate();
   return { status: 200, body: { ok: true } };

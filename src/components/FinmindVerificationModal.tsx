@@ -1,3 +1,4 @@
+import { adminHeaders } from '../services/playerSession';
 import React, { useState, useEffect } from 'react';
 import {
   X,
@@ -125,7 +126,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
     try {
       const res = await fetch('/api/finmind/set-token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(adminHeaders() || {}) },
         body: JSON.stringify({ token: inputToken.trim() }),
       });
       const data = await res.json();
@@ -157,7 +158,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
     try {
       const res = await fetch('/api/finmind/set-token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(adminHeaders() || {}) },
         body: JSON.stringify({ token: '' }),
       });
       const data = await res.json();
@@ -179,7 +180,7 @@ export const FinmindVerificationModal: React.FC<FinmindVerificationModalProps> =
     setIsDownloadingEOD(true);
     setDownloadFeedback(null);
     try {
-      const res = await fetch('/api/market/download-eod-data', { method: 'POST' });
+      const res = await fetch('/api/market/download-eod-data', { method: 'POST', headers: { ...(adminHeaders() || {}) } });
       const data = await res.json();
       setDownloadFeedback(data);
     } catch (err: any) {

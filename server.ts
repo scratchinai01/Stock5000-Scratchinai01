@@ -1521,6 +1521,7 @@ app.get('/api/finmind/token-status', (req, res) => {
 
 // 0.16 API: Set & verify 市場資料 Token from user input
 app.post('/api/finmind/set-token', async (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ success: false, ok: false, error: '只有版主可以變更此設定', message: '只有版主可以變更此設定（請先在「版主後台」登入）' });
   const { token } = req.body;
   const cleanToken = (token || '').trim();
 
@@ -1753,6 +1754,7 @@ app.post('/api/finmind/refresh-all', async (req, res) => {
 
 // 0.4 API: Download and Snapshot Market Data into Local Database (智慧減負方案)
 app.post('/api/market/download-eod-data', async (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ success: false, ok: false, error: '只有版主可以變更此設定', message: '只有版主可以變更此設定（請先在「版主後台」登入）' });
   try {
     const session = getTaiwanMarketSession();
     // Snapshot current authentic quotes and flush to disk
@@ -3124,6 +3126,7 @@ app.get('/api/groq/status', (req, res) => {
 
 // 2. POST /api/groq/keys
 app.post('/api/groq/keys', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ success: false, ok: false, error: '只有版主可以變更此設定', message: '只有版主可以變更此設定（請先在「版主後台」登入）' });
   const { keys } = req.body || {};
   if (!Array.isArray(keys)) {
     return res.status(400).json({ error: 'keys must be an array of up to 10 strings' });

@@ -922,8 +922,12 @@ export default function App() {
           prev.map(inst => {
             if (liveMap[inst.symbol]) {
               const live = liveMap[inst.symbol];
+              // 期貨換月後，名稱裡的合約月份跟著伺服器的近月合約更新（例如 202610 → 202611）
+              const cm = (live as any).contractMonth as string | undefined;
+              const name = cm && /\d{6}合約|近月合約/.test(inst.name) ? inst.name.replace(/\d{6}合約|近月合約/, `${cm}合約`) : inst.name;
               return {
                 ...inst,
+                name,
                 price: live.currentPrice,
                 prevClose: live.prevClose,
                 open: live.open ?? inst.open ?? live.currentPrice,

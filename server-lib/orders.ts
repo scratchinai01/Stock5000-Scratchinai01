@@ -20,6 +20,7 @@ import {
 } from '../src/utils/orderRules';
 import type { AssetCategory, OrderAction } from '../src/types/market';
 import { fetchMisFutures } from './taifexMis';
+import { rollContractMonth, frontContractMonth } from '../src/utils/futuresContract';
 import {
   LiquidityLedger,
   applyFills,
@@ -36,6 +37,7 @@ export interface OrderDeps {
   /** 伺服器的 報價快取（日資料），含 close21、prevClose、date、contractMonth */
   getCachedQuote: (symbol: string) => any | undefined;
   futuresCode: (symbol: string) => string;
+  isAdmin?: (req: any) => boolean;
 }
 
 const COLLECTION = 'sim_orders';
@@ -210,6 +212,8 @@ function monthCode(contractMonth: string | null | undefined, letters: string): s
 /** 決定快照代號；回傳 null 表示格式上就沒有快照可用 */
 function resolveFeedKey(category: AssetCategory, symbol: string, contractMonth: string | null): { kind: FeedKind; dataId: string; key: string } | null {
   const sym = symbol.toUpperCase();
+  // 已結算的月份自動換成目前近月
+  if (category === 'futures' || category === 'options') contractMonth = rollContractMonth(contractMonth) ?? frontContractMonth();
   if (isCash(category)) return { kind: 'stock', dataId: '', key: sym };
   if (category === 'futures') {
     const code = deps.futuresCode(sym);
@@ -280,6 +284,17 @@ function closeFor(o: SimOrder): number | null {
 
 async function processOrder(o: SimOrder, now: Date): Promise<SimOrder> {
   const ts = now.getTime();
+  // 委託掛在已結算的月份合約上（例如 10 月合約 10/21 收盤後）：改掛目前近月合約，才撮合得到
+  if ((o.category === 'futures' || o.category === 'options') && o.contractMonth) {
+    const rolled = rollContractMonth(o.contractMonth, now);
+    if (rolled && rolled !== o.contractMonth) {
+      const spec = resolveFeedKey(o.category, o.symbol, rolled);
+      o = event({ ...o, contractMonth: rolled, feedKey: spec ? spec.key : o.feedKey, feed: spec ? 'snapshot' : o.feed, baseline: null }, `${o.contractMonth} 合約已結算，改掛近月 ${rolled} 合約`, ts);
+      // 從現在的行情起算（和新送出的委託一樣），不拿改掛之前的價格成交
+      const q0 = o.feed === 'snapshot' ? await quoteFor(o, true) : null;
+      if (q0) o.baseline = { low: q0.low, high: q0.high, totalVolume: q0.totalVolume, lastTickAt: q0.tickAt };
+    }
+  }
   const sess = sessionFor(o.category, o.symbol, now);
 
   if (o.status === 'QUEUED') {
@@ -383,7 +398,7 @@ export async function createOrder(b: NewOrderBody): Promise<{ order?: SimOrder; 
 
   const sym = b.symbol.toUpperCase();
   const cached = deps.getCachedQuote(sym);
-  const contractMonth = b.contractMonth || cached?.contractMonth || null;
+  const contractMonth = b.category === 'futures' || b.category === 'options' ? rollContractMonth(b.contractMonth || cached?.contractMonth || null) : b.contractMonth || cached?.contractMonth || null;
   const spec = resolveFeedKey(b.category, sym, contractMonth);
   let feed: 'snapshot' | 'eod' = 'eod';
   let q: Quote | null = null;
@@ -684,6 +699,30 @@ export function registerOrderRoutes(app: Express, d: OrderDeps) {
     if ((r as any).error) return res.status(400).json({ error: (r as any).error });
     res.json({ order: (r as any).order });
   });
+  // 版主：委託統計（看各商品有沒有人成交）
+  app.get('/api/admin/orders-summary', async (req: Request, res: Response) => {
+    if (!d.isAdmin?.(req)) return res.status(401).json({ ok: false, error: '請重新登入版主帳號' });
+    await loadOrders();
+    const since = Date.now() - Math.min(Number(req.query.days) || 1, 7) * 86400000;
+    const rows = new Map<string, any>();
+    for (const o of orders.values()) {
+      if (o.createdAt < since) continue;
+      const k = `${o.category}|${o.symbol}`;
+      const r = rows.get(k) || { category: o.category, symbol: o.symbol, name: o.name, orders: 0, students: new Set<string>(), filledOrders: 0, filledQty: 0, byStatus: {} as Record<string, number>, feedKeys: new Set<string>(), samples: [] as string[] };
+      r.orders++;
+      r.students.add(o.studentName);
+      if (o.filledQty > 0) { r.filledOrders++; r.filledQty += o.filledQty; }
+      r.byStatus[o.status] = (r.byStatus[o.status] || 0) + 1;
+      if (o.feedKey) r.feedKeys.add(o.feedKey);
+      if (r.samples.length < 3) r.samples.push(`${o.studentName}：${o.events[o.events.length - 1]?.text || ''}`);
+      rows.set(k, r);
+    }
+    res.set('Cache-Control', 'no-store').json({
+      ok: true,
+      list: [...rows.values()].map(r => ({ ...r, students: r.students.size, feedKeys: [...r.feedKeys] })).sort((a, b) => b.orders - a.orders),
+    });
+  });
+
   // Cloud Scheduler 定時喚醒（收盤後的最後撮合與失效處理）
   app.get('/api/orders/tick', async (_req: Request, res: Response) => {
     res.json(await runTick());

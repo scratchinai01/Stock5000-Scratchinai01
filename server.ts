@@ -22,6 +22,7 @@ import { fetchMisFutures, lastMisDebug } from './server-lib/taifexMis';
 import { getGlobalQuotes, toLiveQuote, isGlobalSymbol, globalQuoteErrors, CRYPTO_BINANCE, getUsdTwd, getStockqQuotes } from './server-lib/globalQuotes';
 import * as players from './server-lib/players';
 import { registerFeedbackRoutes } from './server-lib/feedback';
+import { frontContractMonth } from './src/utils/futuresContract';
 import { recordAccess, adminLogin, isAdmin, adminConfigured, queryLogs, getBlocklist, setBlocked, isBlocked, clientIp } from './server-lib/access';
 import { getPatternLatest, getPatternBacktest, getRiskLatest, getRiskBacktest, getLearnDoc } from './server-lib/patternStore';
 
@@ -488,10 +489,13 @@ async function finmindRange(dataset: string, dataId: string, startDate: string, 
 /** 期貨/選擇權：只留一般盤 (position)、月合約（排除價差單與週合約），每天取最近月 */
 function nearMonthRows<T extends { date: string; contract_date: string; trading_session?: string; close?: number }>(rows: T[]): T[] {
   const byDate = new Map<string, T>();
+  // 已到期的月份（例如第三個星期三收盤後的當月合約）不再是近月，改用下個月份
+  const front = frontContractMonth();
   for (const r of rows) {
     if (r.trading_session && r.trading_session !== 'position') continue;
     const cd = String(r.contract_date || '').trim();
     if (!/^\d{6}$/.test(cd)) continue;
+    if (cd < front) continue;
     if (!(Number(r.close) > 0)) continue;
     const cur = byDate.get(r.date);
     if (!cur || cd < String(cur.contract_date).trim()) byDate.set(r.date, r);
@@ -1129,6 +1133,7 @@ app.get('/api/market/calendar', (_req, res) => {
 // 委託簿與撮合（限價／市價、ROD／IOC／FOK、刪改單、預約單）
 registerFeedbackRoutes(app, { playerFromToken: players.playerFromToken, isAdmin, clientIp });
 registerOrderRoutes(app, {
+  isAdmin,
   getToken: () => currentFinmindToken,
   getCachedQuote: (symbol: string) => authenticQuotesCache[symbol.toUpperCase()] || authenticQuotesCache[symbol],
   futuresCode: (symbol: string) => FUTURES_CODE_MAP[symbol.toUpperCase()] || symbol.toUpperCase(),

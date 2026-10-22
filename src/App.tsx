@@ -22,6 +22,7 @@ import { LockedTradingHallGate } from './components/LockedTradingHallGate';
 import { FinmindVerificationModal } from './components/FinmindVerificationModal';
 import { AdminManagementModal } from './components/AdminManagementModal';
 import { AdminAccessModal } from './components/AdminAccessModal';
+import { FeedbackModal } from './components/FeedbackModal';
 import { OrderGuideWizard, guideHiddenFor } from './components/OrderGuideWizard';
 import { UpdateBanner } from './components/UpdateBanner';
 import { SeasonBanner } from './components/SeasonBanner';
@@ -216,6 +217,7 @@ export default function App() {
   // 使用預設密碼 money888 或版主重設的臨時密碼登入時，必須先改密碼
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   // 內建清單的價格只是佔位，收到 行情前一律標示為不可交易，並移除編造的五檔掛單
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [instruments, setInstruments] = useState<InstrumentSpec[]>(() => ALL_BASE_INSTRUMENTS.map(placeholderInstrument));
   const [selectedInstrument, setSelectedInstrument] = useState<InstrumentSpec>(() => placeholderInstrument(DEFAULT_INSTRUMENTS[0]));
   const [isProAnalysisOpen, setIsProAnalysisOpen] = useState(false);
@@ -1386,6 +1388,7 @@ export default function App() {
         : [
             { icon: '🔐', label: '登入／註冊', desc: '輸入姓名與密碼進入交易室', onClick: () => setIsPlayerSetupOpen(true), tone: 'accent' as const },
             { icon: '❓', label: '忘記密碼？', desc: '輸入姓名後點「🔑 忘記密碼？看密碼提示」，會顯示密碼的第一個字和最後一個字', onClick: () => setIsPlayerSetupOpen(true) },
+            { icon: '🐞', label: '登入有問題？問題回報', desc: '不用登入也能回報，附上截圖', onClick: () => setIsFeedbackOpen(true) },
           ],
     },
     {
@@ -1426,6 +1429,7 @@ export default function App() {
               { icon: '🔄', label: '清空部位重來', desc: '需要密碼確認', onClick: () => setIsResetModalOpen(true), tone: 'danger' as const },
             ]
           : []),
+        { icon: '🐞', label: '問題回報', desc: '寫下遇到的問題、附上截圖，版主會回覆', onClick: () => setIsFeedbackOpen(true), tone: 'accent' as const },
         { icon: 'ℹ️', label: '關於本系統', desc: '版權、聯絡方式、用途聲明', onClick: () => setIsAboutOpen(true) },
         { icon: '🛡️', label: '版主後台', desc: '需版主密碼', onClick: () => setIsAccessAdminOpen(true) },
         ...(isSuperUser ? [{ icon: '👑', label: '管理系統', desc: '最高管理者', onClick: () => setIsAdminModalOpen(true) }] : []),
@@ -1907,6 +1911,7 @@ export default function App() {
                         <MenuItem icon="🏆" label="全班排行" active={activeView === 'leaderboard'} onClick={() => { close(); needLogin(() => setActiveView('leaderboard'))(); }} />
                         <MenuItem icon="🎯" label="標的衍生商品矩陣" desc="同一標的的期貨、選擇權、權證" onClick={() => { close(); handleOpenDerivatives('2317'); }} />
                         <MenuItem icon="📑" label="PPT 報告工作室" desc="簡報大綱、講稿與列印" active={activeView === 'ppt_studio'} onClick={() => { close(); setActiveView('ppt_studio'); }} />
+                        <MenuItem icon="🐞" label="問題回報" desc="遇到問題或有建議？寫下說明、附上截圖，版主會回覆" onClick={() => { close(); setIsFeedbackOpen(true); }} />
                         <MenuItem icon="ℹ️" label="關於本系統" desc="版權、聯絡方式、用途聲明與研究限制" onClick={() => { close(); setIsAboutOpen(true); }} />
                         <MenuItem icon="🛡️" label="版主後台" desc="查詢誰進入系統、登入紀錄、暫停帳號（需版主密碼）" onClick={() => { close(); setIsAccessAdminOpen(true); }} />
                         {isSuperUser && (
@@ -2247,6 +2252,12 @@ export default function App() {
       <ContextualTermBanner />
 
       {/* 🌐 全球 7 大市場 × 24/7 交易時鐘雷達 Modal */}
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        studentName={isAuthenticated && currentProfile ? currentProfile.studentName : null}
+        page={(isMobileUI && !mobilePage ? '手機版主畫面' : VIEW_TITLE[activeView] || String(activeView)) + (isOrderGuideOpen ? '／下單引導' : '') + (isOrdersPanelOpen ? '／委託查詢' : '')}
+      />
       <AdminAccessModal isOpen={isAccessAdminOpen} onClose={() => { setIsAccessAdminOpen(false); if (window.location.hash === '#admin') history.replaceState(null, '', window.location.pathname + window.location.search); }} />
       <AboutModal open={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
       <ProAnalysisModal

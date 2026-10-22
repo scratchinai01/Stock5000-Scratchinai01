@@ -21,6 +21,7 @@ import { registerOrderRoutes, liveFuturesRow, cancelAllForReset } from './server
 import { fetchMisFutures, lastMisDebug } from './server-lib/taifexMis';
 import { getGlobalQuotes, toLiveQuote, isGlobalSymbol, globalQuoteErrors, CRYPTO_BINANCE, getUsdTwd, getStockqQuotes } from './server-lib/globalQuotes';
 import * as players from './server-lib/players';
+import { registerFeedbackRoutes } from './server-lib/feedback';
 import { recordAccess, adminLogin, isAdmin, adminConfigured, queryLogs, getBlocklist, setBlocked, isBlocked, clientIp } from './server-lib/access';
 import { getPatternLatest, getPatternBacktest, getRiskLatest, getRiskBacktest, getLearnDoc } from './server-lib/patternStore';
 
@@ -40,6 +41,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+app.use('/api/feedback', express.json({ limit: '4mb' })); // 問題回報含截圖
 app.use(express.json({ limit: '2mb' }));
 
 // ───────── 排定的全體還原（測試期結束 → 正式競賽開始） ─────────
@@ -1125,6 +1127,7 @@ app.get('/api/market/calendar', (_req, res) => {
 
 // 專業分析：長期歷史日K（原始＋還原），優先讀 Firestore stock-history
 // 委託簿與撮合（限價／市價、ROD／IOC／FOK、刪改單、預約單）
+registerFeedbackRoutes(app, { playerFromToken: players.playerFromToken, isAdmin, clientIp });
 registerOrderRoutes(app, {
   getToken: () => currentFinmindToken,
   getCachedQuote: (symbol: string) => authenticQuotesCache[symbol.toUpperCase()] || authenticQuotesCache[symbol],

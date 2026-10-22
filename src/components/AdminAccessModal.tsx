@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AdminFeedbackPanel } from './AdminFeedbackPanel';
 import { X, Loader2, ShieldCheck, Download, LogOut, RefreshCw, Ban, CheckCircle2 } from 'lucide-react';
 
 /**
@@ -42,6 +43,8 @@ export const AdminAccessModal: React.FC<{ isOpen: boolean; onClose: () => void }
   const [days, setDays] = useState(7);
   const [data, setData] = useState<{ logs: Log[]; blocklist: string[]; truncated: boolean } | null>(null);
   const [q, setQ] = useState('');
+  const [section, setSection] = useState<'logs' | 'feedback'>(() => (typeof window !== 'undefined' && window.location.hash === '#feedback' ? 'feedback' : 'logs'));
+  const [newFb, setNewFb] = useState<number | null>(null);
   const [ev, setEv] = useState<'people' | 'all' | 'login' | 'login_failed' | 'visit'>('people');
 
   useEffect(() => {
@@ -182,6 +185,16 @@ export const AdminAccessModal: React.FC<{ isOpen: boolean; onClose: () => void }
             </button>
           </form>
         ) : (
+          <>
+          <div className="px-4 pt-4 grid grid-cols-2 gap-1">
+            {([['logs', '📋 進站紀錄'], ['feedback', `🐞 問題回報${newFb ? `（${newFb} 則新）` : ''}`]] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setSection(k)}
+                className={`min-h-[44px] rounded-xl font-black text-[15px] border ${section === k ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`}>{l}</button>
+            ))}
+          </div>
+          {section === 'feedback' ? (
+            <AdminFeedbackPanel token={token} onUnauthorized={() => { logout(); setErr('請重新登入'); }} onCount={setNewFb} />
+          ) : (
           <div className="p-4 space-y-4">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-bold text-slate-600">期間</span>
@@ -281,6 +294,8 @@ export const AdminAccessModal: React.FC<{ isOpen: boolean; onClose: () => void }
             )}
             <div className="text-[11px] text-slate-500">紀錄從本功能上線後開始累積；姓名是學員登入時輸入的操盤手姓名。IP 為連線位址，可能是學校或電信業者的共用位址。</div>
           </div>
+          )}
+          </>
         )}
       </div>
     </div>

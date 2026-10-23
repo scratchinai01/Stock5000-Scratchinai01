@@ -330,7 +330,7 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
                               className="px-3.5 sm:px-4 py-2.5 hover:bg-white/5 transition flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs group"
                             >
                               {/* Col 1: Emoji, Symbol & Name */}
-                              <div className="flex items-center gap-2.5 min-w-[200px]">
+                              <div className="flex items-center gap-2.5 min-w-0 sm:min-w-[200px]">
                                 <span className="text-xl shrink-0">{item.emoji}</span>
                                 <div>
                                   <div className="flex items-center gap-1.5">
@@ -348,7 +348,7 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
                               </div>
 
                               {/* Col 2: Price (💵 93.20) and Change */}
-                              <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-4 flex-wrap">
                                 <div className="min-w-[120px]">
                                   <span className="text-[10px] text-slate-400 block font-medium">即時行情</span>
                                   <div className="flex items-baseline gap-1">
@@ -374,7 +374,7 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
                               </div>
 
                               {/* Col 3: Status Badge (🟢 交易中) */}
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-3 flex-wrap">
                                 {item.isMock ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-500/20 text-slate-300 border border-slate-400/30 shrink-0" title={item.dataSource}>
                                     ⚪ 無即時報價
@@ -391,7 +391,7 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
                                 )}
 
                                 {/* Col 4: Action Buttons */}
-                                <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="flex items-center gap-1.5 flex-wrap sm:shrink-0">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -524,7 +524,7 @@ export const CommoditiesBoard: React.FC<CommoditiesBoardProps> = ({
                               </div>
 
                               {/* Trade Buttons Long / Short */}
-                              <div className="mt-3 pt-2 border-t border-white/10 flex items-center gap-1.5">
+                              <div className="mt-3 pt-2 border-t border-white/10 flex items-center gap-1.5 flex-wrap">
                                 <button
                                   type="button"
                                   onClick={() => {

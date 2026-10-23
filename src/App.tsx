@@ -258,6 +258,7 @@ export default function App() {
     }
   });
   const isMobileUI = (uiOverride ?? device.ui) === 'mobile';
+  const [phoneHintClosed, setPhoneHintClosed] = useState(() => { try { return sessionStorage.getItem('phone_hint_closed') === '1'; } catch { return false; } });
   // 手機版：從「更多」打開電腦版的功能頁（全頁顯示，左上角返回）
   const [mobilePage, setMobilePage] = useState(false);
   useEffect(() => {
@@ -1621,14 +1622,14 @@ export default function App() {
             <button type="button" onClick={() => setMobilePage(false)} className="min-h-[44px] px-3 rounded-xl bg-slate-900 text-white text-[15px] font-black">← 返回</button>
             <div className="flex-1 min-w-0 truncate text-[17px] font-black">{VIEW_TITLE[activeView] || ''}</div>
           </div>
-          <div className="p-3 pb-10">
+          <main className="px-2 pt-2 pb-10">
             {isAuthenticated && currentProfile ? mainViews : (
               <div className="py-16 text-center space-y-3">
                 <div className="text-[18px] font-black">請先登入</div>
                 <button type="button" onClick={() => setIsPlayerSetupOpen(true)} className="min-h-[48px] px-6 rounded-2xl bg-amber-500 text-white font-black">登入／註冊</button>
               </div>
             )}
-          </div>
+          </main>
         </div>
       )}
       <UpdateBanner />
@@ -1948,7 +1949,14 @@ export default function App() {
       </header>
 
       {/* Main Content View Switcher */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3.5 sm:p-6 pb-28 sm:pb-12 text-slate-900">
+      {device.kind === 'phone' && !phoneHintClosed && (
+        <div className="mx-2 mt-2 flex items-center gap-2 rounded-2xl bg-slate-900 text-white px-3 py-2.5 text-[14px]">
+          <span className="flex-1 min-w-0">📱 你正在手機上使用電腦版畫面。手機版字比較大、按鈕比較好按。</span>
+          <button type="button" onClick={() => setUiMode('mobile')} className="shrink-0 min-h-[40px] px-3 rounded-xl bg-amber-400 text-slate-950 font-black">切換手機版</button>
+          <button type="button" aria-label="關閉提示" onClick={() => { setPhoneHintClosed(true); try { sessionStorage.setItem('phone_hint_closed', '1'); } catch { /* 略過 */ } }} className="shrink-0 w-9 h-9 rounded-full text-[16px]">✕</button>
+        </div>
+      )}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-2 py-3 sm:p-6 pb-28 sm:pb-12 text-slate-900">
         {!isAuthenticated || !currentProfile ? (
           /* Locked Trading Hall Gate: When logged out, strictly lock room and block account management & portfolio inspection */
           <LockedTradingHallGate

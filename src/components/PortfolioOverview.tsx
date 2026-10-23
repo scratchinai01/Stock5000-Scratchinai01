@@ -1377,7 +1377,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
 
                 {/* ⚖️ 穩定幣架構重大區分教學提示 (全球加密穩定幣 vs 台灣監理穩定幣) */}
                 <div className="bg-slate-950/80 rounded-xl p-3 border border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center items-start gap-2 min-w-0">
                     <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shrink-0">
                       ⚖️ 監理架構重點區分
                     </span>
@@ -1386,7 +1386,7 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                       <strong>「新台幣穩定幣 (TWDT)」</strong> 是本系統的教學示範商品，固定 1 TWDT = NT$1，所以<strong>沒有匯差</strong>。
                     </span>
                   </div>
-                  <span className="text-[11px] text-cyan-400 font-mono font-bold shrink-0 self-end sm:self-center">
+                  <span className="text-[11px] text-cyan-400 font-mono font-bold sm:shrink-0 sm:self-center">
                     Stablecoin ≠ 不會跌，背後信用儲備才是核心！
                   </span>
                 </div>
@@ -1397,42 +1397,42 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                     <span>即時連動計算流程鏈 (Real-Time Accounting Flow)</span>
                   </div>
-                  <div className="flex items-center justify-between gap-1 overflow-x-auto text-xs py-1">
+                  <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:justify-between sm:gap-1 sm:overflow-x-auto text-xs py-1">
                     <div className="text-center min-w-[90px] bg-slate-800/90 rounded-lg p-2 border border-slate-700">
                       <span className="text-[10px] text-slate-400 block">總資產 (NAV)</span>
                       <span className="font-mono font-black text-amber-300 text-xs">
                         NT$ {Math.round(netAssetValue).toLocaleString()}
                       </span>
                     </div>
-                    <span className="text-slate-500 font-black">➔</span>
+                    <span className="hidden sm:inline text-slate-500 font-black">➔</span>
                     <div className="text-center min-w-[90px] bg-slate-800/90 rounded-lg p-2 border border-slate-700">
                       <span className="text-[10px] text-slate-400 block">未實現損益</span>
                       <span className={`font-mono font-black text-xs ${totalUnrealizedPnL >= 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                         {totalUnrealizedPnL >= 0 ? '+' : ''}NT$ {Math.round(totalUnrealizedPnL).toLocaleString()}
                       </span>
                     </div>
-                    <span className="text-slate-500 font-black">➔</span>
+                    <span className="hidden sm:inline text-slate-500 font-black">➔</span>
                     <div className="text-center min-w-[105px] bg-slate-800/90 rounded-lg p-2 border border-amber-500/40">
                       <span className="text-[10px] text-amber-300 font-bold block">累計已實現損益</span>
                       <span className={`font-mono font-black text-xs ${totalRealizedPnL >= 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                         {totalRealizedPnL >= 0 ? '+' : ''}NT$ {Math.round(totalRealizedPnL).toLocaleString()}
                       </span>
                     </div>
-                    <span className="text-slate-500 font-black">➔</span>
+                    <span className="hidden sm:inline text-slate-500 font-black">➔</span>
                     <div className="text-center min-w-[90px] bg-slate-800/90 rounded-lg p-2 border border-slate-700">
                       <span className="text-[10px] text-slate-400 block">佔用保證金</span>
                       <span className="font-mono font-black text-amber-400 text-xs">
                         NT$ {Math.round(totalMarginUsed).toLocaleString()}
                       </span>
                     </div>
-                    <span className="text-slate-500 font-black">➔</span>
+                    <span className="hidden sm:inline text-slate-500 font-black">➔</span>
                     <div className="text-center min-w-[90px] bg-slate-800/90 rounded-lg p-2 border border-slate-700">
                       <span className="text-[10px] text-slate-400 block">可用資金</span>
                       <span className="font-mono font-black text-emerald-400 text-xs">
                         NT$ {Math.round(currentProfile.availableCash).toLocaleString()}
                       </span>
                     </div>
-                    <span className="text-slate-500 font-black">➔</span>
+                    <span className="hidden sm:inline text-slate-500 font-black">➔</span>
                     <div className="text-center min-w-[85px] bg-slate-800/90 rounded-lg p-2 border border-slate-700">
                       <span className="text-[10px] text-slate-400 block">風險率 (Coverage)</span>
                       <span className="font-mono font-black text-emerald-300 text-xs">

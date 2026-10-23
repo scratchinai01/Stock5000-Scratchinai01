@@ -106,3 +106,23 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+
+/* ───────── 手機寬度（電腦版畫面在手機上、或手機版「更多」打開的功能頁） ─────────
+ * 1. 長字串（英文、代號、括號）允許斷行，避免文字超出卡片被切掉（手機系統字級放大時特別明顯）
+ * 2. 巢狀卡片的內距縮小，內容接近滿版
+ */
+@media (max-width: 640px) {
+  main {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+  main [class*="flex"]:not([class*="overflow-x"]) > *:not([class*="min-w-"]):not([class*="shrink-0"]) { min-width: 0; }
+  /* 數字不要被拆開 */
+  main .font-mono { overflow-wrap: normal; }
+  main .p-8, main .p-7, main .p-6, main .p-5, main .sm\:p-6, main .sm\:p-8 { padding: 12px; }
+  main .px-8, main .px-7, main .px-6, main .px-5 { padding-left: 12px; padding-right: 12px; }
+  main .p-4 { padding: 10px; }
+  main .gap-6, main .gap-5 { gap: 12px; }
+  main .rounded-3xl, main .rounded-\[2rem\], main .rounded-\[28px\] { border-radius: 18px; }
+  main > * { max-width: 100%; }
+}

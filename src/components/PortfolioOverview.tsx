@@ -984,15 +984,6 @@ export const PortfolioOverview: React.FC<PortfolioOverviewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span
-              className={`font-black px-2.5 py-0.5 rounded-full border ${
-                isAllCovered
-                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                  : 'bg-amber-100 text-amber-950 border-amber-300'
-              }`}
-            >
-              {isAllCovered ? '✅ 5大類別全數涵蓋' : `⚠️ 涵蓋進度 ${requiredCount}/5 種商品`}
-            </span>
             <button
               type="button"
               onClick={() => setIsSummaryCollapsed(!isSummaryCollapsed)}

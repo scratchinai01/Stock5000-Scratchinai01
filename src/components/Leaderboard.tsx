@@ -149,7 +149,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               全班 5000 萬股市大富翁實戰模擬排行榜 · Firebase 雲端紀錄
             </h2>
             <p className="text-xs text-slate-700 font-semibold">
-              每位同學起始 5,000 萬元，依據 21 號收盤價建倉，涵蓋股票、債券、ETF、期貨與選擇權進行績效較量！點選任一學員「詳情」即可查看五大工具核銷明細。
+              每位同學起始 5,000 萬元，依據 21 號收盤價建倉，涵蓋股票、債券、ETF、期貨與選擇權進行績效較量！點選任一學員「詳情」即可查看持倉明細。
             </p>
           </div>
         </div>
@@ -174,7 +174,6 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                 <th className="py-3 px-4">操作策略標籤</th>
                 <th className="py-3 px-4 text-right">總資產淨值 (NAV)</th>
                 <th className="py-3 px-4 text-right">報酬率 %</th>
-                <th className="py-3 px-4 text-center">作業五大工具核銷 (點擊看詳情)</th>
                 <th className="py-3 px-4 text-center">詳情與切換控制</th>
               </tr>
             </thead>
@@ -190,7 +189,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                     className={`transition cursor-pointer group/row ${
                       isCurrent ? 'bg-amber-50/70 font-semibold' : 'hover:bg-amber-50/40'
                     }`}
-                    title="點擊此列或詳情按鈕查看五大工具核銷明細"
+                    title="點擊此列或詳情按鈕查看持倉明細"
                   >
                     {/* Rank */}
                     <td className="py-4 px-4 text-center">
@@ -210,7 +209,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                           setDetailProfile(p);
                         }}
                         className="flex items-center gap-2 cursor-pointer group"
-                        title="點擊查看該操盤手作業核銷與持倉詳情"
+                        title="點擊查看該操盤手持倉詳情"
                       >
                         <span className="text-xl shrink-0 group-hover:scale-110 transition">
                           {p.avatarEmoji || '👤'}
@@ -255,31 +254,6 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                       </span>
                     </td>
 
-                    {/* 5 Tools Check - Clickable Pill Button */}
-                    <td className="py-4 px-4 text-center">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDetailProfile(p);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer hover:shadow-md hover:scale-105 active:scale-95 border"
-                        title="點擊查看作業五大工具核銷詳情與持倉"
-                      >
-                        {p.isFullyCompliant ? (
-                          <span className="text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1 font-black">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>已達標 (5/5) · 詳情 ➔</span>
-                          </span>
-                        ) : (
-                          <span className="text-amber-900 bg-amber-50 px-2.5 py-0.5 rounded-full border-2 border-amber-400 flex items-center gap-1 font-black shadow-xs">
-                            <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                            <span>缺 {5 - p.toolsCount} 種 ({p.toolsCount}/5) · 詳情 ➔</span>
-                          </span>
-                        )}
-                      </button>
-                    </td>
-
                     {/* Action Buttons: 詳情 & 切換控制 */}
                     <td className="py-4 px-4 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -291,7 +265,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                             setDetailProfile(p);
                           }}
                           className="px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-400 font-black text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs hover:shadow-xs active:scale-95"
-                          title="查看該操盤手持倉與五大工具核銷明細"
+                          title="查看該操盤手持倉明細"
                         >
                           <Eye className="w-3.5 h-3.5 text-amber-800" />
                           <span>詳情</span>
@@ -410,131 +384,6 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                   </span>
                 </div>
               </div>
-
-              {/* Section 1: 作業五大工具核銷檢核表 (五項必修審查) */}
-              {(() => {
-                const positions: any[] = detailProfile.positions || [];
-                const stocks = positions.filter(pos => pos.category === 'stocks');
-                const bonds = positions.filter(pos => pos.category === 'bonds');
-                const etfs = positions.filter(pos => pos.category === 'etfs');
-                const futures = positions.filter(pos => pos.category === 'futures');
-                const options = positions.filter(
-                  pos => pos.category === 'options' || pos.category === 'warrants'
-                );
-
-                const tools = [
-                  {
-                    name: '1. 台股現貨 (個股標的)',
-                    desc: '台積電、鴻海、聯發科等指標股',
-                    items: stocks,
-                    icon: '📈',
-                  },
-                  {
-                    name: '2. 長天期美債 ETF (固定收益)',
-                    desc: '00679B 元大美債20年、00687B 國泰美債20年等',
-                    items: bonds,
-                    icon: '🛡️',
-                  },
-                  {
-                    name: '3. 大盤指數 ETF (核心被動配置)',
-                    desc: '0050 元大台灣50、006208 富邦台50 等',
-                    items: etfs,
-                    icon: '🏛️',
-                  },
-                  {
-                    name: '4. 台指期貨 (多空避險與槓桿)',
-                    desc: '大台 (TX)、小台 (MTX)、微台 (TMF) 或個股期貨',
-                    items: futures,
-                    icon: '⚡',
-                  },
-                  {
-                    name: '5. 台指選擇權 / 權證 (非對稱策略)',
-                    desc: 'TXO 買權/賣權 (Buy/Sell Call/Put) 或認購認售權證',
-                    items: options,
-                    icon: '🎯',
-                  },
-                ];
-
-                const completedCount = tools.filter(t => t.items.length > 0).length;
-
-                return (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base font-black text-slate-900">
-                          🎯 作業五大工具核銷檢核清單
-                        </span>
-                        <span
-                          className={`text-xs px-2.5 py-0.5 rounded-full font-black ${
-                            completedCount === 5
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : 'bg-amber-100 text-amber-900 border border-amber-300'
-                          }`}
-                        >
-                          核銷進度：{completedCount} / 5
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-slate-500 font-bold">
-                        {completedCount === 5 ? '🎉 已符合全班實戰核銷標準' : `⚠️ 尚缺 ${5 - completedCount} 項工具未配置`}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      {tools.map((t, i) => {
-                        const isDone = t.items.length > 0;
-                        return (
-                          <div
-                            key={`tool-check-${i}`}
-                            className={`p-3 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-                              isDone
-                                ? 'bg-emerald-50/60 border-emerald-300 text-emerald-950'
-                                : 'bg-slate-50 border-slate-200 text-slate-700'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <span className="text-xl shrink-0">{t.icon}</span>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-black text-xs sm:text-sm">{t.name}</span>
-                                  {isDone ? (
-                                    <span className="text-[10px] px-2 py-0.2 bg-emerald-200 text-emerald-900 rounded font-black flex items-center gap-0.5">
-                                      <Check className="w-3 h-3" /> 已核銷
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] px-2 py-0.2 bg-slate-200 text-slate-700 rounded font-bold">
-                                      尚未配置
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-[11px] text-slate-500 block">{t.desc}</span>
-                              </div>
-                            </div>
-
-                            <div className="text-right sm:max-w-xs shrink-0 pl-8 sm:pl-0">
-                              {isDone ? (
-                                <div className="text-xs font-mono font-bold text-emerald-900">
-                                  {t.items.map((it, idx) => (
-                                    <span
-                                      key={`item-tag-${idx}`}
-                                      className="inline-block bg-white/80 border border-emerald-300 px-2 py-0.5 rounded-md text-[11px] mr-1 mb-0.5"
-                                    >
-                                      {it.name} ({it.symbol})
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-[11px] text-amber-700 font-semibold">
-                                  尚未持有此類別標的
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
 
               {/* Section 2: 完整持倉部位清單 */}
               <div className="space-y-2.5 pt-2">

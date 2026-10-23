@@ -277,6 +277,12 @@ export default function App() {
     }
   };
   const [activeView, setActiveView] = useState<'overview' | 'trading' | 'ppt_studio' | 'leaderboard' | 'commodities' | 'crypto'>('overview');
+  // 切換頁面時回到最上方：不然停在頁尾，看起來像沒換頁
+  const firstViewRender = useRef(true);
+  useEffect(() => {
+    if (firstViewRender.current) { firstViewRender.current = false; return; }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeView]);
   const [isGlobalRadarOpen, setIsGlobalRadarOpen] = useState(false);
   const [isFinmindLiveConnected, setIsFinmindLiveConnected] = useState<boolean>(true);
   const [isFinmindVerificationOpen, setIsFinmindVerificationOpen] = useState(false);
@@ -2321,6 +2327,7 @@ export default function App() {
               return;
             }
             setActiveView('overview');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition ${
             activeView === 'overview' ? 'text-amber-600 font-black' : 'text-slate-500 hover:text-slate-800'
@@ -2337,6 +2344,7 @@ export default function App() {
               return;
             }
             setActiveView('leaderboard');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition relative ${
             activeView === 'leaderboard' ? 'text-amber-600 font-black' : 'text-slate-500 hover:text-slate-800'
@@ -2347,22 +2355,6 @@ export default function App() {
           <span className="absolute -top-1 right-1 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
         </button>
 
-        {/* Center Prominent Trade Action Button */}
-        <button
-          onClick={() => {
-            if (!isAuthenticated) {
-              setIsPlayerSetupOpen(true);
-              return;
-            }
-            handleOpenGeneralTrading();
-          }}
-          className="flex flex-col items-center justify-center -mt-4 py-1.5 px-3 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-slate-950 shadow-md active:scale-95 transition cursor-pointer border border-amber-300"
-        >
-          <div className="w-7 h-7 rounded-xl bg-white/40 flex items-center justify-center text-sm font-black mb-0.5">
-            🎲
-          </div>
-          <span className="text-[10px] font-black">{isAuthenticated ? '5大類下單' : '🔒需登入'}</span>
-        </button>
 
         <button
           onClick={() => {
@@ -2371,6 +2363,7 @@ export default function App() {
               return;
             }
             setActiveView('trading');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition ${
             activeView === 'trading' ? 'text-amber-600 font-black' : 'text-slate-500 hover:text-slate-800'
@@ -2387,6 +2380,7 @@ export default function App() {
               return;
             }
             setActiveView('ppt_studio');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition ${
             activeView === 'ppt_studio' ? 'text-indigo-600 font-black' : 'text-slate-500 hover:text-slate-800'
